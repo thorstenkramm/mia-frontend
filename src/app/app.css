@@ -1,0 +1,8 @@
+@import "tailwindcss";
+
+/* Protected application content is suppressed unless an approved surface explicitly opts in. */
+@media print {
+  #root {
+    display: none;
+  }
+}

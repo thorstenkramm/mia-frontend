@@ -1,6 +1,30 @@
 # MIA Frontend
 
-This is the frontend of MIA. It connects to the mia api backend.
+This is the frontend of MIA. It connects to the MIA API backend.
+
+## Development
+
+Use Node.js 22, 24, or 26 and npm 11 or newer.
+
+```bash
+npm ci
+npm run dev
+```
+
+The application is a client-rendered SPA. Vite proxies development API traffic only when a later feature adds the
+backend contract; the public scaffold intentionally makes no API requests.
+
+## Checks
+
+Run the complete local quality gate before submitting changes:
+
+```bash
+./run-all-tests.sh
+```
+
+The gate runs type checking, lint and architecture fences, formatting, unit tests, a production build, the compressed
+initial-route JavaScript budget, Chromium E2E, duplication detection, dependency scanning, Tailwind Plus catalog
+validation, and Markdown linting. Trivy remains an explicit environment-dependent skip when it is not installed.
 
 ## Tailwind Plus
 

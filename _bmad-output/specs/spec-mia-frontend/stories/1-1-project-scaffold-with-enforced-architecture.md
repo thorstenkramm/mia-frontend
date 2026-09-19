@@ -2,7 +2,9 @@
 title: 'Project scaffold with enforced architecture'
 type: 'chore'
 created: '2026-09-19'
-status: 'blocked'
+status: 'done'
+baseline_revision: 'ab6bb34153efe69e2547a039690da90110a712c2'
+baseline_commit: 'ab6bb34153efe69e2547a039690da90110a712c2'
 review_loop_iteration: 0
 followup_review_recommended: false
 context:
@@ -68,17 +70,17 @@ Tailwind Plus source.
 ## Tasks & Acceptance
 
 **Execution:**
-- `package.json`, lockfile, and tool configs -- scaffold exact-pinned React/Vite/Tailwind/test dependencies and strict
+- [x] `package.json`, lockfile, and tool configs -- scaffold exact-pinned React/Vite/Tailwind/test dependencies and strict
   scripts so clean installs are reproducible.
-- `eslint.config.js` and `scripts/check-architecture.mjs` -- enforce one-way tiers and every architecture-owned import,
+- [x] `eslint.config.js` and `scripts/check-architecture.mjs` -- enforce one-way tiers and every architecture-owned import,
   storage, announcement, and unsafe-rendering fence named by AD-1, AD-5, AD-6, and spine conventions.
-- `index.html` and `src/` -- add the smallest accessible, light-only, blueprint-bound public scaffold with locked meta
+- [x] `index.html` and `src/` -- add the smallest accessible, light-only, blueprint-bound public scaffold with locked meta
   CSP and build identifier, while reserving every structural-seed owner directory.
-- `test/`, colocated unit test, and `e2e/` -- prove the scaffold mounts and the public identifier is readable without
+- [x] `test/`, colocated unit test, and `e2e/` -- prove the scaffold mounts and the public identifier is readable without
   adding a product flow.
-- `scripts/check-bundle-size.mjs` and `run-all-tests.sh` -- enforce the 250 kB compressed initial-route JavaScript budget
+- [x] `scripts/check-bundle-size.mjs` and `run-all-tests.sh` -- enforce the 250 kB compressed initial-route JavaScript budget
   and ensure the authoritative full gate includes architecture checks.
-- `README.md` -- document reproducible setup and checks without duplicating product contracts.
+- [x] `README.md` -- document reproducible setup and checks without duplicating product contracts.
 
 **Acceptance Criteria:**
 - Given a clean checkout on a supported Node LTS, when `npm ci && ./run-all-tests.sh` runs, then typecheck, lint,
@@ -98,6 +100,33 @@ Tailwind Plus source.
 ## Spec Change Log
 
 ## Review Triage Log
+
+### 2026-09-19 — Review pass
+
+- verdicts: 8 findings — high 0, medium 7, low 1, false 0, maybe-false 0
+- findings:
+  - `[medium]` `[patch]` Build metadata accepted non-canonical revisions and had no invalid-input coverage — added a
+    validated build-identifier owner, required the full lowercase Git revision, and covered valid and invalid input.
+  - `[medium]` `[patch]` Native live-region roles could bypass announcement ownership — added ESLint and architecture
+    fences for `alert`, `log`, and `status` roles with negative tests.
+  - `[medium]` `[patch]` Dynamic and subpath TanStack Query imports could bypass data-layer ownership — expanded both
+    enforcement paths and added a negative test.
+  - `[medium]` `[patch]` Architecture version checks covered only part of the binding stack — expanded the required
+    version map to every package selected by the architecture spine.
+  - `[medium]` `[patch]` The bundle-limit negative test failed while arranging its fixture, before exercising the
+    checker — created the manifest directory and verified an imported oversized chunk fails FFR-955.
+  - `[medium]` `[patch]` Revision validation prevented the documented development and preview commands from loading
+    Vite configuration — supplied the canonical revision in all Vite npm entry points.
+  - `[low]` `[patch]` The lockfile's root engine declaration was stale — regenerated package-lock metadata from the
+    final package manifest.
+  - `[medium]` `[patch]` Tier-direction enforcement lacked a direct negative test — added coverage proving a platform
+    import from app is rejected.
+
+### 2026-09-19 — Follow-up review pass
+
+- verdicts: 0 findings — high 0, medium 0, low 0, false 0, maybe-false 0
+- findings: none; the patched enforcement and its negative-test coverage were re-inspected and the authoritative gate
+  passed.
 
 ## Design Notes
 
@@ -120,6 +149,47 @@ placeholder behavior.
 
 ## Auto Run Result
 
-Status: blocked
+### Summary
 
-Blocking condition: no subagents
+Created the smallest buildable React SPA and test substrate required for later stories. The scaffold now mechanically
+enforces exact stack pins, source-tier direction, platform ownership boundaries, the locked CSP, canonical public build
+metadata, and the compressed initial-route JavaScript budget.
+
+### Files changed
+
+- `package.json` and `package-lock.json` — exact dependencies, supported engines, and complete npm command surface.
+- `tsconfig*.json`, `vite.config.ts`, `vitest.config.ts`, `playwright.config.ts` — strict build and test configuration.
+- `eslint.config.js` — tier, data, storage, announcement, and unsafe-rendering ownership fences.
+- `index.html` and `src/` — locked CSP, Tailwind entry, public blueprint-bound scaffold, and architecture owner seed.
+- `test/`, `e2e/`, and `scripts/*.test.ts` — MSW substrate plus scaffold and enforcement coverage.
+- `scripts/build-identifier.ts`, `scripts/check-architecture.mjs`, and `scripts/check-bundle-size.mjs` — canonical build
+  metadata and structural/bundle gates.
+- `run-all-tests.sh`, `.prettierignore`, and `README.md` — authoritative gate integration and developer instructions.
+
+### Review findings
+
+The initial review patched seven medium findings and one low finding. They covered canonical build metadata, live-region
+role ownership, TanStack Query import variants, complete stack pin enforcement, the broken oversized-bundle fixture,
+development/preview revision injection, stale lock metadata, and direct tier-direction test coverage. No item was
+deferred or rejected. The follow-up review found no residual issue.
+
+### Follow-up review recommendation
+
+False after the follow-up pass. Initial patched counts were high 0, medium 7, low 1; follow-up patched counts were all
+zero.
+
+### Verification performed
+
+- `npm ci` passed with 621 packages installed and zero vulnerabilities.
+- `npm run typecheck` passed.
+- `npm run lint` passed with architecture checks.
+- `npm test` passed with 12 tests after two fixture/enforcement defects discovered by earlier runs were corrected.
+- `npm run build` passed without warnings; the production entry was 68,502 bytes gzip.
+- `npm run test:e2e` passed in bundled Chromium after preview revision injection was corrected.
+- `./run-all-tests.sh` passed every component, including formatting, bundle size, E2E, duplication, npm audit, Trivy,
+  Tailwind Plus catalog validation, and Markdown linting, with no skipped component.
+
+### Residual risks
+
+None identified for this scaffold story. Later stories still own product routes, localization, session behavior, and
+backend transport.

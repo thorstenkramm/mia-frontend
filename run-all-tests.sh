@@ -34,7 +34,7 @@ else
     npm ci
   fi
 
-  for target in typecheck lint format:check test build; do
+  for target in typecheck lint format:check test build check:bundle-size; do
     if has_script "$target"; then
       echo "Running npm run $target ..."
       npm run "$target"

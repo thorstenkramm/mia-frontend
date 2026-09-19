@@ -1,0 +1,11 @@
+_bmad/
+_bmad-output/
+.agents/
+.opencode/
+AGENTS.md
+dist/
+node_modules/
+playwright-report/
+tailwindplus/
+test-results/
+tmp/
