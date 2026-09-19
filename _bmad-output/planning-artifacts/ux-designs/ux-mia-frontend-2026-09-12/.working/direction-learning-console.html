@@ -1,0 +1,144 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>MIA direction: Learning console</title>
+  <style>
+    /*
+      Learning console palette: navy #14213D, cobalt #1D4ED8, cyan #0E7490,
+      text #1D2939, muted #58677A, canvas #E9EEF5, panel #FFFFFF,
+      pale blue #EAF2FF, border #BFC9D8, danger #A13624, danger wash #FFF0ED,
+      focus #F59E0B. Contrast intent: dark text and solid controls meet WCAG 2.2 AA;
+      amber focus is paired with a navy inner edge and every status is explicitly named.
+    */
+    * { box-sizing: border-box; }
+    html, body { margin: 0; min-height: 100%; background: #DCE3EC; color: #1D2939; }
+    body { font-family: Arial, Helvetica, ui-sans-serif, system-ui, sans-serif; }
+    button, textarea { font: inherit; }
+    button:focus-visible, textarea:focus-visible, a:focus-visible {
+      outline: 3px solid #F59E0B; outline-offset: 2px; box-shadow: 0 0 0 5px #14213D;
+    }
+    .page { padding: 12px 16px 24px; }
+    .rationale { width: min(1408px, 100%); margin: 0 auto 10px; display: grid; grid-template-columns: 250px 1fr; align-items: center; }
+    .rationale strong { font-size: 18px; letter-spacing: -.02em; text-transform: uppercase; }
+    .rationale p { margin: 0; color: #415268; font-size: 12px; line-height: 1.45; }
+    .frame { width: min(1408px, 100%); min-height: 804px; margin: auto; background: #FFFFFF; border: 2px solid #14213D; box-shadow: 8px 8px 0 #9EAABD; }
+    .browser { height: 30px; padding: 0 10px; display: flex; align-items: center; background: #14213D; color: #FFFFFF; font-size: 10px; }
+    .browser b { letter-spacing: .08em; }
+    .browser span { margin-left: auto; color: #C9D5E8; }
+    .topbar { height: 58px; display: grid; grid-template-columns: 210px 1fr auto; align-items: center; border-bottom: 1px solid #BFC9D8; }
+    .brand { height: 100%; padding: 0 18px; display: flex; align-items: center; gap: 10px; background: #1D4ED8; color: #FFFFFF; font-size: 17px; font-weight: 800; letter-spacing: .08em; }
+    .brand-mark { width: 20px; height: 20px; border: 2px solid #FFFFFF; transform: rotate(45deg); }
+    .scope { padding: 0 18px; }
+    .scope b { display: block; font-size: 14px; }
+    .scope span { color: #58677A; font-size: 11px; }
+    .tools { padding-right: 16px; display: flex; gap: 7px; }
+    .tool { padding: 8px 10px; border: 1px solid #8796AA; background: #FFFFFF; color: #26364A; font-size: 11px; font-weight: 700; }
+    .workspace { min-height: 714px; display: grid; grid-template-columns: 210px minmax(540px, 1fr) 330px; }
+    .nav { background: #F3F6FA; border-right: 1px solid #BFC9D8; }
+    .nav-section { padding: 17px 16px 7px; color: #58677A; font-size: 9px; font-weight: 800; letter-spacing: .14em; text-transform: uppercase; }
+    .nav a { display: flex; justify-content: space-between; padding: 11px 16px; color: #26364A; border-left: 4px solid transparent; text-decoration: none; font-size: 12px; }
+    .nav a.active { border-left-color: #1D4ED8; background: #EAF2FF; color: #14213D; font-weight: 800; }
+    .nav .context { margin: 22px 13px; padding: 13px; border: 1px solid #BFC9D8; background: #FFFFFF; }
+    .context label { display: block; margin-bottom: 6px; color: #58677A; font-size: 9px; font-weight: 800; text-transform: uppercase; }
+    .context b { font-size: 11px; }
+    .context p { margin: 5px 0 0; color: #58677A; font-size: 10px; line-height: 1.4; }
+    .chat { min-width: 0; display: grid; grid-template-rows: 55px 1fr auto; background: #FFFFFF; }
+    .chat-head { padding: 10px 20px; display: flex; justify-content: space-between; border-bottom: 1px solid #D6DDE7; }
+    h1 { margin: 0; font-size: 16px; line-height: 1.25; }
+    .sub { color: #58677A; font-size: 10px; }
+    .session-state { align-self: center; padding: 5px 8px; border: 1px solid #0E7490; color: #075A70; font-size: 10px; font-weight: 800; text-transform: uppercase; }
+    .transcript { padding: 19px 30px 4px; overflow: hidden; }
+    .row { display: grid; grid-template-columns: 92px 1fr; gap: 15px; margin-bottom: 17px; }
+    .who { padding-top: 3px; color: #58677A; font-size: 10px; font-weight: 800; text-transform: uppercase; }
+    .who.ai { color: #1D4ED8; }
+    .copy { padding-bottom: 16px; border-bottom: 1px solid #E1E6ED; font-size: 14px; line-height: 1.48; }
+    .student .copy { padding: 11px 13px; border: 1px solid #BFC9D8; border-left: 4px solid #14213D; background: #F7F9FC; }
+    .generation { margin: 2px 0 13px 107px; display: flex; align-items: stretch; border: 1px solid #7FA4EB; background: #EAF2FF; }
+    .generation b { padding: 9px 11px; background: #1D4ED8; color: #FFFFFF; font-size: 10px; text-transform: uppercase; }
+    .generation span { padding: 8px 11px; color: #294564; font-size: 11px; line-height: 1.35; }
+    .composer-area { padding: 10px 20px 17px; border-top: 1px solid #BFC9D8; background: #F3F6FA; }
+    .composer-label { display: flex; justify-content: space-between; margin-bottom: 6px; color: #46566A; font-size: 10px; font-weight: 700; }
+    .composer { display: grid; grid-template-columns: 1fr 104px; min-height: 76px; border: 2px solid #14213D; background: #FFFFFF; }
+    textarea { width: 100%; padding: 13px; border: 0; resize: none; color: #1D2939; outline: 0; }
+    textarea::placeholder { color: #69778A; }
+    .send { margin: 7px; border: 0; background: #1D4ED8; color: #FFFFFF; font-weight: 800; }
+    .prep { padding: 16px; border-left: 1px solid #BFC9D8; background: #F7F9FC; }
+    .prep-head { display: flex; justify-content: space-between; align-items: start; margin-bottom: 11px; }
+    .prep h2 { margin: 0; font-size: 15px; text-transform: uppercase; }
+    .prep-head span { color: #58677A; font-size: 9px; text-align: right; }
+    .alert { margin-bottom: 12px; padding: 10px; border: 1px solid #A13624; background: #FFF0ED; color: #762A1F; font-size: 11px; line-height: 1.4; }
+    .alert strong { display: block; margin-bottom: 2px; text-transform: uppercase; }
+    .matrix { border: 1px solid #AEB9C8; background: #FFFFFF; }
+    .mrow { display: grid; grid-template-columns: 1fr 82px; min-height: 43px; border-bottom: 1px solid #D6DDE7; }
+    .mrow:last-child { border: 0; }
+    .mrow > div { padding: 8px; }
+    .mrow > div + div { border-left: 1px solid #D6DDE7; }
+    .mrow label { display: block; color: #58677A; font-size: 8px; font-weight: 800; letter-spacing: .07em; text-transform: uppercase; }
+    .mrow b { display: block; margin-top: 3px; font-size: 10px; }
+    .ok { color: #176043; }
+    .fail { color: #A13624; }
+    .pending { color: #76520C; }
+    .refresh { width: 100%; margin-top: 11px; padding: 10px; border: 2px solid #14213D; background: #FFFFFF; color: #14213D; font-size: 10px; font-weight: 800; text-transform: uppercase; }
+    .access-note { margin: 13px 2px; color: #58677A; font-size: 9px; line-height: 1.45; }
+    @media (max-width: 1080px) {
+      .workspace { grid-template-columns: 170px minmax(520px, 1fr); }
+      .prep { grid-column: 2; border-left: 0; border-top: 1px solid #BFC9D8; }
+      .topbar { grid-template-columns: 170px 1fr auto; }
+    }
+  </style>
+</head>
+<body>
+  <main class="page">
+    <section class="rationale">
+      <strong>Learning console</strong>
+      <p>A compact, instrument-like system makes state and scope easy to scan without turning learning into a scorecard. Sharp geometry, tabular alignment, and explicit labels favor experienced desktop users while a large, high-contrast composer keeps Pablo’s next action unmistakable. AA-oriented contrast, named states, and an amber-on-navy focus treatment support keyboard and low-vision use.</p>
+    </section>
+    <section class="frame" aria-label="MIA desktop browser concept at a 1440 by 900 design viewport">
+      <div class="browser"><b>MIA SECURE WORKSPACE</b><span>mia.school.local · connected</span></div>
+      <header class="topbar">
+        <div class="brand"><i class="brand-mark" aria-hidden="true"></i>MIA</div>
+        <div class="scope"><b>Biology / Cells and living systems</b><span>Pablo · Active tutoring session · Today, 4:08 PM</span></div>
+        <div class="tools"><button class="tool">Text size: Standard</button><button class="tool">English (US)</button><button class="tool">Log out</button></div>
+      </header>
+      <div class="workspace">
+        <nav class="nav" aria-label="Main navigation">
+          <div class="nav-section">Learn</div>
+          <a class="active" href="#session"><span>Current session</span><b>›</b></a>
+          <a href="#courses"><span>My courses</span><b>›</b></a>
+          <div class="nav-section">Account</div>
+          <a href="#profile"><span>Profile &amp; security</span><b>›</b></a>
+          <div class="context"><label>Session context</label><b>Homework help</b><p>Course material: Cell biology workbook</p></div>
+        </nav>
+        <section class="chat" id="session">
+          <header class="chat-head"><div><h1>Tutoring transcript</h1><div class="sub">Messages are saved in this active session</div></div><div class="session-state">Generating response</div></header>
+          <div class="transcript">
+            <article class="row"><div class="who ai">AI tutor</div><div class="copy">You have identified the nucleus and the cell membrane correctly. Now let us look at the mitochondria. What job do you think they do for the cell?</div></article>
+            <article class="row student"><div class="who">Pablo</div><div class="copy">They make energy from the food the cell gets?</div></article>
+            <article class="row"><div class="who ai">AI tutor</div><div class="copy">Yes. That explanation connects the cell part to its job clearly. Mitochondria release usable energy from nutrients. Can you explain why a muscle cell might need many of them?</div></article>
+            <article class="row student"><div class="who">Pablo</div><div class="copy">Muscles need a lot of energy when they move, so they need more mitochondria.</div></article>
+            <div class="generation" role="status"><b>Working</b><span>The AI tutor is preparing a response. You may write one next message while it works.</span></div>
+          </div>
+          <div class="composer-area">
+            <div class="composer-label"><span>MESSAGE TO AI TUTOR</span><span>One queued message is allowed</span></div>
+            <div class="composer"><textarea aria-label="Message to AI tutor" placeholder="Write your next message"></textarea><button class="send">QUEUE<br>MESSAGE</button></div>
+          </div>
+        </section>
+        <aside class="prep" id="courses">
+          <div class="prep-head"><h2>Course readiness</h2><span>Supervisor sample<br>Checked 4:12 PM</span></div>
+          <div class="alert"><strong>Activation blocked</strong>One material failed processing. Ready material also needs supervisor approval.</div>
+          <div class="matrix">
+            <div class="mrow"><div><label>Learning goals</label><b class="ok">Complete</b></div><div><label>Required</label><b class="ok">Ready</b></div></div>
+            <div class="mrow"><div><label>Cell biology workbook</label><b class="ok">Processing: Ready</b></div><div><label>Approval</label><b class="pending">Required</b></div></div>
+            <div class="mrow"><div><label>Lab image set</label><b class="fail">Processing: Failed</b></div><div><label>Approval</label><b>Unavailable</b></div></div>
+            <div class="mrow"><div><label>Course supervisor</label><b class="ok">Elena García</b></div><div><label>Required</label><b class="ok">Ready</b></div></div>
+          </div>
+          <button class="refresh">Refresh status</button>
+          <p class="access-note">Icons are optional; complete text labels carry meaning. Focus is visible with a wide amber and navy outline.</p>
+        </aside>
+      </div>
+    </section>
+  </main>
+</body>
+</html>

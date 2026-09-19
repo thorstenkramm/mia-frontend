@@ -1,0 +1,147 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>MIA direction: Open desk</title>
+  <style>
+    /*
+      Open desk palette: midnight #18324A, blue #225E84, teal #16746E,
+      rust #A34C2E, gold #C58B22, ink #202B33, muted #5C6871,
+      sky #EDF5F7, parchment #F8F5EE, white #FFFFFF, border #BCC8CC,
+      focus #D9480F. Contrast intent: primary pairs meet WCAG 2.2 AA; focus uses
+      a high-visibility rust outline, and statuses include words and geometric marks.
+    */
+    * { box-sizing: border-box; }
+    html, body { margin: 0; min-height: 100%; background: #DDE8EA; color: #202B33; }
+    body { font-family: ui-sans-serif, system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif; }
+    button, textarea { font: inherit; }
+    button:focus-visible, textarea:focus-visible, a:focus-visible { outline: 4px solid #D9480F; outline-offset: 3px; }
+    .page { padding: 14px 18px 26px; }
+    .rationale { width: min(1400px, 100%); margin: 0 auto 10px; display: grid; grid-template-columns: 235px 1fr; align-items: end; }
+    .rationale strong { font-family: Georgia, "Times New Roman", serif; color: #18324A; font-size: 23px; }
+    .rationale p { margin: 0; color: #4E606A; font-size: 12px; line-height: 1.45; }
+    .frame { width: min(1400px, 100%); min-height: 800px; margin: auto; background: #FFFFFF; border: 1px solid #8FA4AB; box-shadow: 0 12px 0 rgba(24,50,74,.12); }
+    .browser { height: 32px; padding: 0 14px; display: flex; align-items: center; border-bottom: 1px solid #8FA4AB; background: #F8F5EE; }
+    .browser span { color: #5C6871; font-size: 10px; }
+    .browser b { margin-left: auto; color: #18324A; font-size: 10px; }
+    .masthead { min-height: 74px; padding: 0 25px; display: flex; align-items: center; background: #18324A; color: #FFFFFF; }
+    .brand { padding-right: 25px; font-family: Georgia, "Times New Roman", serif; font-size: 26px; font-weight: 700; }
+    .brand::before { content: ""; display: inline-block; width: 13px; height: 27px; margin-right: 11px; vertical-align: -5px; background: #C58B22; clip-path: polygon(0 0, 100% 12%, 68% 100%, 0 76%); }
+    .mast-nav { display: flex; height: 74px; }
+    .mast-nav a { min-width: 96px; display: grid; place-items: center; padding: 0 17px; color: #DCE8EF; border-left: 1px solid #345067; text-decoration: none; font-size: 12px; font-weight: 680; }
+    .mast-nav a.active { background: #FFFFFF; color: #18324A; }
+    .utilities { margin-left: auto; display: flex; align-items: center; gap: 12px; color: #DCE8EF; font-size: 10px; }
+    .utilities button { padding: 7px 9px; border: 1px solid #AABCC7; color: #FFFFFF; background: transparent; }
+    .workspace { min-height: 694px; display: grid; grid-template-columns: minmax(620px, 1fr) 365px; }
+    .learn { min-width: 0; display: grid; grid-template-columns: 155px minmax(500px, 1fr); border-right: 1px solid #BCC8CC; }
+    .session-card { padding: 24px 15px; background: #EDF5F7; border-right: 1px solid #BCC8CC; }
+    .session-card h2 { margin: 5px 0 19px; font-family: Georgia, "Times New Roman", serif; font-size: 20px; line-height: 1.1; }
+    .fact { padding: 10px 0; border-top: 1px solid #BCC8CC; }
+    .fact label { display: block; color: #5C6871; font-size: 8px; font-weight: 800; letter-spacing: .09em; text-transform: uppercase; }
+    .fact b { display: block; margin-top: 3px; color: #18324A; font-size: 10px; line-height: 1.35; }
+    .finish { width: 100%; margin-top: 18px; padding: 9px; border: 1px solid #18324A; color: #18324A; background: transparent; font-size: 10px; font-weight: 750; }
+    .conversation { min-width: 0; display: grid; grid-template-rows: auto 1fr auto; }
+    .conversation-head { padding: 16px 25px 12px; display: flex; justify-content: space-between; border-bottom: 3px double #BCC8CC; }
+    .kicker { color: #16746E; font-size: 9px; font-weight: 820; letter-spacing: .12em; text-transform: uppercase; }
+    h1 { margin: 3px 0 0; font-family: Georgia, "Times New Roman", serif; font-size: 22px; }
+    .saved { align-self: center; color: #40555F; font-size: 10px; }
+    .saved::before { content: "◆"; margin-right: 6px; color: #16746E; }
+    .transcript { padding: 21px 35px 2px; overflow: hidden; }
+    .message { margin: 0 0 20px; }
+    .message-head { display: flex; align-items: center; gap: 9px; margin-bottom: 6px; color: #18324A; font-size: 10px; font-weight: 820; text-transform: uppercase; letter-spacing: .08em; }
+    .message-head::before { content: ""; width: 18px; height: 5px; background: #225E84; }
+    .student .message-head::before { background: #C58B22; }
+    .message p { margin: 0; max-width: 720px; font-size: 14px; line-height: 1.52; }
+    .tutor p { font-family: Georgia, "Times New Roman", serif; font-size: 16px; }
+    .student { margin-left: 12%; padding: 13px 15px; border: 1px solid #BCC8CC; background: #F8F5EE; }
+    .interrupted { margin: 2px 0 15px; padding: 11px 13px; display: grid; grid-template-columns: 22px 1fr; gap: 10px; border: 1px solid #A34C2E; background: #FFF5F1; color: #74341F; font-size: 11px; line-height: 1.4; }
+    .interrupted i { width: 18px; height: 18px; display: grid; place-items: center; border: 2px solid #A34C2E; font-style: normal; font-weight: 850; }
+    .composer-wrap { padding: 10px 25px 17px; background: #FFFFFF; }
+    .composer-label { margin-bottom: 6px; color: #18324A; font-size: 10px; font-weight: 800; }
+    .composer { display: grid; grid-template-columns: 1fr 110px; border: 1px solid #728B96; box-shadow: 4px 4px 0 #D6E2E5; }
+    textarea { min-height: 76px; padding: 13px; border: 0; resize: none; outline: 0; color: #202B33; }
+    textarea::placeholder { color: #68747C; }
+    .send { margin: 8px; border: 0; background: #18324A; color: #FFFFFF; font-weight: 780; }
+    .prep { padding: 21px; background: #F8F5EE; }
+    .prep h2 { margin: 4px 0 5px; font-family: Georgia, "Times New Roman", serif; color: #18324A; font-size: 19px; }
+    .prep-intro { margin: 0 0 15px; color: #5C6871; font-size: 10px; line-height: 1.45; }
+    .readiness-callout { margin-bottom: 13px; padding: 12px; border-left: 5px solid #A34C2E; background: #FFFFFF; }
+    .readiness-callout b { display: block; color: #74341F; font-size: 11px; }
+    .readiness-callout span { display: block; margin-top: 4px; color: #5C6871; font-size: 9px; line-height: 1.4; }
+    table { width: 100%; border-collapse: collapse; background: #FFFFFF; font-size: 9px; }
+    th { padding: 7px; color: #FFFFFF; background: #225E84; text-align: left; text-transform: uppercase; letter-spacing: .06em; }
+    td { padding: 9px 7px; border-bottom: 1px solid #BCC8CC; vertical-align: top; }
+    td b { display: block; color: #18324A; }
+    td span { display: block; margin-top: 3px; color: #5C6871; }
+    .state { font-weight: 800; }
+    .state::before { content: "■"; margin-right: 5px; color: #16746E; }
+    .state.needs::before { content: "▲"; color: #A34C2E; }
+    .review { width: 100%; margin-top: 13px; padding: 10px; border: 0; background: #225E84; color: #FFFFFF; font-size: 10px; font-weight: 780; }
+    .access-note { margin: 12px 0 0; color: #5C6871; font-size: 9px; line-height: 1.45; }
+    @media (max-width: 1100px) {
+      .workspace { grid-template-columns: 1fr; }
+      .learn { border-right: 0; }
+      .prep { border-top: 1px solid #BCC8CC; }
+      .utilities span { display: none; }
+    }
+  </style>
+</head>
+<body>
+  <main class="page">
+    <section class="rationale">
+      <strong>Open desk</strong>
+      <p>A formal public-service character signals responsibility without becoming clinical or corporate. Strong sectional bands, serif explanation text, and practical tables let conversation and administration share one mature visual language, while offset shadows imply deliberate physical actions rather than playful motion. AA-targeted contrast, explicit labels, and a wide rust focus ring make interaction state unmistakable.</p>
+    </section>
+    <section class="frame" aria-label="MIA desktop browser concept at a 1440 by 900 design viewport">
+      <div class="browser"><span>mia.school.local / biology / tutoring-session</span><b>Secure school workspace</b></div>
+      <header class="masthead">
+        <div class="brand">MIA</div>
+        <nav class="mast-nav" aria-label="Capabilities"><a class="active" href="#learn">Learn</a><a href="#prepare">Prepare</a><a href="#profile">Profile</a></nav>
+        <div class="utilities"><span>Pablo · English (US)</span><button>Text size: Standard</button><button>Log out</button></div>
+      </header>
+      <div class="workspace">
+        <section class="learn" id="learn">
+          <aside class="session-card">
+            <div class="kicker">Session context</div><h2>Cells and living systems</h2>
+            <div class="fact"><label>Course</label><b>Biology</b></div>
+            <div class="fact"><label>Activity</label><b>Homework help</b></div>
+            <div class="fact"><label>Material</label><b>Cell biology workbook</b></div>
+            <div class="fact"><label>Started</label><b>Today, 4:08 PM</b></div>
+            <button class="finish">Finish session</button>
+          </aside>
+          <section class="conversation">
+            <header class="conversation-head"><div><div class="kicker">Pablo’s active tutoring session</div><h1>Conversation with the AI tutor</h1></div><div class="saved">Messages saved</div></header>
+            <div class="transcript">
+              <article class="message tutor"><div class="message-head">AI tutor</div><p>You have identified the nucleus and the cell membrane correctly. Now let us look at the mitochondria. What job do you think they do for the cell?</p></article>
+              <article class="message student"><div class="message-head">Pablo</div><p>They make energy from the food the cell gets?</p></article>
+              <article class="message tutor"><div class="message-head">AI tutor</div><p>Yes. That explanation connects the cell part to its job clearly. Mitochondria release usable energy from nutrients. Can you explain why a muscle cell might need many of them?</p></article>
+              <div class="interrupted" role="status"><i>!</i><div><strong>The response was interrupted.</strong><br>The completed text remains saved. Reconnect before requesting a retry so MIA can check the latest session state.</div></div>
+            </div>
+            <div class="composer-wrap">
+              <div class="composer-label">Your message to the AI tutor</div>
+              <div class="composer"><textarea aria-label="Message to the AI tutor" placeholder="Write what you think, or ask for another explanation"></textarea><button class="send">Send message</button></div>
+            </div>
+          </section>
+        </section>
+        <aside class="prep" id="prepare">
+          <div class="kicker">Supervisor sample</div><h2>Biology course preparation</h2>
+          <p class="prep-intro">Readiness checked today at 4:12 PM. Processing and educational approval are reviewed separately.</p>
+          <div class="readiness-callout"><b>Course is not ready to activate</b><span>At least one ready, file-backed course material must also be approved.</span></div>
+          <table aria-label="Course preparation readiness">
+            <thead><tr><th>Preparation item</th><th>Current state</th></tr></thead>
+            <tbody>
+              <tr><td><b>Learning goals</b><span>Required course guidance</span></td><td class="state">Complete</td></tr>
+              <tr><td><b>Cell biology workbook</b><span>Technical processing</span></td><td class="state">Ready</td></tr>
+              <tr><td><b>Cell biology workbook</b><span>Educational approval</span></td><td class="state needs">Approval required</td></tr>
+              <tr><td><b>Supervisor</b><span>Course responsibility</span></td><td class="state">Assigned</td></tr>
+            </tbody>
+          </table>
+          <button class="review">Open readiness review</button>
+          <p class="access-note">Words and geometric markers communicate status without relying on color. Keyboard focus is deliberately prominent.</p>
+        </aside>
+      </div>
+    </section>
+  </main>
+</body>
+</html>

@@ -1,0 +1,39 @@
+# Licensed Tailwind Plus component library.
+# Downloaded per-machine, never committed: the Tailwind Plus licence permits use
+# in this project but forbids redistributing the component source.
+# Bootstrap with: ./scripts/twp-download.sh   (see README.md)
+# Deliberately not a dot-directory: agent Glob/Grep tools skip hidden paths.
+/tailwindplus/
+/tailwindplus-components-*/
+/tailwindplus-components-*.json
+/tailwindplus-skeleton.json
+
+# Tailwind Plus credentials and session. Credentials live in
+# ~/.config/tailwindplus/credentials.json, outside the repo.
+.tailwindplus-downloader-credentials.json
+.tailwindplus-downloader-session.json
+tmp/tailwind-plus-credentials.txt
+
+# Node
+node_modules/
+.pnpm-store/
+npm-debug.log*
+yarn-error.log*
+
+# Build output
+dist/
+build/
+.vite/
+
+# Test output
+playwright-report/
+test-results/
+coverage/
+
+# Editor and OS
+.DS_Store
+*.swp
+.idea/workspace.xml
+.idea/tasks.xml
+.idea/usage.statistics.xml
+.idea/shelf/

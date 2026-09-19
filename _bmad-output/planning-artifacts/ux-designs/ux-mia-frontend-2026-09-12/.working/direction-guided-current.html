@@ -1,0 +1,139 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>MIA direction: Guided current</title>
+  <style>
+    /*
+      Guided current palette: plum #4A315A, aubergine #382243, ink #2D2931,
+      muted #665E69, blush #F7F0F5, lilac #EDE2F2, mint #E4F2EA,
+      sage #276047, cream #FFFCF8, border #D9CFD8, warning #85500A,
+      warning wash #FFF3D8, focus #0B63CE, white #FFFFFF.
+      Contrast intent: text/control pairs target WCAG 2.2 AA; all progress and
+      connection states remain legible without color, and focus uses a 3px solid ring.
+    */
+    * { box-sizing: border-box; }
+    html, body { margin: 0; min-height: 100%; background: #F1E9EF; color: #2D2931; }
+    body { font-family: ui-rounded, "SF Pro Rounded", "Segoe UI", system-ui, sans-serif; }
+    button, textarea { font: inherit; }
+    button:focus-visible, textarea:focus-visible, a:focus-visible { outline: 3px solid #0B63CE; outline-offset: 3px; }
+    .page { padding: 14px 18px 26px; }
+    .rationale { width: min(1400px, 100%); margin: 0 auto 11px; display: flex; gap: 30px; align-items: center; }
+    .rationale strong { min-width: 210px; color: #382243; font-size: 21px; font-weight: 820; }
+    .rationale p { margin: 0; color: #5D5361; font-size: 12px; line-height: 1.5; }
+    .frame { width: min(1400px, 100%); min-height: 798px; margin: auto; background: #FFFCF8; border: 1px solid #CDBFCC; border-radius: 24px; overflow: hidden; box-shadow: 0 20px 55px rgba(74,49,90,.16); }
+    .browser { height: 34px; padding: 0 16px; display: flex; align-items: center; gap: 7px; background: #4A315A; color: #FFFFFF; }
+    .browser i { width: 8px; height: 8px; border: 1px solid #F7F0F5; border-radius: 3px; opacity: .85; }
+    .browser span { margin-left: 8px; font-size: 10px; opacity: .88; }
+    .app { min-height: 764px; display: grid; grid-template-columns: 238px minmax(560px, 1fr); }
+    .sidebar { padding: 23px 20px; background: #F7F0F5; border-right: 1px solid #D9CFD8; }
+    .brand { margin-bottom: 27px; display: flex; align-items: center; gap: 10px; color: #382243; font-weight: 840; font-size: 18px; }
+    .signature { width: 29px; height: 24px; border-radius: 14px 14px 7px 14px; background: #4A315A; position: relative; }
+    .signature::after { content: ""; position: absolute; right: 5px; bottom: -5px; border: 5px solid transparent; border-top-color: #4A315A; transform: rotate(-25deg); }
+    .small-label { color: #756B77; font-size: 10px; font-weight: 760; letter-spacing: .09em; text-transform: uppercase; }
+    .course-card { margin: 8px 0 23px; padding: 14px; background: #FFFFFF; border: 1px solid #D9CFD8; border-radius: 15px; }
+    .course-card b { display: block; color: #382243; font-size: 13px; }
+    .course-card span { display: block; margin-top: 5px; color: #665E69; font-size: 11px; line-height: 1.4; }
+    nav a { display: flex; align-items: center; gap: 10px; padding: 10px 12px; margin: 4px 0; color: #5A4C5E; border-radius: 12px; text-decoration: none; font-size: 12px; font-weight: 650; }
+    nav a::before { content: ""; width: 8px; height: 8px; border: 2px solid #80698B; border-radius: 50%; }
+    nav a.active { background: #EDE2F2; color: #382243; }
+    nav a.active::before { background: #4A315A; border-color: #4A315A; }
+    .account { margin-top: 84px; padding-top: 15px; border-top: 1px solid #D9CFD8; color: #665E69; font-size: 10px; line-height: 1.8; }
+    .account button { padding: 0; border: 0; color: #4A315A; background: transparent; font-weight: 750; text-decoration: underline; }
+    .main { min-width: 0; display: grid; grid-template-rows: auto 1fr; }
+    .top { padding: 18px 27px 15px; display: flex; align-items: center; justify-content: space-between; border-bottom: 1px solid #E5DDE4; }
+    h1 { margin: 3px 0 0; color: #382243; font-size: 20px; }
+    .top-actions { display: flex; gap: 9px; }
+    .quiet-btn { padding: 8px 11px; border: 1px solid #80698B; border-radius: 999px; background: #FFFFFF; color: #4A315A; font-size: 10px; font-weight: 750; }
+    .content { min-height: 0; display: grid; grid-template-columns: minmax(510px, 1fr) 322px; }
+    .conversation { min-width: 0; display: grid; grid-template-rows: 1fr auto; }
+    .transcript { padding: 23px 35px 4px 42px; overflow: hidden; }
+    .message { position: relative; padding: 0 0 20px 33px; border-left: 2px solid #D9CFD8; }
+    .message:last-of-type { border-left-color: transparent; }
+    .node { position: absolute; left: -10px; top: 0; width: 18px; height: 18px; border: 4px solid #FFFCF8; border-radius: 50%; background: #9E89A8; box-shadow: 0 0 0 1px #9E89A8; }
+    .tutor .node { background: #4A315A; box-shadow: 0 0 0 1px #4A315A; }
+    .speaker { margin-bottom: 6px; color: #665E69; font-size: 10px; font-weight: 800; text-transform: uppercase; letter-spacing: .07em; }
+    .tutor .speaker { color: #4A315A; }
+    .bubble { max-width: 680px; padding: 13px 16px; border-radius: 5px 18px 18px 18px; background: #F7F0F5; font-size: 14px; line-height: 1.5; }
+    .student .bubble { background: #FFFFFF; border: 1px solid #D9CFD8; border-radius: 18px 5px 18px 18px; }
+    .waiting { margin: 1px 0 13px 33px; padding: 10px 14px; border: 1px solid #D8A94A; border-radius: 14px; background: #FFF3D8; color: #66410B; font-size: 11px; line-height: 1.4; }
+    .waiting b { display: block; margin-bottom: 2px; }
+    .composer-wrap { padding: 8px 31px 20px; }
+    .composer { padding: 7px; display: grid; grid-template-columns: 1fr auto; border: 2px solid #4A315A; border-radius: 19px; background: #FFFFFF; box-shadow: 0 8px 22px rgba(74,49,90,.1); }
+    textarea { min-height: 66px; padding: 10px 11px; border: 0; outline: 0; resize: none; color: #2D2931; }
+    textarea::placeholder { color: #746A77; }
+    .send { align-self: end; padding: 10px 17px; border: 0; border-radius: 13px; background: #4A315A; color: #FFFFFF; font-size: 12px; font-weight: 780; }
+    .composer-note { margin: 6px 10px 0; color: #756B77; font-size: 9px; }
+    .readiness { padding: 20px 18px; border-left: 1px solid #E5DDE4; background: #FFFAF6; }
+    .readiness h2 { margin: 4px 0 5px; color: #382243; font-size: 16px; }
+    .intro { margin: 0 0 14px; color: #665E69; font-size: 10px; line-height: 1.45; }
+    .steps { display: grid; gap: 9px; }
+    .step { padding: 11px 12px; display: grid; grid-template-columns: 25px 1fr; gap: 9px; border: 1px solid #D9CFD8; border-radius: 13px; background: #FFFFFF; }
+    .step-num { width: 23px; height: 23px; display: grid; place-items: center; border-radius: 50%; background: #E4F2EA; color: #276047; font-size: 10px; font-weight: 820; }
+    .step.warn .step-num { border-radius: 7px; background: #FFF3D8; color: #85500A; }
+    .step b { display: block; font-size: 11px; }
+    .step span { display: block; margin-top: 3px; color: #665E69; font-size: 9px; line-height: 1.35; }
+    .material-state { margin-top: 7px; display: flex; gap: 5px; flex-wrap: wrap; }
+    .pill { padding: 4px 7px; border-radius: 999px; background: #E4F2EA; color: #276047; font-size: 8px; font-weight: 800; }
+    .pill.wait { background: #FFF3D8; color: #714708; }
+    .review { width: 100%; margin-top: 13px; padding: 10px; border: 0; border-radius: 12px; background: #4A315A; color: #FFFFFF; font-size: 10px; font-weight: 780; }
+    .access-note { margin: 12px 3px; color: #665E69; font-size: 9px; line-height: 1.45; }
+    @media (max-width: 1080px) {
+      .app { grid-template-columns: 190px minmax(560px, 1fr); }
+      .content { grid-template-columns: 1fr; }
+      .readiness { border-left: 0; border-top: 1px solid #E5DDE4; }
+      .account { margin-top: 30px; }
+    }
+  </style>
+</head>
+<body>
+  <main class="page">
+    <section class="rationale">
+      <strong>Guided current</strong>
+      <p>A visible conversational path and softly nested surfaces communicate that Pablo is being guided without turning the AI into a person. Rounded shapes and generous labels reduce tension, while the numbered preparation sequence gives supervisors orientation without forcing a linear wizard. AA-minded contrast, redundant status wording, and a clear blue focus ring keep the warmth accessible.</p>
+    </section>
+    <section class="frame" aria-label="MIA desktop browser concept at a 1440 by 900 design viewport">
+      <div class="browser"><i></i><i></i><i></i><span>mia.school.local / learn / current-session</span></div>
+      <div class="app">
+        <aside class="sidebar">
+          <div class="brand"><span class="signature" aria-hidden="true"></span>MIA</div>
+          <div class="small-label">Current course</div>
+          <div class="course-card"><b>Biology</b><span>Cells and living systems<br>Homework help</span></div>
+          <nav aria-label="Main navigation"><a class="active" href="#session">Tutoring session</a><a href="#courses">My courses</a><a href="#profile">Profile &amp; security</a></nav>
+          <div class="account">Pablo<br>Text size: Standard<br>English (US)<br><button>Log out</button></div>
+        </aside>
+        <section class="main">
+          <header class="top"><div><div class="small-label">Active session · Started today at 4:08 PM</div><h1>Learning about cells</h1></div><div class="top-actions"><button class="quiet-btn">Session details</button><button class="quiet-btn">Finish session</button></div></header>
+          <div class="content">
+            <section class="conversation" id="session">
+              <div class="transcript">
+                <article class="message tutor"><span class="node"></span><div class="speaker">AI tutor</div><div class="bubble">You have identified the nucleus and the cell membrane correctly. Now let us look at the mitochondria. What job do you think they do for the cell?</div></article>
+                <article class="message student"><span class="node"></span><div class="speaker">Pablo</div><div class="bubble">They make energy from the food the cell gets?</div></article>
+                <article class="message tutor"><span class="node"></span><div class="speaker">AI tutor</div><div class="bubble">Yes. That explanation connects the cell part to its job clearly. Mitochondria release usable energy from nutrients. Can you explain why a muscle cell might need many of them?</div></article>
+                <div class="waiting" role="status"><b>Reconnecting to the session</b>Your messages are saved. The AI tutor may still be working, and MIA will restore the latest saved response when the connection returns.</div>
+              </div>
+              <div class="composer-wrap">
+                <div class="composer"><textarea aria-label="Reply to the AI tutor" placeholder="Write your answer to the AI tutor"></textarea><button class="send">Send</button></div>
+                <div class="composer-note">You can keep writing while MIA reconnects. Your draft stays on this page.</div>
+              </div>
+            </section>
+            <aside class="readiness" id="courses">
+              <div class="small-label">Supervisor sample</div><h2>Prepare Biology</h2>
+              <p class="intro">Complete these areas in any order. Readiness was checked today at 4:12 PM.</p>
+              <div class="steps">
+                <div class="step"><div class="step-num">1</div><div><b>Learning goals</b><span>Complete and saved</span></div></div>
+                <div class="step"><div class="step-num">2</div><div><b>AI instructions</b><span>Complete and saved</span></div></div>
+                <div class="step warn"><div class="step-num">3</div><div><b>Course material needs attention</b><span>Microscope lab notes finished processing but still needs educational approval.</span><div class="material-state"><span class="pill">Processing: Ready</span><span class="pill wait">Approval: Required</span></div></div></div>
+                <div class="step"><div class="step-num">4</div><div><b>Supervisor assigned</b><span>Elena García</span></div></div>
+              </div>
+              <button class="review">Review what is needed</button>
+              <p class="access-note">Shape, numbering, and full text labels repeat every status; color is supplementary.</p>
+            </aside>
+          </div>
+        </section>
+      </div>
+    </section>
+  </main>
+</body>
+</html>

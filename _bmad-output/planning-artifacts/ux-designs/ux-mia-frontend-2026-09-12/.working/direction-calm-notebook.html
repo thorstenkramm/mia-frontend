@@ -1,0 +1,164 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>MIA direction: Calm notebook</title>
+  <style>
+    /*
+      Calm notebook palette: ink #24332D, muted ink #5D6A64, paper #FBFAF6,
+      canvas #EEECE4, leaf #275D4B, leaf wash #E6F0EB, rule #D7D8D0,
+      amber #9A5A16, amber wash #FFF1D8, focus #155EEF, white #FFFFFF.
+      Contrast intent: primary text and controls target WCAG 2.2 AA on every
+      listed surface; status meaning is repeated with text and shape, never color alone.
+    */
+    * { box-sizing: border-box; }
+    html, body { margin: 0; min-height: 100%; background: #EEECE4; color: #24332D; }
+    body { font-family: ui-sans-serif, system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif; }
+    button, textarea { font: inherit; }
+    button:focus-visible, textarea:focus-visible, a:focus-visible {
+      outline: 3px solid #155EEF; outline-offset: 3px;
+    }
+    .page { padding: 18px 20px 28px; }
+    .rationale {
+      width: min(1400px, 100%); margin: 0 auto 12px; display: flex; align-items: baseline;
+      justify-content: space-between; gap: 32px; color: #3E4D46;
+    }
+    .rationale strong { color: #24332D; font-family: Georgia, "Times New Roman", serif; font-size: 21px; }
+    .rationale p { margin: 0; max-width: 820px; font-size: 13px; line-height: 1.5; }
+    .frame {
+      width: min(1400px, 100%); min-height: 790px; margin: auto; background: #FBFAF6;
+      border: 1px solid #C8CAC1; border-radius: 12px; overflow: hidden;
+      box-shadow: 0 18px 45px rgba(36, 51, 45, .12);
+    }
+    .browser {
+      height: 34px; padding: 0 14px; display: flex; align-items: center; gap: 7px;
+      background: #E3E1D9; border-bottom: 1px solid #C8CAC1;
+    }
+    .dot { width: 9px; height: 9px; border: 1px solid #8B918C; border-radius: 50%; }
+    .browser span:last-child { margin-left: 10px; color: #5D6A64; font-size: 11px; }
+    .app { min-height: 756px; display: grid; grid-template-columns: 178px minmax(520px, 1fr) 310px; }
+    .rail { padding: 25px 17px; border-right: 1px solid #D7D8D0; background: #F5F3EC; }
+    .brand { display: flex; align-items: center; gap: 10px; margin: 0 8px 30px; font-weight: 760; }
+    .mark { width: 25px; height: 25px; border: 2px solid #275D4B; border-radius: 50% 50% 45% 55%; position: relative; }
+    .mark::after { content: ""; position: absolute; width: 7px; height: 7px; right: -4px; top: 1px; background: #D5A74B; border-radius: 50%; }
+    .nav-label { margin: 23px 9px 8px; color: #737C77; font-size: 10px; font-weight: 760; letter-spacing: .12em; text-transform: uppercase; }
+    .nav-item { display: block; margin: 3px 0; padding: 10px 11px; border-radius: 7px; color: #44524B; font-size: 13px; text-decoration: none; }
+    .nav-item.active { color: #173E31; background: #E1EBE5; font-weight: 700; }
+    .rail-bottom { margin: 212px 9px 0; color: #5D6A64; font-size: 11px; line-height: 1.6; }
+    .conversation { min-width: 0; display: grid; grid-template-rows: auto 1fr auto; }
+    .context-bar { padding: 18px 30px 15px; border-bottom: 1px solid #E1E0D9; display: flex; justify-content: space-between; gap: 20px; }
+    .eyebrow { color: #5D6A64; font-size: 11px; font-weight: 720; letter-spacing: .08em; text-transform: uppercase; }
+    h1 { margin: 5px 0 0; font-family: Georgia, "Times New Roman", serif; font-size: 24px; font-weight: 500; }
+    .session-meta { text-align: right; color: #5D6A64; font-size: 11px; line-height: 1.6; }
+    .finish { border: 0; background: transparent; color: #275D4B; font-size: 12px; font-weight: 700; text-decoration: underline; text-underline-offset: 3px; }
+    .transcript { overflow: hidden; padding: 27px clamp(30px, 6vw, 84px) 12px; }
+    .message { margin: 0 0 25px; }
+    .speaker { display: flex; align-items: center; gap: 8px; margin-bottom: 7px; font-size: 11px; font-weight: 780; letter-spacing: .04em; }
+    .speaker .ai { width: 17px; height: 17px; border: 1px solid #275D4B; border-radius: 50%; display: inline-grid; place-items: center; color: #275D4B; font-size: 9px; }
+    .message p { margin: 0; line-height: 1.62; font-size: 15px; }
+    .tutor p { font-family: Georgia, "Times New Roman", serif; font-size: 17px; }
+    .student { margin-left: 15%; padding: 14px 17px; background: #F0EFE8; border-left: 3px solid #A8AEA9; }
+    .student .speaker { margin-bottom: 5px; }
+    .reconnect { margin: 6px 0 18px; padding: 10px 13px; display: flex; gap: 10px; align-items: center; background: #FFF1D8; border-left: 3px solid #9A5A16; color: #5B3B16; font-size: 12px; line-height: 1.45; }
+    .reconnect b { white-space: nowrap; }
+    .composer-wrap { padding: 12px clamp(28px, 5vw, 70px) 22px; background: linear-gradient(180deg, rgba(251,250,246,0), #FBFAF6 20%); }
+    .composer { border: 1px solid #AEB3AD; border-radius: 9px; background: #FFFFFF; box-shadow: 0 7px 22px rgba(36,51,45,.08); }
+    textarea { width: 100%; min-height: 74px; padding: 15px 17px 8px; border: 0; resize: none; color: #24332D; background: transparent; outline: 0; }
+    textarea::placeholder { color: #6E7973; }
+    .compose-actions { padding: 6px 9px 9px 16px; display: flex; justify-content: space-between; align-items: center; color: #68736D; font-size: 11px; }
+    .send { padding: 9px 17px; border: 0; border-radius: 7px; background: #275D4B; color: #FFFFFF; font-weight: 720; }
+    .side { padding: 24px 21px; border-left: 1px solid #D7D8D0; background: #F8F7F2; }
+    .side h2 { margin: 0 0 4px; font-family: Georgia, "Times New Roman", serif; font-size: 18px; font-weight: 500; }
+    .side-intro { margin: 0 0 20px; color: #5D6A64; font-size: 11px; line-height: 1.5; }
+    .material { padding: 13px 0; border-top: 1px solid #D7D8D0; }
+    .material:last-of-type { border-bottom: 1px solid #D7D8D0; }
+    .material-name { margin-bottom: 8px; font-size: 12px; font-weight: 720; }
+    .state-line { display: grid; grid-template-columns: 78px 1fr; gap: 7px; margin: 5px 0; font-size: 11px; color: #5D6A64; }
+    .state-line b { color: #24332D; font-weight: 670; }
+    .status { display: inline-flex; gap: 6px; align-items: center; }
+    .status::before { content: ""; width: 7px; height: 7px; border-radius: 50%; background: #648974; }
+    .status.wait::before { border-radius: 1px; background: #C27B25; }
+    .readiness { margin-top: 19px; padding: 14px; border: 1px solid #D0D3CC; border-radius: 8px; background: #FFFFFF; }
+    .readiness strong { display: block; font-size: 12px; }
+    .readiness p { margin: 6px 0 12px; color: #5D6A64; font-size: 11px; line-height: 1.5; }
+    .review { width: 100%; padding: 9px; border: 1px solid #275D4B; border-radius: 6px; color: #275D4B; background: #FFFFFF; font-weight: 720; font-size: 11px; }
+    .access-note { margin-top: 18px; color: #5D6A64; font-size: 10px; line-height: 1.5; }
+    @media (max-width: 1050px) {
+      .app { grid-template-columns: 150px minmax(500px, 1fr); }
+      .side { grid-column: 2; border-top: 1px solid #D7D8D0; border-left: 0; }
+      .rail-bottom { margin-top: 80px; }
+    }
+  </style>
+</head>
+<body>
+  <main class="page">
+    <section class="rationale" aria-label="Design direction rationale">
+      <strong>Calm notebook</strong>
+      <p>An airy, paper-like workspace makes the exchange feel patient and considered rather than mechanical. Editorial tutor text gives explanations quiet authority, while restrained rules and plain statuses keep course preparation practical. Text and controls are designed for AA contrast, with a strong blue focus ring on every interactive element.</p>
+    </section>
+    <section class="frame" aria-label="MIA desktop browser concept at a 1440 by 900 design viewport">
+      <div class="browser"><i class="dot"></i><i class="dot"></i><i class="dot"></i><span>mia.school.local / learn / biology / session</span></div>
+      <div class="app">
+        <aside class="rail">
+          <div class="brand"><span class="mark" aria-hidden="true"></span>MIA</div>
+          <div class="nav-label">Learn</div>
+          <a class="nav-item active" href="#conversation">Current session</a>
+          <a class="nav-item" href="#courses">My courses</a>
+          <div class="nav-label">Your account</div>
+          <a class="nav-item" href="#profile">Profile &amp; security</a>
+          <div class="rail-bottom">Text size: <strong>Standard</strong><br>English (US)<br><button class="finish">Log out</button></div>
+        </aside>
+        <section class="conversation" id="conversation">
+          <header class="context-bar">
+            <div><div class="eyebrow">Biology · Cells and living systems</div><h1>Homework help with Pablo</h1></div>
+            <div class="session-meta">Session started today, 4:08 PM<br><button class="finish">Finish session</button></div>
+          </header>
+          <div class="transcript">
+            <article class="message tutor">
+              <div class="speaker"><span class="ai" aria-hidden="true">AI</span>AI tutor</div>
+              <p>You have identified the nucleus and the cell membrane correctly. Now let us look at the mitochondria. What job do you think they do for the cell?</p>
+            </article>
+            <article class="message student">
+              <div class="speaker">Pablo</div>
+              <p>They make energy from the food the cell gets?</p>
+            </article>
+            <article class="message tutor">
+              <div class="speaker"><span class="ai" aria-hidden="true">AI</span>AI tutor</div>
+              <p>Yes. That explanation connects the cell part to its job clearly. Mitochondria release usable energy from nutrients. Can you explain why a muscle cell might need many of them?</p>
+            </article>
+            <div class="reconnect" role="status"><b>Connection interrupted.</b><span>Your session and messages are safe. MIA is reconnecting to receive the tutor’s next response.</span></div>
+          </div>
+          <div class="composer-wrap">
+            <div class="composer">
+              <textarea aria-label="Message to the AI tutor" placeholder="Write your answer to the AI tutor"></textarea>
+              <div class="compose-actions"><span>Enter sends · Shift+Enter starts a new line</span><button class="send">Send message</button></div>
+            </div>
+          </div>
+        </section>
+        <aside class="side" id="courses">
+          <div class="eyebrow">Supervisor sample</div>
+          <h2>Course preparation</h2>
+          <p class="side-intro">Biology · Readiness checked today, 4:12 PM</p>
+          <div class="material">
+            <div class="material-name">Cell biology workbook</div>
+            <div class="state-line"><span>Processing</span><b class="status">Ready</b></div>
+            <div class="state-line"><span>Approval</span><b class="status">Approved</b></div>
+          </div>
+          <div class="material">
+            <div class="material-name">Microscope lab notes</div>
+            <div class="state-line"><span>Processing</span><b class="status">Ready</b></div>
+            <div class="state-line"><span>Approval</span><b class="status wait">Approval required</b></div>
+          </div>
+          <div class="readiness">
+            <strong>Not ready to activate</strong>
+            <p>Approve one ready material. Students cannot start new sessions until the course is active.</p>
+            <button class="review">Review course readiness</button>
+          </div>
+          <p class="access-note">Status uses text and symbols as well as color. Keyboard focus remains visible throughout this direction.</p>
+        </aside>
+      </div>
+    </section>
+  </main>
+</body>
+</html>

@@ -1,0 +1,1337 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<title>PRD Validation: MIA Frontend PRD Foundation</title>
+<style>
+  :root {
+    --bg: #fafaf9;
+    --surface: #ffffff;
+    --border: #e7e5e4;
+    --text: #1c1917;
+    --muted: #78716c;
+
+    --verdict-strong: #16a34a;
+    --verdict-adequate: #65a30d;
+    --verdict-thin: #d97706;
+    --verdict-broken: #dc2626;
+
+    --sev-low: #64748b;
+    --sev-medium: #ca8a04;
+    --sev-high: #ea580c;
+    --sev-critical: #dc2626;
+
+    --grade-exc: #16a34a;
+    --grade-good: #65a30d;
+    --grade-fair: #d97706;
+    --grade-poor: #dc2626;
+  }
+  * { box-sizing: border-box; }
+  html, body { margin: 0; padding: 0; }
+  body {
+    font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Inter, system-ui, sans-serif;
+    background: var(--bg);
+    color: var(--text);
+    line-height: 1.6;
+    font-size: 15px;
+  }
+  .container { max-width: 960px; margin: 0 auto; padding: 32px 24px 64px; }
+
+  header.report-header {
+    display: flex;
+    align-items: flex-start;
+    justify-content: space-between;
+    gap: 24px;
+    padding-bottom: 16px;
+    border-bottom: 1px solid var(--border);
+    margin-bottom: 24px;
+  }
+  .title h1 { margin: 0; font-size: 22px; font-weight: 600; letter-spacing: -0.01em; }
+  .title .subtitle { color: var(--muted); font-size: 13px; margin-top: 4px; font-family: ui-monospace, "SF Mono", Menlo, monospace; }
+  .grade {
+    padding: 10px 18px;
+    border-radius: 8px;
+    font-weight: 600;
+    color: white;
+    font-size: 15px;
+    white-space: nowrap;
+  }
+  .grade-excellent { background: var(--grade-exc); }
+  .grade-good { background: var(--grade-good); }
+  .grade-fair { background: var(--grade-fair); }
+  .grade-poor { background: var(--grade-poor); }
+
+  .synthesis {
+    background: var(--surface);
+    border: 1px solid var(--border);
+    border-left: 3px solid var(--muted);
+    border-radius: 8px;
+    padding: 18px 22px;
+    margin-bottom: 24px;
+    font-size: 15.5px;
+  }
+  .synthesis p { margin: 0 0 10px; }
+  .synthesis p:last-child { margin-bottom: 0; }
+
+  .dimension-summary {
+    display: grid;
+    grid-template-columns: repeat(auto-fit, minmax(180px, 1fr));
+    gap: 10px;
+    margin-bottom: 24px;
+  }
+  .dim-card {
+    background: var(--surface);
+    border: 1px solid var(--border);
+    border-radius: 8px;
+    padding: 12px 14px;
+  }
+  .dim-card .dim-name { font-size: 13px; color: var(--muted); margin-bottom: 6px; }
+  .dim-card .dim-verdict { font-size: 14px; font-weight: 600; }
+
+  section.dimension, section.reviewer-section { margin-bottom: 14px; }
+  section.dimension details, section.reviewer-section details {
+    background: var(--surface);
+    border: 1px solid var(--border);
+    border-radius: 8px;
+    overflow: hidden;
+  }
+  section summary {
+    padding: 14px 20px;
+    cursor: pointer;
+    user-select: none;
+    list-style: none;
+    display: flex;
+    align-items: center;
+    gap: 12px;
+  }
+  section summary::-webkit-details-marker { display: none; }
+  section summary::before {
+    content: "▸";
+    display: inline-block;
+    color: var(--muted);
+    transition: transform 0.15s ease;
+  }
+  section details[open] summary::before { transform: rotate(90deg); }
+  section summary h2 {
+    display: inline;
+    margin: 0;
+    font-size: 16px;
+    font-weight: 600;
+    letter-spacing: -0.005em;
+    flex: 1;
+  }
+  .verdict-pill {
+    font-size: 11px;
+    padding: 3px 10px;
+    border-radius: 999px;
+    font-weight: 600;
+    text-transform: uppercase;
+    letter-spacing: 0.04em;
+    color: white;
+  }
+  .verdict-strong { background: var(--verdict-strong); }
+  .verdict-adequate { background: var(--verdict-adequate); }
+  .verdict-thin { background: var(--verdict-thin); }
+  .verdict-broken { background: var(--verdict-broken); }
+
+  .dim-body { padding: 4px 20px 18px; }
+  .dim-judgment { color: var(--text); font-size: 14.5px; }
+  .dim-judgment p { margin: 0 0 10px; }
+
+  .findings-list { padding: 0 20px 4px; }
+  article.finding {
+    padding: 14px 0;
+    border-top: 1px solid var(--border);
+  }
+  article.finding:first-child { border-top: none; }
+  article.finding header {
+    display: flex;
+    align-items: center;
+    gap: 10px;
+    flex-wrap: wrap;
+    margin-bottom: 6px;
+  }
+  .badge {
+    font-size: 10.5px;
+    padding: 3px 8px;
+    border-radius: 4px;
+    font-weight: 600;
+    text-transform: uppercase;
+    letter-spacing: 0.04em;
+    line-height: 1.4;
+  }
+  .badge-sev-low { background: rgba(100, 116, 139, 0.12); color: var(--sev-low); }
+  .badge-sev-medium { background: rgba(202, 138, 4, 0.14); color: var(--sev-medium); }
+  .badge-sev-high { background: rgba(234, 88, 12, 0.14); color: var(--sev-high); }
+  .badge-sev-critical { background: rgba(220, 38, 38, 0.14); color: var(--sev-critical); }
+  .finding-title { margin: 0; font-size: 15px; font-weight: 500; flex: 1; min-width: 200px; }
+  .finding-location { font-family: ui-monospace, "SF Mono", Menlo, monospace; font-size: 12.5px; color: var(--muted); }
+  .finding-note, .finding-fix { margin-top: 6px; font-size: 14px; }
+  .finding-fix strong { color: var(--muted); font-weight: 500; }
+
+  .reviewer-source {
+    font-size: 12px;
+    color: var(--muted);
+    font-family: ui-monospace, "SF Mono", Menlo, monospace;
+  }
+
+  .mechanical {
+    background: var(--surface);
+    border: 1px solid var(--border);
+    border-radius: 8px;
+    padding: 16px 20px;
+    margin-top: 24px;
+    font-size: 14px;
+  }
+  .mechanical h3 { margin: 0 0 10px; font-size: 14px; font-weight: 600; color: var(--muted); text-transform: uppercase; letter-spacing: 0.04em; }
+  .mechanical ul { margin: 0; padding-left: 20px; }
+  .mechanical li { margin-bottom: 4px; color: var(--text); }
+
+  footer.report-footer {
+    margin-top: 40px;
+    padding-top: 16px;
+    border-top: 1px solid var(--border);
+    font-size: 12px;
+    color: var(--muted);
+    font-family: ui-monospace, "SF Mono", Menlo, monospace;
+  }
+  footer .meta { display: flex; gap: 24px; flex-wrap: wrap; }
+  code { font-family: ui-monospace, "SF Mono", Menlo, monospace; font-size: 0.92em; background: rgba(120,113,108,0.1); padding: 1px 4px; border-radius: 3px; }
+  .tail { font-size: 13.5px; color: var(--muted); padding: 12px 0 4px; border-top: 1px solid var(--border); }
+  .tail ul { margin: 8px 0 0; padding-left: 20px; }
+  .tail li { margin-bottom: 3px; }
+</style>
+</head>
+<body>
+  <div class="container">
+
+    <header class="report-header">
+      <div class="title">
+        <h1>MIA Frontend PRD Foundation — Validation Report</h1>
+        <div class="subtitle">_bmad-output/planning-artifacts/ux-designs/ux-mia-frontend-2026-09-12/FRONTEND-PRD-FOUNDATION.md</div>
+      </div>
+      <div class="grade grade-poor">Poor</div>
+    </header>
+
+    <div class="synthesis">
+      <p>This document is unusually honest about what it excludes and unusually rigorous about security, session
+      lifecycle, localization, and accessibility bounds — those sections are genuinely buildable, and all seven
+      delegated companion contracts resolve. It fails as a PRD spine on three load-bearing axes: it carries no
+      requirement identifiers, no success metrics, and no performance requirements, so neither "done for this
+      requirement" nor "successful at release" can be answered from it. The core defect is an inversion: the
+      implementation policy it delegates elsewhere is dense and precise, while the product commitments only a PRD can
+      own — measurable outcomes, a cut line, bounds on the surfaces the thesis bets on — are the thinnest content in
+      the file.</p>
+      <p>The three extra reviewers materially widen the picture rather than confirming it. The <strong>adversarial</strong>
+      reviewer found that both flagship outcomes are not merely unmeasured but structurally unobservable — telemetry is
+      excluded (L301) and the only instrument is one developer's Playwright run on macOS (L436) — and surfaced two
+      product-level silences the rubric does not reach: safeguarding for minors is a disclaimer (L299) composed with
+      supervisors blinded to active chat (L184), and guardian consent, age verification, and data export are excluded
+      in a single unreasoned bullet (L85) while four EU locales ship at launch (L362). It also found a genuine internal
+      contradiction: the raw-error-body mandate (L262) cannot be satisfied without breaching the document's own
+      L289/L293/L296 rules, and L272 forbids the frontend from mitigating. The <strong>source-fidelity</strong> reviewer
+      confirmed every declared source and cross-reference resolves and that the document does not invent transport —
+      its defects there are omission, chiefly that SSE establishment resets the <em>server</em> idle timer
+      (<code>product-requirements.md:530-532</code>) while the idle model here is built purely on user-initiated
+      requests, plus four confirmed tutoring-lifecycle rules and login throttling that never reach the page. The
+      <strong>downstream</strong> reviewer confirmed <code>bmad-architecture</code> can proceed but
+      <code>bmad-create-epics-and-stories</code> cannot cut a value epic, and found ownership asserted at L256 for two
+      concerns the named owner does not contain.</p>
+      <p><strong>On the grade.</strong> No dimension is <em>broken</em>; four of seven are strong or adequate. The
+      <em>Poor</em> grade is produced mechanically by the presence of critical findings, and should be read as
+      "critical gaps block use as a PRD spine", not as "low-quality document". Nine distinct critical findings survive
+      de-duplication across the four reviewers.</p>
+    </div>
+
+    <div class="dimension-summary">
+      <div class="dim-card">
+        <div class="dim-name">Decision-readiness</div>
+        <div class="dim-verdict" style="color: var(--verdict-adequate)">adequate</div>
+      </div>
+      <div class="dim-card">
+        <div class="dim-name">Substance over theater</div>
+        <div class="dim-verdict" style="color: var(--verdict-strong)">strong</div>
+      </div>
+      <div class="dim-card">
+        <div class="dim-name">Strategic coherence</div>
+        <div class="dim-verdict" style="color: var(--verdict-thin)">thin</div>
+      </div>
+      <div class="dim-card">
+        <div class="dim-name">Done-ness clarity</div>
+        <div class="dim-verdict" style="color: var(--verdict-adequate)">adequate</div>
+      </div>
+      <div class="dim-card">
+        <div class="dim-name">Scope honesty</div>
+        <div class="dim-verdict" style="color: var(--verdict-strong)">strong</div>
+      </div>
+      <div class="dim-card">
+        <div class="dim-name">Downstream usability</div>
+        <div class="dim-verdict" style="color: var(--verdict-thin)">thin</div>
+      </div>
+      <div class="dim-card">
+        <div class="dim-name">Shape fit</div>
+        <div class="dim-verdict" style="color: var(--verdict-adequate)">adequate</div>
+      </div>
+    </div>
+
+    <section class="dimension">
+      <details>
+        <summary>
+          <h2>Decision-readiness</h2>
+          <span class="verdict-pill verdict-adequate">adequate</span>
+        </summary>
+        <div class="dim-body">
+          <div class="dim-judgment">
+            <p>The document states real decisions as decisions rather than burying them. "Exact raw body disclosure is
+            an approved Product Owner decision and must not be silently replaced with a validated-field subset"
+            (§ Error Response Bodies, 270–271) names the decision, its owner, and forecloses the tempting alternative in
+            one sentence. Similar quality appears at "Product Owner Safari evidence is mandatory" (421), "Firefox is
+            unsupported but not proactively blocked" (422), and the refusal to overclaim at 428. None of this is
+            smoothed-to-neutral writing.</p>
+            <p>What a decision-maker cannot do with this document is decide anything about <em>delivery</em>. Release
+            Priorities (461–479) looks like a prioritization but closes with "Priority expresses UX refinement and
+            delivery sequence, not permission to omit confirmed release-one behavior" (479) — which removes the only
+            lever priorities exist to provide. Every included surface is release-one, WCAG 2.2 AA is release-blocking
+            (381), seven locales ship at launch (362), and multiple backend blockers are hard release gates. A sponsor
+            facing a date slip finds no decision framework here at all.</p>
+            <p>Open Questions (535–538) reinforces this: two questions, both tooling selection. Not one open
+            <em>product</em> tension, despite launch stakes and seventeen tracked backend blockers.</p>
+          </div>
+        </div>
+        <div class="findings-list">
+          <article class="finding">
+            <header>
+              <span class="badge badge-sev-high">high</span>
+              <h3 class="finding-title">No cut line or de-scope lever</h3>
+              <span class="finding-location">§ Release Priorities, 461–479</span>
+            </header>
+            <div class="finding-note">P0/P1/P2 are declared, then neutralized by "not permission to omit confirmed
+            release-one behavior" (479). The document offers no way to trade scope for date and no guidance on what a
+            P2 slip means.</div>
+            <div class="finding-fix"><strong>Fix:</strong> state explicitly which P2 families may ship post-launch and
+            which may not, or state plainly that release one is all-or-nothing and name who owns that risk.</div>
+          </article>
+          <article class="finding">
+            <header>
+              <span class="badge badge-sev-high">high</span>
+              <h3 class="finding-title">Release-gating blockers carry no contingency decision</h3>
+              <span class="finding-location">§ Mentoring 212–214; § Error Response Bodies 270–272; § Security 315–316</span>
+            </header>
+            <div class="finding-note">"<code>BCG-017</code> blocks target resolution and grant availability" (213) and
+            "The ledger's logout request-quiescence blocker must close before release" (316) state a gate without
+            stating the fallback. If <code>BCG-017</code> never closes, does the feature defer or does the release
+            slip?</div>
+            <div class="finding-fix"><strong>Fix:</strong> for each release-gating blocker, state the product decision
+            if it does not close by the date — defer the feature, slip the release, or escalate — and name the decision
+            owner.</div>
+          </article>
+          <article class="finding">
+            <header>
+              <span class="badge badge-sev-medium">medium</span>
+              <h3 class="finding-title">Seven launch locales committed with no cost acknowledged</h3>
+              <span class="finding-location">§ Localization, 362</span>
+            </header>
+            <div class="finding-note">Combined with rendering "each launch locale at Standard, Large, and Extra large"
+            (439) and full accessibility coverage on "every surface, locale, text size, state" (385), this is one of the
+            largest verification commitments in the document and the only major one presented without a trade-off
+            sentence.</div>
+            <div class="finding-fix"><strong>Fix:</strong> name what was given up to fund seven launch locales, or
+            record it as an accepted cost with the verification multiplier stated.</div>
+          </article>
+          <article class="finding">
+            <header>
+              <span class="badge badge-sev-medium">medium</span>
+              <h3 class="finding-title">Open Questions are tooling-only</h3>
+              <span class="finding-location">§ Open Questions, 537–538</span>
+            </header>
+            <div class="finding-note">Both items are architecture selections. Real unresolved product questions exist in
+            the body but never surface here — e.g. whether student-only accounts get any profile self-service at all
+            (139–140), or whether the mentor-role grant flow is in release one.</div>
+            <div class="finding-fix"><strong>Fix:</strong> promote the genuinely undecided product items into Open
+            Questions; keep tooling selection as a separate architecture-handoff list.</div>
+          </article>
+        </div>
+      </details>
+    </section>
+
+    <section class="dimension">
+      <details>
+        <summary>
+          <h2>Substance over theater</h2>
+          <span class="verdict-pill verdict-strong">strong</span>
+        </summary>
+        <div class="dim-body">
+          <div class="dim-judgment">
+            <p>Nothing in this document reads as furniture, which is rare at this length. Users and Context (59–70)
+            names four role groups, each of which demonstrably drives a downstream requirement: "Mentors may be older or
+            less technically confident volunteers working internationally" (64) pays out in the compact-briefing rule
+            (206) and the time-zone emphasis at scenario 7. The section then removes a would-be persona rather than
+            padding: "The operator is not an application user role and has no frontend surface" (67).</p>
+            <p>Security content is product-specific rather than boilerplate. "Do not claim that self-hosting keeps all
+            processing local or that local deletion removes provider copies and backups" (297) and "MIA is not an
+            emergency service, sends no safeguarding alert, and never implies human monitoring" (299) could only have
+            come from thinking about this product with minors in scope.</p>
+          </div>
+        </div>
+        <div class="findings-list">
+          <article class="finding">
+            <header>
+              <span class="badge badge-sev-low">low</span>
+              <h3 class="finding-title">The central thesis is asserted but never motivated</h3>
+              <span class="finding-location">§ Product Objective, 51–52; § Prioritized Experience Outcomes, 115</span>
+            </header>
+            <div class="finding-note">"a student can complete a second tutoring session independently" is repeated as
+            the bar without explaining why the <em>second</em> session is the meaningful threshold — novelty wearing
+            off, onboarding complete, or habit formation? That determines what the frontend must optimize.</div>
+            <div class="finding-fix"><strong>Fix:</strong> one sentence of rationale for the second-session bar.</div>
+          </article>
+          <article class="finding">
+            <header>
+              <span class="badge badge-sev-low">low</span>
+              <h3 class="finding-title">The Capability Model table is decorative relative to its real owner</h3>
+              <span class="finding-location">§ Capability Model, 100–106</span>
+            </header>
+            <div class="finding-note">The five groups are informal labels bound to no identifier, while the binding
+            contract is delegated to <code>ROUTE-INVENTORY.md</code> (153) and the actual representations are pending
+            backend work (517). The table conveys shape but authorizes nothing.</div>
+            <div class="finding-fix"><strong>Fix:</strong> bind the groups to the capability identifiers
+            <code>ROUTE-INVENTORY.md</code> uses, or label the table explicitly as an orienting sketch.</div>
+          </article>
+        </div>
+      </details>
+    </section>
+
+    <section class="dimension">
+      <details open>
+        <summary>
+          <h2>Strategic coherence</h2>
+          <span class="verdict-pill verdict-thin">thin</span>
+        </summary>
+        <div class="dim-body">
+          <div class="dim-judgment">
+            <p>There is a real thesis and the priorities follow it, which is the half that works. The objective names
+            "the two highest-priority experiences" (50–51), the scope section deliberately downgrades everything else
+            (80–81), and Priority 1 (469–473) contains exactly the thesis-serving items. That arc is coherent and the
+            document is not a backlog with headings.</p>
+            <p>The half that fails is validation. There is no Success Metrics section anywhere — "metric" appears twice,
+            both incidental. The closest outcome claim is "Improved marks remain an intended benefit, not a guarantee"
+            (57), which explicitly declines to be measured. Meanwhile the document excludes the entire measurement
+            apparatus (88, 301). Those exclusions are defensible for a platform handling minors' data; the failure is
+            that the document never connects the two facts. Having chosen a thesis that is a behavioral claim about
+            students, and having forbidden every instrument that could observe student behavior, it owes the reader an
+            explicit statement of how success will be judged instead. It says nothing, so the thesis is unfalsifiable by
+            accident rather than by decision.</p>
+            <p>Prioritized Experience Outcomes (111–121) is the structural substitute and cannot carry the load: each
+            item is a capability assertion with an unmeasurable qualifier. No counter-metrics exist, which matters more
+            than usual here — the tutoring thesis has an obvious failure mode (students completing sessions faster by
+            disengaging) that nothing in the document guards against.</p>
+          </div>
+        </div>
+        <div class="findings-list">
+          <article class="finding">
+            <header>
+              <span class="badge badge-sev-critical">critical</span>
+              <h3 class="finding-title">No Success Metrics and no measurement story</h3>
+              <span class="finding-location">absent entirely; cf. 57, 88, 301</span>
+            </header>
+            <div class="finding-note">The PRD bets on a behavioral outcome ("a student can complete a second tutoring
+            session independently", 51–52) while excluding analytics, telemetry, and session replay, and never states
+            the alternative evidence path. Nobody downstream can judge whether release one succeeded. Corroborated by
+            the adversarial and downstream reviewers, who add that the only instrument named anywhere is one developer's
+            Playwright run on macOS (436).</div>
+            <div class="finding-fix"><strong>Fix:</strong> add a Success Metrics section stating how each Prioritized
+            Experience Outcome will be evidenced without telemetry — named pilot cohort, supervisor-reported activation
+            time, backend aggregate session counts — or record an explicit Product Owner decision that release one ships
+            unmeasured, with a named accountable owner for discovering failure.</div>
+          </article>
+          <article class="finding">
+            <header>
+              <span class="badge badge-sev-high">high</span>
+              <h3 class="finding-title">Prioritized Experience Outcomes have no pass/fail definition</h3>
+              <span class="finding-location">§ Prioritized Experience Outcomes, 113–121</span>
+            </header>
+            <div class="finding-note">"resolve it, and activate confidently" (113–114) and "without human interface
+            guidance" (115) cannot be adjudicated. These are the document's stated top two priorities, so their
+            unfalsifiability propagates into every story derived from them.</div>
+            <div class="finding-fix"><strong>Fix:</strong> restate each outcome with an observable condition — e.g.
+            activation completes with every unmet prerequisite reachable from the hub in one hop and no external
+            documentation reference — or convert to a moderated usability acceptance gate with a named population, task,
+            and pass threshold.</div>
+          </article>
+        </div>
+      </details>
+    </section>
+
+    <section class="dimension">
+      <details>
+        <summary>
+          <h2>Done-ness clarity</h2>
+          <span class="verdict-pill verdict-adequate">adequate</span>
+        </summary>
+        <div class="dim-body">
+          <div class="dim-judgment">
+            <p>The density of genuinely testable bounds in the middle of this document is well above average. "Transport
+            loss schedules 1, 2, and 4 second reconnect-availability delays" (250), "five-failure invalidation" (340),
+            "MFA code entry uses one native text input holding the full pasteable value" (134), and "320 effective CSS
+            pixels and at 1280 CSS pixels with 400% zoom, in Standard, Large, and Extra large text modes" (401–403) are
+            all conditions an engineer can write a failing test against today. Negative requirements are equally sharp:
+            "Lifecycle events and transport loss never open an authenticated request or replacement EventSource" (240)
+            is directly assertable in a network trace.</p>
+            <p>Two gaps undercut this. The first is total: there is not one performance requirement in 538 lines. The
+            document itself establishes the need — "sometimes on shared devices and weak connections" (61) — then
+            converts it exclusively into resilience requirements. Every other quality family gets a release-blocking
+            gate; frontend performance has no gate, no budget, and no owner, on an SSE-streaming product whose primary
+            user is on a school network.</p>
+            <p>The second gap is pointed: the surfaces the thesis stakes everything on are the least bounded prose in
+            the file. "a calm Home continuation surface" (150–151) is the entire specification of the landing surface
+            for every authenticated user.</p>
+          </div>
+        </div>
+        <div class="findings-list">
+          <article class="finding">
+            <header>
+              <span class="badge badge-sev-critical">critical</span>
+              <h3 class="finding-title">No performance requirements anywhere</h3>
+              <span class="finding-location">§ Desktop and Platform Scope, 399–428; § Test and Verification Model, 430–459</span>
+            </header>
+            <div class="finding-note">Despite "weak connections" (61) and an SSE-streaming core (248–254), no latency,
+            render, bundle, or throughput bound exists, and the verification model contains no performance test category
+            alongside its accessibility, localization, security, and resilience categories. The adversarial reviewer
+            adds that a self-hosted product also states no deployment envelope it was designed against.</div>
+            <div class="finding-fix"><strong>Fix:</strong> add a performance section with product-specific bounds —
+            authenticated shell first render on a throttled school-network profile, streamed-token render latency,
+            transcript render cost at a stated turn count — the observable states for exceeding them, and the matching
+            automated test category.</div>
+          </article>
+          <article class="finding">
+            <header>
+              <span class="badge badge-sev-high">high</span>
+              <h3 class="finding-title">Refinement tiering is unfalsifiable</h3>
+              <span class="finding-location">§ Included, 80–81; § Prioritized Experience Outcomes, 121</span>
+            </header>
+            <div class="finding-note">"highest UX refinement", "visually conventional and merely functional", and
+            "conventional, consistent, unambiguous flows" give a reviewer no basis to accept or reject. Since this
+            tiering is the document's main scope-shaping device, its vagueness is load-bearing — and it is the
+            <em>only</em> quality bar for the entire mentoring and administration surface, so any implementation
+            passes.</div>
+            <div class="finding-fix"><strong>Fix:</strong> define each tier by observable obligations — e.g. refined
+            tier requires an empty, loading, partial, error, and recovery state per surface plus a keyboard walkthrough;
+            functional tier requires the standard states, unmodified inherited blueprints, and no bespoke layout
+            work.</div>
+          </article>
+          <article class="finding">
+            <header>
+              <span class="badge badge-sev-high">high</span>
+              <h3 class="finding-title">The Home surface carries no testable consequence</h3>
+              <span class="finding-location">§ Home and Unified Navigation, 150–151</span>
+            </header>
+            <div class="finding-note">"calm", "prioritizes current work by consequence", and the negative constraints
+            are the whole specification for a surface every user sees on every login.</div>
+            <div class="finding-fix"><strong>Fix:</strong> state what Home must show, the ordering rule, the maximum
+            item count, and the behavior when a user has no current work; or delegate Home explicitly to
+            <code>SURFACE-STATE-MATRIX.md</code> and say so.</div>
+          </article>
+          <article class="finding">
+            <header>
+              <span class="badge badge-sev-medium">medium</span>
+              <h3 class="finding-title">Adjective-bound preparation requirements</h3>
+              <span class="finding-location">§ Course Administration and Preparation, 162–163</span>
+            </header>
+            <div class="finding-note">"concise helper text", "supplemental tooltips", and "without scoring or shaming
+            the supervisor" sit directly beside genuinely testable siblings in the same sentence ("exact preview, and
+            confirmed code-point and byte feedback"), which makes the inconsistency avoidable.</div>
+            <div class="finding-fix"><strong>Fix:</strong> convert to conditions — helper text present for every field
+            with a bound; no completion percentage or progress score rendered on draft state.</div>
+          </article>
+        </div>
+      </details>
+    </section>
+
+    <section class="dimension">
+      <details>
+        <summary>
+          <h2>Scope honesty</h2>
+          <span class="verdict-pill verdict-strong">strong</span>
+        </summary>
+        <div class="dim-body">
+          <div class="dim-judgment">
+            <p>This is the document's best dimension by a clear margin. The Excluded section (83–92) does real work:
+            eight dense bullets that pre-empt exactly the omissions a reader would otherwise assume were oversights.
+            Deferred Backlog (527–533) separately distinguishes <em>deferred</em> from <em>excluded</em>, including the
+            conditional mascot entry (532).</p>
+            <p>The document is also honest about its own incompleteness in ways that are easy to omit. "The licensed
+            Tailwind Plus inventory is not yet bound… the handoff does not claim exact references already exist"
+            (415–417) volunteers a weakness rather than papering over it. "Silence is unresolved, not permission to
+            assume" (45–46) and the OpenAPI blocking rule (277–279) convert scope honesty into an enforceable working
+            rule. Open-items density is appropriate: unresolved work is concentrated in a named, owned ledger rather
+            than scattered as hedges.</p>
+            <p>The adversarial reviewer contests the outer edge of this dimension: several exclusions (guardian consent,
+            age verification, data export, safeguarding alerts) are stated without rationale or a named risk acceptor,
+            which is scope honesty about the <em>what</em> but not about the <em>consequence</em>. Those are carried as
+            separate critical findings below rather than downgrading this verdict.</p>
+          </div>
+        </div>
+        <div class="findings-list">
+          <article class="finding">
+            <header>
+              <span class="badge badge-sev-medium">medium</span>
+              <h3 class="finding-title">No <code>[ASSUMPTION]</code> tags and no Assumptions Index</h3>
+              <span class="finding-location">document-wide; cf. § Authority and Sources, 41–42</span>
+            </header>
+            <div class="finding-note">Everything reads as equally confirmed, yet several items are clearly
+            frontend-authored product choices rather than backend-sourced facts: the locale variant fallback rules
+            (363–366), the five static starters (199–200), and the five-minute warning threshold (323–324). A downstream
+            reader cannot tell which decisions are settled upstream and which are this document's own inference. The
+            source-fidelity reviewer independently flagged the 1/2/4-second reconnect schedule (250) as unsourced and
+            unmarked.</div>
+            <div class="finding-fix"><strong>Fix:</strong> tag frontend-originated inferences inline and index them, so
+            the future PRD knows which need confirmation.</div>
+          </article>
+          <article class="finding">
+            <header>
+              <span class="badge badge-sev-low">low</span>
+              <h3 class="finding-title">Priority and scope are conflated in one sentence</h3>
+              <span class="finding-location">§ Release Priorities, 479</span>
+            </header>
+            <div class="finding-note">"Priority expresses UX refinement and delivery sequence, not permission to omit
+            confirmed release-one behavior" fuses two different axes that the document elsewhere keeps apart.</div>
+            <div class="finding-fix"><strong>Fix:</strong> separate refinement tier from delivery order explicitly.</div>
+          </article>
+        </div>
+      </details>
+    </section>
+
+    <section class="dimension">
+      <details open>
+        <summary>
+          <h2>Downstream usability</h2>
+          <span class="verdict-pill verdict-thin">thin</span>
+        </summary>
+        <div class="dim-body">
+          <div class="dim-judgment">
+            <p>This dimension matters most here, because the document is explicitly chain-top. Delegation itself is
+            handled well — all seven companion contracts exist in the same folder, ownership is stated per companion,
+            and every identifier checked resolves, including <code>BCG-001</code>, <code>BCG-014</code>,
+            <code>BCG-015</code>, <code>BCG-016</code>, <code>BCG-017</code>, and backend <code>AS-1</code> through
+            <code>AS-32</code>. That is responsible delegation, not evasion.</p>
+            <p>What blocks extraction is that the document has no identifiers of its own. "Functional Requirement
+            Families" (123–219) is nine prose subsections; there is no <code>FR-*</code> anywhere in the file, and
+            <code>REQUIREMENT-FLOW-MATRIX.md</code> maps <em>backend</em> <code>FR-1</code>..<code>FR-84</code>, so
+            frontend requirement identity does not exist in this folder at all. Nothing in this document can be
+            referenced, versioned, diffed, or marked done.</p>
+            <p>The numbering that does exist creates a collision: line 483 instructs authors to derive from backend
+            <code>AS-1</code>..<code>AS-32</code> and the following list is numbered 1 through 16. Four protagonists
+            (Pablo, Elena, Rosa, Diego) appear only inside that list with no introduction. And there is no Glossary, in
+            a document whose precision depends on invented terms of art — "privacy shield", "security epoch",
+            "revalidation needed", "restricted stage", "stable-reading mode", plus the load-bearing readiness/approval
+            and brief/briefing pairs.</p>
+          </div>
+        </div>
+        <div class="findings-list">
+          <article class="finding">
+            <header>
+              <span class="badge badge-sev-critical">critical</span>
+              <h3 class="finding-title">No requirement identifiers</h3>
+              <span class="finding-location">§ Functional Requirement Families, 123–219; document-wide</span>
+            </header>
+            <div class="finding-note">Nine prose subsections with no <code>FR-*</code> or equivalent, and no frontend
+            requirement IDs in the delegated matrix either — its <code>FR-1</code>..<code>FR-84</code> are explicitly
+            backend IDs (<code>REQUIREMENT-FLOW-MATRIX.md:21-22</code>). A whole-file scan returns seven ID tokens, every
+            one a pointer into another document. Story creation, traceability, and done-tracking all lack an anchor; the
+            document's traceability promise (484) is one-directional.</div>
+            <div class="finding-fix"><strong>Fix:</strong> assign a stable frontend namespace (e.g. <code>FFR-*</code>)
+            across 123–219, one ID per discrete testable obligation, and add a column to
+            <code>REQUIREMENT-FLOW-MATRIX.md</code> binding each to its source <code>FR-*</code>/<code>NFR-*</code>/<code>AS-*</code>;
+            or state explicitly that this document is narrative only and backend IDs are the sole citation scheme.</div>
+          </article>
+          <article class="finding">
+            <header>
+              <span class="badge badge-sev-high">high</span>
+              <h3 class="finding-title">Acceptance-scenario numbering collides with backend <code>AS-*</code></h3>
+              <span class="finding-location">§ Acceptance-Scenario Foundation, 483–502</span>
+            </header>
+            <div class="finding-note">The instruction to use both schemes appears one line above a list numbered 1–16,
+            making bare scenario numbers ambiguous. The sixteen are also addressable only by ordinal — inserting one
+            renumbers every reference — and <code>REQUIREMENT-FLOW-MATRIX.md</code> does not map them at all, despite
+            line 484 designating it the release traceability source.</div>
+            <div class="finding-fix"><strong>Fix:</strong> prefix them with a distinct namespace (e.g.
+            <code>UXS-01</code>..<code>UXS-16</code>) and add them to the matrix, or state that they are illustrative and
+            not traceable.</div>
+          </article>
+          <article class="finding">
+            <header>
+              <span class="badge badge-sev-high">high</span>
+              <h3 class="finding-title">No Glossary for load-bearing invented terms</h3>
+              <span class="finding-location">absent; cf. 130, 190, 194, 212, 227, 236, 305, 309, 311</span>
+            </header>
+            <div class="finding-note">"privacy shield", "security epoch", "revalidation needed", "restricted stage",
+            "stable-reading mode", "static starters", and "existence-hiding" carry precise, safety-relevant meaning and
+            are used as if already defined. A misread of "privacy shield" as a visual overlay rather than a content-free
+            pre-paint barrier produces a security defect. Additionally "readiness" must be distinguished from "approval"
+            — a distinction the document itself flags as load-bearing (491) — and "brief" (a material artifact, 168) and
+            "briefing" (a mentoring packet, 104) denote unrelated things one morpheme apart.</div>
+            <div class="finding-fix"><strong>Fix:</strong> add a Glossary defining each coined term once, including the
+            readiness/approval and brief/briefing pairs, and reference it instead of re-describing the mechanism
+            inline.</div>
+          </article>
+          <article class="finding">
+            <header>
+              <span class="badge badge-sev-medium">medium</span>
+              <h3 class="finding-title">Undefined protagonists</h3>
+              <span class="finding-location">§ Acceptance-Scenario Foundation, 486–494</span>
+            </header>
+            <div class="finding-note">Pablo, Elena, Rosa, and Diego appear only in the scenario list with no role,
+            context, or introduction anywhere in the document, while Users and Context (59–70) names no individuals at
+            all.</div>
+            <div class="finding-fix"><strong>Fix:</strong> bind each name to its role at first use, or map them in Users
+            and Context.</div>
+          </article>
+          <article class="finding">
+            <header>
+              <span class="badge badge-sev-low">low</span>
+              <h3 class="finding-title">Prioritized Experience Outcomes are uncitable</h3>
+              <span class="finding-location">§ 113–121</span>
+            </header>
+            <div class="finding-note">Six numbered items with no stable identifier, referenced indirectly
+            throughout.</div>
+            <div class="finding-fix"><strong>Fix:</strong> assign identifiers so scenarios and stories can trace back to
+            an outcome.</div>
+          </article>
+        </div>
+      </details>
+    </section>
+
+    <section class="dimension">
+      <details>
+        <summary>
+          <h2>Shape fit</h2>
+          <span class="verdict-pill verdict-adequate">adequate</span>
+        </summary>
+        <div class="dim-body">
+          <div class="dim-judgment">
+            <p>The chosen shape is defensible. For a capability-dense, multi-stakeholder platform whose journeys and
+            per-surface states already live in adjacent owned contracts, a requirement-family narrative plus explicit
+            delegation is the right call. Declaring itself a "handoff companion for a future frontend PRD" (17) and
+            carrying <code>status: draft</code> is consistent with having no metrics section on a first pass. The
+            absence of inline user journeys is correct, not under-formalization.</p>
+            <p>The shape problem is an inversion rather than a wrong template. The two longest sections — State and
+            Integration Contract (221–283) and Security, Privacy, and Safety (285–358) — are dense normative
+            implementation policy at a granularity no PRD needs, while the sections only a PRD can own occupy about
+            twenty lines. The result reads closer to an engineering policy manual with a PRD preamble than to a PRD
+            foundation.</p>
+            <p>That inversion also produces a self-consistency problem: the document forbids duplicating delegated
+            contracts (22–23), then duplicates them at length. Two normative statements of the same rule in two owned
+            documents is exactly the divergence risk the delegation was meant to prevent, and the repository's own
+            one-source-of-truth rule is the standard being breached.</p>
+          </div>
+        </div>
+        <div class="findings-list">
+          <article class="finding">
+            <header>
+              <span class="badge badge-sev-high">high</span>
+              <h3 class="finding-title">Shape inversion between policy and product</h3>
+              <span class="finding-location">§ 221–283 and § 285–358 versus § 111–121 and § 461–479</span>
+            </header>
+            <div class="finding-note">Roughly a third of the document specifies transport and lifecycle mechanics it
+            delegates elsewhere anyway, while the product commitments that have no other owner occupy about twenty
+            lines. Downstream architecture gets more than it needs and downstream product work gets less.</div>
+            <div class="finding-fix"><strong>Fix:</strong> compress the mechanics sections to the decisions and their
+            owners, moving step-level rules into the state-machine and security companions, and reinvest the space in
+            outcomes, metrics, and the release cut line.</div>
+          </article>
+          <article class="finding">
+            <header>
+              <span class="badge badge-sev-high">high</span>
+              <h3 class="finding-title">No precedence rule between this document and the seven contracts it delegates to</h3>
+              <span class="finding-location">§ Purpose 22–29; § Authority and Sources 33–42</span>
+            </header>
+            <div class="finding-note">Line 42 ranks only "The three handoff documents win on conflict" over imports. The
+            seven companions get ad-hoc per-topic ownership sentences while this document restates large parts of state,
+            security, and accessibility behavior in compressed prose (221–358). When § State and Integration Contract
+            and <code>FRONTEND-STATE-MACHINES.md</code> drift — and at this density they will — nothing says which wins.
+            The master ownership sentence (25–29) is additionally seven-to-five with no pairing, and omits security and
+            accessibility from its list of owned concerns.</div>
+            <div class="finding-fix"><strong>Fix:</strong> add one precedence table with one row per companion and one
+            owned concern set per row, and either demote the restatements here to explicitly non-normative summaries or
+            delete them.</div>
+          </article>
+        </div>
+      </details>
+    </section>
+
+    <section class="reviewer-section">
+      <details open>
+        <summary>
+          <h2>Adversarial review — 5 critical, 15 high, 9 medium, 3 low</h2>
+          <span class="reviewer-source">review-adversarial.md</span>
+        </summary>
+        <div class="dim-body">
+          <div class="dim-judgment">
+            <p>A disciplined constraint catalogue wearing a PRD's clothes, and the disguise is the problem: it names two
+            "highest-priority experiences" and then builds a verification model that structurally cannot observe either
+            of them, before or after launch. Its one real product bet — that exposing backend truth and ambiguity always
+            beats resolving it for the user — is never stated as a bet, never defended, and never reconciled with its
+            own user context of children on weak school connections. Strip the prose and what remains is a 538-line
+            promise that somebody else will make the hard calls.</p>
+          </div>
+        </div>
+        <div class="findings-list">
+          <article class="finding">
+            <header>
+              <span class="badge badge-sev-critical">critical</span>
+              <h3 class="finding-title">The two priority outcomes are unmeasurable, and nothing would notice if both were missed</h3>
+              <span class="finding-location">L50–54, L113–115, L432–456</span>
+            </header>
+            <div class="finding-note">No success rate, sample, task-completion criterion, time bound, definition of
+            "second session", usability study, pilot, beta cohort, or post-release signal. The only instrument is L436 —
+            "Playwright's bundled Chromium on developer macOS covers the four named journeys" — a script written by the
+            team that knows the product, which proves a robot with perfect knowledge can click through. L301 removes the
+            last feedback channel. If both flagship outcomes fail in every school that installs MIA, this document
+            contains no mechanism by which anyone would ever find out.</div>
+            <div class="finding-fix"><strong>Fix:</strong> convert each priority outcome into a pre-release moderated
+            usability acceptance gate with a named population, task, assisted/unassisted criterion, and pass threshold;
+            and define one privacy-preserving, operator-visible, locally-stored success signal a school can read back.
+            If telemetry stays excluded, say explicitly who is accountable for discovering failure and how.</div>
+          </article>
+          <article class="finding">
+            <header>
+              <span class="badge badge-sev-critical">critical</span>
+              <h3 class="finding-title">The raw-error-body mandate contradicts three of the document's own security rules</h3>
+              <span class="finding-location">§ Error Response Bodies L262–272 vs § Security L288–296</span>
+            </header>
+            <div class="finding-note">L262 requires "the exact HTTP status and complete raw backend response body". L289
+            forbids exposing provider payloads and unnecessary personal data; L293 forbids forbidden fields entering
+            DOM, memory, or the accessibility tree; L296 forbids revealing whether an out-of-scope resource exists. A
+            backend body embedding a provider payload, another student's name, or a distinguishing not-found detail
+            satisfies L262 and violates all three. L268's escape hatch regulates only what the frontend <em>adds</em>,
+            and L272 closes the last door: "failure never authorizes frontend redaction". The client must display
+            whatever arrives, is banned from mitigating, and the whole safety of the feature rests on an open blocker in
+            another repository.</div>
+            <div class="finding-fix"><strong>Fix:</strong> state the precedence explicitly — until the error-body
+            blocker lands, the disclosure renders a contract-bounded safe body and verbatim mode is dark. If the Product
+            Owner truly accepts verbatim-always, record that acceptance, its data-protection rationale, and its approver
+            next to L270.</div>
+          </article>
+          <article class="finding">
+            <header>
+              <span class="badge badge-sev-critical">critical</span>
+              <h3 class="finding-title">Priority 0 is hostage to another repository with no authority, escalation, date, or descope plan</h3>
+              <span class="finding-location">§ Release Priorities L463–467; § Backend and OpenAPI Dependencies L507–525</span>
+            </header>
+            <div class="finding-note">P0 is "Accepted backend-gap closure" plus OpenAPI integration, gated by seventeen
+            named blockers. L281 asserts <code>BACKEND-CONTRACT-GAPS.md</code> "is the authoritative inventory and
+            release gate" — but a frontend planning artifact cannot bind a separate team's roadmap, and nowhere does
+            this document name a backend counterpart, an agreed date, a negotiated priority order, an escalation route,
+            or what ships if a blocker is declined. L278–279 is the correct engineering rule and a non-answer as a
+            delivery plan.</div>
+            <div class="finding-fix"><strong>Fix:</strong> add a dependency section with, per blocker, the backend
+            owner, the target date, the frontend slices it holds, and the explicit descope decision if it slips past a
+            stated cutoff.</div>
+          </article>
+          <article class="finding">
+            <header>
+              <span class="badge badge-sev-critical">critical</span>
+              <h3 class="finding-title">Safeguarding for minors is a disclaimer, not a design, and the only adults present are blinded</h3>
+              <span class="finding-location">§ Security L299–300; § Students and Oversight L184; § Users and Context L69–70</span>
+            </header>
+            <div class="finding-note">"MIA is not an emergency service, sends no safeguarding alert, and never implies
+            human monitoring or notification" (L299) is a legal posture, not a product answer. Compose it with "Active
+            chat content remains hidden from supervisors until completion" (L184) and "MIA treats a student as working
+            alone" (L69–70): a minor discloses self-harm or abuse to an AI tutor, in a product sold to schools, and by
+            design no adult can see it while it is happening and the system will not tell anyone. That may be the
+            correct release-one call, but a school administrator will ask it in the first ten minutes and this document
+            does not acknowledge the question exists, names no risk acceptor, specifies no student-facing
+            expectation-setting copy, and offers no "here is who to talk to" affordance.</div>
+            <div class="finding-fix"><strong>Fix:</strong> add an explicit safeguarding posture section: what the
+            student is told and when, what static help affordance exists, what the supervisor is told about their
+            blindness to active chats, and the named person who accepted the no-alert decision.</div>
+          </article>
+          <article class="finding">
+            <header>
+              <span class="badge badge-sev-critical">critical</span>
+              <h3 class="finding-title">No data-protection posture for minors' data across four EU launch locales</h3>
+              <span class="finding-location">§ Frontend Scope and Exclusions L85; § Localization L362; § Users and Context L61–62</span>
+            </header>
+            <div class="finding-note">L85 excludes, in one bullet with no rationale: "No public sign-up, operator command
+            UI, guardian account, age verification, guardian consent, or data export." L62: "Release one uses no age
+            differentiation." L362 launches <code>de-DE</code>, <code>fr-FR</code>, <code>pt-PT</code>,
+            <code>es-ES</code>. GDPR Art. 8 and Arts. 15/20 are not features you scope out of a frontend with a dash —
+            the excluded items <em>are</em> the named legal instruments. The document also ships no privacy-notice
+            surface, no terms surface, no retention statement, no consent record, no DPIA reference, and no
+            student-visible "what MIA stores about me".</div>
+            <div class="finding-fix"><strong>Fix:</strong> add a data-protection section stating which obligations the
+            operator owns, which the product owns, which frontend surfaces exist in release one, and who accepted the
+            exclusions. If the answer is "the self-hosting school is the controller and carries all of it", write that
+            sentence.</div>
+          </article>
+          <article class="finding">
+            <header>
+              <span class="badge badge-sev-high">high</span>
+              <h3 class="finding-title">The document disclaims authorship while authoring, and launders its own novel decisions through a memlog</h3>
+              <span class="finding-location">§ Purpose L19; § Authority and Sources L41</span>
+            </header>
+            <div class="finding-note">"It is not a final PRD and does not authorize behavior absent from its sources"
+            (L19), yet it invents behavior throughout — the 1/2/4-second reconnect delays (L251), the five-minute
+            warning threshold (L324), the five static starters (L199–200). The authority for these is L41: a log of the
+            decisions made while writing the document. A closed loop that gives the text a contract's force and a
+            draft's deniability.</div>
+            <div class="finding-fix"><strong>Fix:</strong> split content into "inherited from backend sources" and
+            "decided here, by whom, on what date", and drop the L19 disclaimer for the second category.</div>
+          </article>
+          <article class="finding">
+            <header>
+              <span class="badge badge-sev-high">high</span>
+              <h3 class="finding-title">The verification model runs on one laptop with no CI and one person's eyes</h3>
+              <span class="finding-location">§ Test and Verification Model L424–425, L450; § Desktop and Platform Scope L419–422</span>
+            </header>
+            <div class="finding-note">Safari is a <em>supported</em> platform (L419) whose only regression protection is
+            one human (L450), at no stated cadence, against no stated checklist — "critical workflows" is never
+            enumerated — while L87 excludes a Playwright WebKit project. Combined with this repository having no CI at
+            all, every release gate in the document is honour-system.</div>
+            <div class="finding-fix"><strong>Fix:</strong> state where automated checks run and who blocks a merge;
+            define the Safari manual checklist as a concrete enumerated list with a per-release cadence, or add the
+            WebKit project.</div>
+          </article>
+          <article class="finding">
+            <header>
+              <span class="badge badge-sev-high">high</span>
+              <h3 class="finding-title">The stated user context defeats the stated transport rule, and the document never notices</h3>
+              <span class="finding-location">§ Users and Context L61 vs § Tutoring Transport L251–252</span>
+            </header>
+            <div class="finding-note">On the exact network the document says students are on ("weak connections", L61),
+            the no-automatic-reconnect rule (L251–252) turns every blip into a manual task for a child mid-explanation,
+            several times per session — while the flagship outcome is that the same child completes a session unaided.
+            The keepalive-avoidance rationale is sound; that it costs the primary journey its fluency is never
+            acknowledged, quantified, or traded off.</div>
+            <div class="finding-fix"><strong>Fix:</strong> acknowledge the tension explicitly and specify the recovery
+            affordance's prominence, wording, focus behaviour, and an acceptable interruption budget; or negotiate a
+            read-only reconnect that provably does not touch the idle timer.</div>
+          </article>
+          <article class="finding">
+            <header>
+              <span class="badge badge-sev-high">high</span>
+              <h3 class="finding-title">SSE is mandated while the network it says it runs on is assumed away</h3>
+              <span class="finding-location">§ Tutoring Transport L249; § Frontend Scope and Exclusions L86</span>
+            </header>
+            <div class="finding-note">Self-hosted school networks are the canonical home of buffering proxies,
+            TLS-inspecting filters, and idle-connection reapers that break long-lived event streams in ways
+            indistinguishable from a hung tutor. There is no stated deployment assumption, no diagnostic for "your proxy
+            is eating the stream", no fallback transport, and offline mode is excluded.</div>
+            <div class="finding-fix"><strong>Fix:</strong> state the network assumptions as explicit deployment
+            prerequisites for the operator, and define the observable state and operator-facing guidance when a stream
+            never starts versus stalls.</div>
+          </article>
+          <article class="finding">
+            <header>
+              <span class="badge badge-sev-high">high</span>
+              <h3 class="finding-title">The provisioning flow is described as impossible</h3>
+              <span class="finding-location">§ Students and Oversight L180</span>
+            </header>
+            <div class="finding-note">"Temporary credentials are never returned, retained, or copied automatically and
+            must be communicated outside MIA." If credentials are never returned to the frontend, the supervisor never
+            learns them and cannot communicate them anywhere. Either they are displayed once — and "never returned" is
+            false — or the flow has no exit. This sits inside one of the two flagship supervisor journeys.</div>
+            <div class="finding-fix"><strong>Fix:</strong> say precisely what the supervisor sees, once, under what
+            masking, with what copy behaviour, and reserve "never retained" for storage and clipboard automation.</div>
+          </article>
+          <article class="finding">
+            <header>
+              <span class="badge badge-sev-high">high</span>
+              <h3 class="finding-title">"Second session unaided" presupposes a guided first session the document forbids representing</h3>
+              <span class="finding-location">§ Prioritized Experience Outcomes L115 vs § Users and Context L69–70</span>
+            </header>
+            <div class="finding-note">Choosing the <em>second</em> session concedes the first is scaffolded by a human.
+            But L69–70 states any human guidance "is neither required nor represented by the interface". There is
+            consequently no first-run experience, no onboarding, no empty-state tutorial, and no supervisor-facing "how
+            to introduce MIA to your class" anywhere in scope. The document optimises for session two and leaves session
+            one undefined and unowned.</div>
+            <div class="finding-fix"><strong>Fix:</strong> either define the release-one first-session experience as a
+            scoped surface, or state plainly that the first session depends on out-of-product teacher onboarding and
+            name who supplies it.</div>
+          </article>
+          <article class="finding">
+            <header>
+              <span class="badge badge-sev-high">high</span>
+              <h3 class="finding-title">The inline manual is the highest-priority feature and has no author, quality bar, or translation plan</h3>
+              <span class="finding-location">§ Prioritized Experience Outcomes L113; § Course Administration L161; § Localization L370</span>
+            </header>
+            <div class="finding-note">"activate confidently without a separate manual" is delivered by helper text,
+            examples, and tooltips (L161) across seven locales. The only verification is completeness and <em>fit</em>
+            (L370). A catalogue can be 100% complete, perfectly fitted, and incomprehensible in German. No content
+            owner, no UX-writing standard, no reading level, no native-educator review.</div>
+            <div class="finding-fix"><strong>Fix:</strong> name the content owner, set a reading-level and review
+            standard, and add native-speaker educator review of the preparation and activation copy to release
+            evidence.</div>
+          </article>
+          <article class="finding">
+            <header>
+              <span class="badge badge-sev-high">high</span>
+              <h3 class="finding-title">Model-output safety is verified by an unspecified manual skim of a stochastic system, for minors</h3>
+              <span class="finding-location">§ Test and Verification Model L456</span>
+            </header>
+            <div class="finding-note">"Manual content review covers stochastic tutor praise, safeguarding language, and
+            no false monitoring claims." No sampling protocol, corpus, adversarial prompt set, pass threshold, reviewer
+            qualification, locale coverage, or re-run trigger on provider/model change. The structural controls
+            (L290–291) are excellent and address injection; they do not address what the tutor <em>says</em> to a
+            child.</div>
+            <div class="finding-fix"><strong>Fix:</strong> define a red-team prompt suite with locale coverage, a
+            sampling size, explicit fail conditions, and a re-run trigger on any model or prompt change; state who owns
+            it.</div>
+          </article>
+          <article class="finding">
+            <header>
+              <span class="badge badge-sev-high">high</span>
+              <h3 class="finding-title">Everything is release-blocking and nothing may be cut</h3>
+              <span class="finding-location">§ Release Priorities L479; passim</span>
+            </header>
+            <div class="finding-note">Keyboard-only completion (L135), WCAG 2.2 AA (L381), blocked cells (L395), reflow
+            failures (L404), Safari evidence (L421), the error-body blocker (L272), and the logout-quiescence blocker
+            (L316) are all vetoes. When every constraint is a veto and no arbiter is named, the real cut list will be
+            improvised under deadline pressure by whoever is typing.</div>
+            <div class="finding-fix"><strong>Fix:</strong> name the release-decision owner and state which gates are
+            genuinely non-negotiable versus severity-triaged with a documented waiver process.</div>
+          </article>
+          <article class="finding">
+            <header>
+              <span class="badge badge-sev-high">high</span>
+              <h3 class="finding-title">Nothing can be diagnosed in the field</h3>
+              <span class="finding-location">absent; § Security L301</span>
+            </header>
+            <div class="finding-note">No telemetry, no error SDK, no session replay — all defensible for minors' data.
+            But the document provides no local substitute: no build/version display, no diagnostics page, no "report a
+            problem" affordance, no operator-readable client error log, no support handoff. A school's install breaks
+            and the only channel is a teacher's prose description to an unnamed recipient.</div>
+            <div class="finding-fix"><strong>Fix:</strong> specify the minimum in-product diagnostics: version/build
+            identifier, an operator-visible client health view, and a defined support-report path carrying no protected
+            content.</div>
+          </article>
+          <article class="finding">
+            <header>
+              <span class="badge badge-sev-high">high</span>
+              <h3 class="finding-title">The Tailwind Plus gate has no failure branch</h3>
+              <span class="finding-location">§ Desktop and Platform Scope L415–417</span>
+            </header>
+            <div class="finding-note">Thirty canonical components, zero verified availability, inheritance mandatory,
+            invented imitation markup forbidden by repository rule. If the library lacks a blueprint for a component the
+            design assumes, this document specifies no fallback and the gate simply cannot be passed. The downstream
+            reviewer adds that the gate names no owner, no output artifact, and no definition of done, while Priority 0
+            depends on it — so every UI story in the project is gated on a task with no acceptance criteria.</div>
+            <div class="finding-fix"><strong>Fix:</strong> define the decision path for a missing blueprint —
+            substitute, compose, or escalate a design change — name the output artifact and owner, enumerate the
+            canonical component set (or designate <code>DESIGN.md</code> § Components as that set), and time-box the
+            binding exercise.</div>
+          </article>
+          <article class="finding">
+            <header>
+              <span class="badge badge-sev-high">high</span>
+              <h3 class="finding-title">"The four named journeys" is a dangling referent that defines the entire E2E scope</h3>
+              <span class="finding-location">§ Test and Verification Model L436</span>
+            </header>
+            <div class="finding-note">This document names six prioritized experience outcomes and sixteen acceptance
+            scenarios. It never names four journeys. They resolve to <code>KF-1</code>..<code>KF-4</code> in
+            <code>REQUIREMENT-FLOW-MATRIX.md:30-33</code>, but the same matrix also defines six <code>UJ-*</code> and
+            eleven <code>SF-*</code> flows, so "four" is ambiguous on first read across three candidate sets. "critical
+            auth and recovery paths" is undefined.</div>
+            <div class="finding-fix"><strong>Fix:</strong> write "the four key flows <code>KF-1</code> through
+            <code>KF-4</code>" and enumerate the critical auth and recovery paths.</div>
+          </article>
+          <article class="finding">
+            <header>
+              <span class="badge badge-sev-high">high</span>
+              <h3 class="finding-title">No schedule, effort, sequencing, or resourcing for an enormous surface</h3>
+              <span class="finding-location">absent throughout</span>
+            </header>
+            <div class="finding-note">128 surfaces, 31 state machines, seven locales, three text modes, WCAG 2.2 AA
+            release-blocking on every surface at 320px and 400% zoom, manual assistive-technology and per-browser
+            evidence, plus seventeen external blockers. No date, no phase boundary, no team-size assumption, and no
+            statement of what one release costs.</div>
+            <div class="finding-fix"><strong>Fix:</strong> add a delivery section: assumed team, phase boundaries, the
+            order P0 must land in, and the first date at which slippage forces a scope conversation.</div>
+          </article>
+          <div class="tail">
+            Plus 9 medium and 3 low adversarial findings in <code>review-adversarial.md</code>, including: the idle
+            warning contradicts its own no-prediction claim and the "no countdown" exclusion is cosmetic (L92 vs
+            L320–324); two different answers for a missing backend contract (L242 vs L278–279); multi-role self-scope
+            collision unaddressed (L66, L96–98 vs L184); content language unresolved across UI locale, course language,
+            and tutor output (L362–369, L158, L190); "Firefox is unsupported but not proactively blocked" defines no
+            experience (L422); two library questions after 538 lines of absolutes signal false closure (L535–538); and
+            <code>status: draft</code> on a document asserting release gates.
+            <ul>
+              <li><strong>What survived the attack:</strong> the OpenAPI dependency rule (L274–283), which states a
+              prohibition <em>and</em> a consequence and enumerates the specific cheats it forecloses; the per-tab idle
+              baseline and keepalive prohibition (L318–324); existence-hiding as a single fixed presentation (L109,
+              L296); reflow at 320 CSS px and 1280 px at 400% zoom in three text modes (L401–405) — the one headline
+              quality requirement that is unambiguously falsifiable; and the exclusion list (L83–92).</li>
+            </ul>
+          </div>
+        </div>
+      </details>
+    </section>
+
+    <section class="reviewer-section">
+      <details open>
+        <summary>
+          <h2>Source-fidelity review — 1 critical, 2 high, 5 medium, 3 low</h2>
+          <span class="reviewer-source">review-source-fidelity.md</span>
+        </summary>
+        <div class="dim-body">
+          <div class="dim-judgment">
+            <p>Every declared source path and every in-document cross-reference resolves, and the document is unusually
+            disciplined about not inventing transport — its recurring "OpenAPI owns this" and <code>BCG-*</code>
+            deferrals are real and correctly targeted. The defects are almost entirely of omission rather than
+            invention: confirmed backend behavior that directly shapes the interface never reaches this document, and
+            the repository's own <code>AGENTS.md</code> vocabulary mandate for "sign-in expiry" is never honored. One
+            passage — the Continue-working deadline response — states a response shape that no named source
+            establishes.</p>
+          </div>
+        </div>
+        <div class="findings-list">
+          <article class="finding">
+            <header>
+              <span class="badge badge-sev-critical">critical</span>
+              <h3 class="finding-title">SSE establishment resets the server idle timer, and the idle-warning model never says so</h3>
+              <span class="finding-location">frontend 250–254, 318–322; <code>product-requirements.md:530-532</code>, <code>api.md:122</code></span>
+            </header>
+            <div class="finding-note">Backend, verbatim: "Each successful authenticated HTTP request, including
+            establishment of an SSE connection, resets the inactivity timer." Frontend: "Each tab's idle-warning
+            baseline is its own last successful user-initiated authenticated request" (318–319). The client model is
+            internally sound but never states the consequence: in the flow it designates highest priority, opening or
+            reopening the stream extends the <strong>server</strong> deadline while the client baseline does not move,
+            so the local warning can fire against a deadline the server already pushed out — and a long-lived stream
+            plus one explicit <em>Try now</em> is a keepalive the backend honors. The project's own
+            <code>BACKEND-CONTRACT-GAPS.md:70-72</code> already records this fact, so the foundation under-claims what
+            its own ledger holds, on the single invariant <code>AGENTS.md</code> states most emphatically.</div>
+            <div class="finding-fix"><strong>Fix:</strong> in § Tutoring Transport, state that SSE establishment is an
+            authenticated request that refreshes the server-side idle deadline today, that the client baseline is
+            deliberately more conservative, and that reconciling the two is part of the <code>BCG-001</code> deadline
+            contract.</div>
+          </article>
+          <article class="finding">
+            <header>
+              <span class="badge badge-sev-high">high</span>
+              <h3 class="finding-title">Login throttling is confirmed backend behavior and appears nowhere</h3>
+              <span class="finding-location">frontend 125–146, 83–92; <code>product-requirements.md:1609-1617</code>, <code>paths/auth.yaml:26-28</code></span>
+            </header>
+            <div class="finding-note">Backend: five failed attempts per normalized username, 30 per source IP in a
+            rolling 15-minute window, 1/2/4-second retry delays, <code>429</code> with <code>Retry-After</code>, and a
+            block at the fifth username failure. OpenAPI makes it a first-class login response. The frontend enumerates
+            the authentication family in fine detail — password managers, autofill, paste, autocomplete purposes, reveal
+            state, MFA input shape, TOTP enrollment — and never mentions a throttled state. It is also absent from
+            § Excluded and the acceptance scenarios, so a reader cannot tell whether it was scoped out or overlooked.
+            The backend explicitly flags "classroom-scale bursts can temporarily throttle logins" against the exact
+            population described at frontend line 61.</div>
+            <div class="finding-fix"><strong>Fix:</strong> add throttled/blocked to the authentication state list, and
+            state that the UI surfaces a wait derived only from <code>Retry-After</code> and never a client-computed
+            countdown.</div>
+          </article>
+          <article class="finding">
+            <header>
+              <span class="badge badge-sev-high">high</span>
+              <h3 class="finding-title">Four confirmed tutoring-session lifecycle rules that constrain interface affordances are absent</h3>
+              <span class="finding-location">frontend 186–200, 83–92; <code>product-requirements.md:1107-1113</code>, <code>1186</code></span>
+            </header>
+            <div class="finding-note">Backend: tutoring sessions have no inactivity timeout; students cannot abandon or
+            discard an active session and finishing is their only action for ending it; only the owning student can
+            finish, and supervisors and administrators cannot force completion; completion is rejected while a response
+            is generating or queued. The frontend says only "one active session … finish" as a feature name. Nothing in
+            the document prevents a designer adding a <em>Discard session</em> control, a supervisor-side <em>Force
+            complete</em>, or a Finish button enabled while a response is streaming. <code>AGENTS.md</code> names all
+            four as product invariants the UI must not violate.</div>
+            <div class="finding-fix"><strong>Fix:</strong> state the four rules in the Tutoring family and add the
+            forbidden controls to § Excluded.</div>
+          </article>
+          <div class="tail">
+            Plus 5 medium and 3 low findings in <code>review-source-fidelity.md</code>:
+            <ul>
+              <li><strong>medium</strong> — § Security asserts a Continue-working response shape (319–321) that no named
+              source establishes; the implemented OpenAPI path map has no <code>/api/v1/auth/session</code> operation,
+              and <code>AuthSession</code> carries only <code>stage</code> and <code>mfa_challenge_id</code>. Hedged
+              three lines later but written in the indicative — the one passage that fails the document's own line-19
+              claim.</li>
+              <li><strong>medium</strong> — CSRF is named four times and its actual shape never surfaced: it is required
+              on <em>unauthenticated</em> endpoints, and the <code>__Host-mia_csrf</code> cookie is deliberately
+              script-readable, an unstated exception to the document's own "never expose cookies" rule at 288–289.</li>
+              <li><strong>medium</strong> — JSON:API 1.1 and the 65,536-byte safe-registry-field error bound are never
+              named, in the one section that most depends on them; that bound is what makes "complete raw backend
+              response body" implementable rather than open-ended.</li>
+              <li><strong>medium</strong> — Vocabulary: "sign-in expiry" appears zero times. Substitutes are
+              "authentication expiry" (53), "session-expiry countdown" (92), bare "expiry" (303, 489). Line 92 is
+              genuinely ambiguous given that tutoring sessions have no inactivity timeout.</li>
+              <li><strong>medium</strong> — The 1/2/4-second reconnect schedule (250) is presented as transport contract
+              but is unsourced, and collides numerically with the login-throttle delays that <em>are</em> sourced and
+              are missing.</li>
+              <li><strong>low</strong> — Speech requires a supervisor-set ElevenLabs voice the student cannot set;
+              "Optional-provider absence disables only dependent features" (246) is therefore not the only gate.</li>
+              <li><strong>low</strong> — The frontmatter <code>sources:</code> list omits the OpenAPI files it ranks
+              third in its own authority order.</li>
+              <li><strong>low</strong> — The noun "AI tutor" never appears; every use is adjectival.</li>
+            </ul>
+            <strong>Invariant coverage against <code>AGENTS.md</code>:</strong> carried well — OpenAPI ownership,
+            no-probing, ordered authorization gate, model-output-as-untrusted-text, release-one exclusions, student
+            profile immutability. Carried incompletely — restricted-stage prohibitions (no protected title, breadcrumb,
+            cached name, or prefetch are unstated); the 30-minute / 12-hour figures never appear though a derived
+            five-minute threshold does; existence-hiding omits the enumerated dimensions, notably <em>timing</em>;
+            optimistic-update and destructive-mutation rules appear only positively or as a scenario. Largely silent —
+            the general no-automatic-replay rule appears once, scoped only to invitation acceptance, even though the
+            document introduces client-generated request IDs; this is the invariant most likely to be breached by a
+            developer reading only this document.
+          </div>
+        </div>
+      </details>
+    </section>
+
+    <section class="reviewer-section">
+      <details open>
+        <summary>
+          <h2>Downstream-implementability review — 2 critical, 5 high, 6 medium, 2 low</h2>
+          <span class="reviewer-source">review-downstream.md</span>
+        </summary>
+        <div class="dim-body">
+          <div class="dim-judgment">
+            <p><code>bmad-architecture</code> can proceed: the stack is pinned (411, matching
+            <code>.agents/rules/techstack.md</code>), the integration model is decided, and the two genuinely open
+            architecture questions are correctly stated as open. <code>bmad-create-epics-and-stories</code> cannot
+            proceed to a feature epic: zero requirement identifiers, plus the entire authentication spine blocked by an
+            open <code>BCG-001</code> that sits under the first story of any sensible epic ordering. A P0 infrastructure
+            epic is cuttable today; a value epic is not.</p>
+            <p><strong>Extractability test</strong> — Localization (360–377): <em>pass</em>, the best-constructed
+            section in the document; an engineer could build the i18n module from it alone. Error Response Bodies
+            (260–272): <em>pass with one gap</em> — behaviorally complete, but the gate it names is never identified.
+            Material and Files (166–174): <em>fail</em> — eight lines naming capabilities with no identifier, field
+            list, state enumeration, or bounds; it is a table of contents, and this generalizes to the whole Functional
+            Requirement Families block. Security, Privacy, and Safety (285–358): <em>fail on packaging, not content</em>
+            — 74 lines under a single H2 mixing sixteen one-line invariants with ten unrelated subsystems and no
+            subheadings. Desktop and Platform Scope (399–428): <em>partial</em>.</p>
+            <p><strong>Story-cuttability test</strong> — of the first three P0 stories attempted, only "Locale
+            negotiation, selector, and catalog loading" is implementable to done with nothing invented. "Anonymous
+            bootstrap" is cleanly blocked by <code>BCG-001</code>. "Login form" is cuttable only as an unwired
+            presentational component, deferring every interesting risk. One of three, and it is infrastructure.</p>
+          </div>
+        </div>
+        <div class="findings-list">
+          <article class="finding">
+            <header>
+              <span class="badge badge-sev-critical">critical</span>
+              <h3 class="finding-title">Ownership is asserted for concerns the named owner does not contain</h3>
+              <span class="finding-location">§ Tutoring Transport, 256–258</span>
+            </header>
+            <div class="finding-note">Line 256 lists seventeen concerns owned by
+            <code>FRONTEND-STATE-MACHINES.md</code>. Two do not resolve. <strong>Reading-position preservation:</strong>
+            that document has no section on it; the normative owner is <code>ACCESSIBILITY-ACCEPTANCE.md</code> AC-013
+            (lines 538–689). <strong>Dialogs:</strong> likewise absent; owner is AC-007 (lines 295–348). Worse, this
+            document contradicts itself 60 lines apart — line 195 correctly says of stable-reading behavior "Detailed
+            behavior belongs to the accessibility contract", then line 256 reassigns it. An engineer who follows line
+            256 opens the named file, finds nothing, and invents.</div>
+            <div class="finding-fix"><strong>Fix:</strong> remove <em>reading-position preservation</em> and
+            <em>dialogs</em> from the line-256 list and point both at AC-013 and AC-007. Audit the remaining fifteen the
+            same way.</div>
+          </article>
+          <article class="finding">
+            <header>
+              <span class="badge badge-sev-high">high</span>
+              <h3 class="finding-title">Dangling referent: "the ledger"</h3>
+              <span class="finding-location">§ Security, Privacy, and Safety, 315</span>
+            </header>
+            <div class="finding-note">"The ledger's logout request-quiescence blocker must close before release." The
+            noun <em>ledger</em> appears exactly once and is never defined; this document never calls
+            <code>BACKEND-CONTRACT-GAPS.md</code> "the ledger". Resolvable only via a third file
+            (<code>SECURITY-PRIVACY-ACCEPTANCE.md:298</code>). No <code>BCG</code> entry is titled for logout
+            quiescence, so a reader scanning blocker titles concludes the pointer is broken.</div>
+            <div class="finding-fix"><strong>Fix:</strong> replace with "<code>BCG-001</code> covers logout request
+            quiescence".</div>
+          </article>
+          <article class="finding">
+            <header>
+              <span class="badge badge-sev-high">high</span>
+              <h3 class="finding-title">Blockers cited by prose description instead of ID</h3>
+              <span class="finding-location">272, 328, 510</span>
+            </header>
+            <div class="finding-note">"The backend error-body safety blocker" (272, 510) means <code>BCG-007</code>,
+            never named. "<code>BACKEND-CONTRACT-GAPS.md</code> owns the deadline contract" (328) names no ID. The
+            document proves it knows the convention at line 241 and then applies it to only 5 of 17 blockers. Every
+            un-IDed citation costs a downstream reader a full-text search across a 72 KB file.</div>
+            <div class="finding-fix"><strong>Fix:</strong> replace every descriptive blocker reference with its
+            <code>BCG-NNN</code>.</div>
+          </article>
+          <article class="finding">
+            <header>
+              <span class="badge badge-sev-high">high</span>
+              <h3 class="finding-title">The document contradicts its own authority</h3>
+              <span class="finding-location">frontmatter 3; § Purpose 17–19; vs <code>AGENTS.md</code></span>
+            </header>
+            <div class="finding-note"><code>status: draft</code> and "It is not a final PRD and does not authorize
+            behavior absent from its sources", against <code>AGENTS.md</code>, which lists planning artifacts in this
+            folder as "the frontend's binding contracts" and names this file as owning "frontend requirements, scope,
+            and exclusions". So is this the binding PRD, or an input to a PRD that does not exist?
+            <code>bmad-architecture</code> needs the answer to know whether line 411's stack is decided;
+            <code>bmad-create-epics-and-stories</code> needs it to know whether it is cutting stories or first writing
+            the PRD.</div>
+            <div class="finding-fix"><strong>Fix:</strong> resolve explicitly. Either promote to
+            <code>status: approved</code> and drop lines 17–19, or keep it a draft and correct the
+            <code>AGENTS.md</code> description.</div>
+          </article>
+          <div class="tail">
+            Plus 6 medium and 2 low findings in <code>review-downstream.md</code>, including: "the four named journeys"
+            unnamed (436, are <code>KF-1</code>..<code>KF-4</code>); positional numbering where stable IDs are needed
+            (486–502, 113–121); the master ownership sentence is seven-to-five with no pairing and omits security and
+            accessibility (25–29); no glossary and undefined coined terms; both <code>ROUTE-INVENTORY.md</code> and
+            <code>SURFACE-STATE-MATRIX.md</code> are declared binding while defining no route or surface IDs, so stories
+            must cite headings that break silently when reworded; and a line-wrap artifact mid-sentence at 170–172.
+            <ul>
+              <li><strong>Recorded as a positive:</strong> the mentoring blockers (210–213) and the
+              <code>BCG-014</code> seven-mutation scope (355–358) name the blocker, the blocked slice, and the
+              explicitly <em>un</em>blocked remainder — planning can route around them cleanly.
+              <code>BCG-001</code> is the one whose blast radius (the entire authentication spine, transitively every
+              protected surface) is never characterized.</li>
+            </ul>
+          </div>
+        </div>
+      </details>
+    </section>
+
+    <div class="mechanical">
+      <h3>Mechanical notes</h3>
+      <ul>
+        <li><strong>Cross-references are in good shape.</strong> All seven companion contracts exist in the same folder;
+        <code>BCG-001</code>, <code>BCG-014</code>, <code>BCG-015</code>, <code>BCG-016</code>, <code>BCG-017</code>
+        resolve; <code>AC-001</code>..<code>AC-019</code> and <code>CP-01</code>..<code>CP-14</code> are contiguous;
+        backend <code>AS-1</code>..<code>AS-32</code> resolves; every frontmatter source path resolves through the
+        <code>mia</code> symlink. The only unresolved pointers are the unnamed ones and the two misdirected ownership
+        claims at 256–257.</li>
+        <li><strong>Vocabulary drift against the repository's own rule.</strong> <code>AGENTS.md</code> mandates
+        "sign-in expiry"; the phrase appears zero times. Roles (administrator, supervisor, mentor, student, operator)
+        are used correctly and consistently throughout, with no "admin" abbreviation. "AI tutor" is never established as
+        a noun.</li>
+        <li><strong>Identifier formatting is inconsistent.</strong> <code>BCG-*</code> references are code-formatted at
+        208, 213, 216 but bare at 241, 341–342, 355.</li>
+        <li><strong>No Assumptions Index to round-trip,</strong> because there are no inline assumption tags — see the
+        Scope honesty finding.</li>
+        <li><strong>Formatting artifact:</strong> the Material and Files paragraph breaks mid-phrase at 170–172, leaving
+        "progress," alone on line 171, which reads as a list-item boundary that is not there.</li>
+        <li><strong>Required-section audit against launch stakes.</strong> Present and substantive: Purpose, scope and
+        exclusions, users, requirements, dependencies, deferred backlog. Missing: Success Metrics, Glossary, requirement
+        identifiers, any performance section, an Assumptions Index, a delivery/sequencing section, and a
+        data-protection section.</li>
+        <li><strong>Orientation note (memlog and inputs).</strong> Ten logged decisions did not reach the document;
+        those clearly owned by <code>EXPERIENCE.md</code> are legitimate delegation, but three are in scope and absent:
+        the speed/friction asymmetry for routine administration, the combined administrator-supervisor
+        continue-from-creation affordance, and the prototype-validation obligation for the minimum viewport (dropped
+        rather than closed, and not in Open Questions). Voice and tone intent from the original brainstorming — "formal
+        but warm, not colloquial, simple language for students", "all errors are allowed", "never left alone" — does not
+        survive into the requirement structure, and the delegation paragraph routes voice nowhere explicitly. Several
+        statements have no traceable origin in the memlog, imports, or working files, including the
+        no-saved-or-unsaved-claim doctrine, stable-reading mode, the <code>pagehide</code> privacy shield, the cross-tab
+        security epoch, the 1/2/4-second reconnect delays, the five-minute warning threshold, and the mobile
+        verification and mentor-grant flows.</li>
+      </ul>
+    </div>
+
+    <footer class="report-footer">
+      <div class="meta">
+        <span>Rubric: .agents/skills/bmad-prd/assets/prd-validation-checklist.md</span>
+        <span>Generated: 2026-09-13T16:41:01Z</span>
+      </div>
+    </footer>
+  </div>
+</body>
+</html>

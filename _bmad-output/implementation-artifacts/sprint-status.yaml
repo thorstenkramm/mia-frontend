@@ -1,0 +1,115 @@
+# STATUS DEFINITIONS:
+# ==================
+# Epic Status:
+#   - backlog: Epic not yet started
+#   - in-progress: Epic actively being worked on
+#   - done: All stories in epic completed
+
+# Story Status:
+#   - backlog: Story only exists in epic file
+#   - ready-for-dev: Story file created, ready for development
+#   - in-progress: Developer actively working on implementation
+#   - review: Implementation complete, ready for review
+#   - done: Story completed
+
+# Retrospective Status:
+#   - optional: Can be completed but not required
+#   - done: Retrospective has been completed
+
+# Action Item Status:
+#   - open: Committed during a retrospective, not yet addressed
+#   - in-progress: Actively being worked on
+#   - done: Completed
+
+# WORKFLOW NOTES:
+# ===============
+# - Epic transitions to 'in-progress' automatically when its first story starts (via build's sprint sync)
+# - Stories can be worked in parallel if team capacity allows
+# - Developer typically creates the next story after the previous one is 'done' to incorporate learnings
+# - Dev moves story to 'review', then runs code-review (fresh context, different LLM recommended)
+# - Retrospective appends its action items to action_items; the status view surfaces open ones
+generated: 09-19-2026 13:57
+last_updated: 09-19-2026 13:57
+project: mia-frontend
+project_key: NOKEY
+tracking_system: file-system
+story_location: 
+  /Users/thorsten/projects/thorsten/mia-frontend/_bmad-output/implementation-artifacts
+development_status:
+  epic-1: backlog
+  1-1-project-scaffold-with-enforced-architecture: backlog
+  1-2-localized-anonymous-entry: backlog
+  1-3-password-sign-in-with-restricted-stage-isolation: backlog
+  1-4-mfa-challenge-and-recovery-code-sign-in: backlog
+  1-5-forced-password-replacement: backlog
+  1-6-password-recovery-and-token-reset: backlog
+  1-7-invitation-preview-and-acceptance: backlog
+  1-8-session-lifecycle-idle-warning-expiry-shield-logout-bcg-001: backlog
+  1-9-totp-enrollment-and-recovery-codes: backlog
+  epic-1-retrospective: optional
+
+  epic-2: backlog
+  2-1-capability-driven-application-shell: backlog
+  2-2-home-the-continuation-surface: backlog
+  2-3-navigation-contract-urls-history-route-changes: backlog
+  2-4-student-self-profile-read-only: backlog
+  2-5-staff-profile-editing: backlog
+  epic-2-retrospective: optional
+
+  epic-3: backlog
+  3-1-administrator-creates-a-course: backlog
+  3-2-the-preparation-hub: backlog
+  3-3-course-fields-details-goals-ai-instructions-logo: backlog
+  3-4-readiness-activation-deactivation: backlog
+  3-5-supervisor-relationships-and-course-deletion: backlog
+  epic-3-retrospective: optional
+
+  epic-4: backlog
+  4-1-create-materials-and-file-drafts: backlog
+  4-2-upload-files-with-live-progress: backlog
+  4-3-finalize-and-processing: backlog
+  4-4-brief-review-correction-and-approval: backlog
+  4-5-authorized-download-and-deletion: backlog
+  epic-4-retrospective: optional
+
+  epic-5: backlog
+  5-1-create-a-new-student: backlog
+  5-2-add-an-existing-student-by-exact-username: backlog
+  5-3-roster-and-student-support: backlog
+  5-4-session-status-with-honest-visibility-expectations: backlog
+  5-5-completed-transcripts-used-material-summary-correction: backlog
+  epic-5-retrospective: optional
+
+  epic-6: backlog
+  6-1-start-a-tutoring-session: backlog
+  6-2-send-and-queue-messages: backlog
+  6-3-live-streamed-responses: backlog
+  6-4-stable-reading-and-transcript-integrity: backlog
+  6-5-stop-retry-and-reconnection: backlog
+  6-6-finish-a-session-bcg-012-gated-closure: backlog
+  6-7-workspace-honesty-fixed-copy-and-optional-speech: backlog
+  6-8-learning-history: backlog
+  epic-6-retrospective: optional
+
+  epic-7: backlog
+  7-1-request-mentoring: backlog
+  7-2-triage-and-assign-requests: backlog
+  7-3-respond-and-schedule: backlog
+  7-4-reschedule-cancel-complete-bcg-016-gated-closure: backlog
+  7-5-grant-the-mentor-role-bcg-017-blocked: backlog
+  epic-7-retrospective: optional
+
+  epic-8: backlog
+  8-1-account-administration: backlog
+  8-2-invitation-administration: backlog
+  8-3-course-administration: backlog
+  8-4-durable-jobs-and-audit-records: backlog
+  epic-8-retrospective: optional
+
+  epic-9: backlog
+  9-1-performance-harness-and-budget-evidence: backlog
+  9-2-accessibility-evidence-matrix: backlog
+  9-3-localization-and-reflow-release-checks: backlog
+  9-4-security-acceptance-suites: backlog
+  9-5-manual-release-evidence: backlog
+  epic-9-retrospective: optional
