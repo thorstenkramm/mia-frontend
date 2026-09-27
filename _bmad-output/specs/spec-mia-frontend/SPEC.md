@@ -92,6 +92,10 @@ confirms it. The planning package is complete; this spec binds it to the archite
   non-negotiable; lifecycle events never act as keepalive.
 - No browser persistence of protected content or secrets; no analytics, telemetry, remote fonts, or remote scripts;
   light theme only; model output is untrusted text rendered solely through the locked boundary.
+- Logout follows the 2026-09-27 owner decision in `FRONTEND-PRD-FOUNDATION.md` and the security companion's
+  §Logout and Privacy Screen: the backend's reduced stateless guarantee is accepted, including possible restoration by
+  delayed authentication transitions. Local shielding is not cookie revocation; confirmation and explicit reconciliation
+  follow those companions. BCG-001 remains open for its remaining obligations.
 - Release-blocking gates: full WCAG 2.2 AA matrix, 320 px reflow and 400 % zoom in all three text modes, performance
   budgets `FFR-951..956` on the constrained profile, keyboard-only authentication, manual Safari evidence.
 - The stack is fixed by `.agents/rules/techstack.md`; the architecture is fixed by `ARCHITECTURE-SPINE.md`
@@ -99,6 +103,13 @@ confirms it. The planning package is complete; this spec binds it to the archite
   `DESIGN.md`.
 - Open `BACKEND-CONTRACT-GAPS.md` entries block the stories that need them; `BCG-001` gates the authentication journey
   and must close before release.
+- Owner-approved partial-entry decision, 2026-09-27: Story 1-2 may wire only the documented cold-entry sequence of
+  `GET /api/v1/auth/session`, followed only for `authenticated` by `GET /api/v1/users/me/capabilities`, and dispatch
+  `/login`, `/`, `/auth/mfa`, and `/auth/password-change`. The same approval includes restricted-stage logout at
+  `/auth/logout`: one explicit CSRF-protected `POST /api/v1/auth/logout`, safe CSRF recovery for an explicit retry, and
+  independent anonymous confirmation or reconciliation behind the privacy shield. This does not close BCG-001 or
+  BCG-003, authorize credentials, restricted forms, broader logout/lifecycle behavior, Home features, BFCache behavior,
+  or waive their remaining release evidence.
 
 ## Non-goals
 
@@ -125,4 +136,6 @@ activates a course without a manual, and a student completes a second tutoring s
 
 - `BCG-001`, `BCG-007`, `BCG-012`, `BCG-014`, `BCG-015`, `BCG-016`, `BCG-017` are open backend dependencies
   (authoritative status in `BACKEND-CONTRACT-GAPS.md`); work needing them is blocked, not assumed.
+- BCG-001 and BCG-003 remain open after the owner-approved Story 1-2 entry slice; the exact partial exception is recorded
+  under Constraints and in `BACKEND-CONTRACT-GAPS.md` and must not be generalized to their deferred obligations.
 - The exact Tailwind Plus component-to-blueprint binding is pending — a pre-implementation gate before UI stories.

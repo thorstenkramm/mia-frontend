@@ -1,0 +1,129 @@
+import { z } from "zod";
+
+export const jsonApiMediaType = "application/vnd.api+json";
+
+export type RawErrorDisclosure = {
+  readonly status: number;
+  readonly body: string;
+};
+
+const errorCodeSchema = z.object({
+  errors: z.array(z.object({ code: z.string() }).passthrough()).min(1),
+});
+
+export class ApiHttpError extends Error {
+  readonly kind = "http";
+  readonly disclosure: RawErrorDisclosure;
+  readonly code: string | null;
+
+  constructor(disclosure: RawErrorDisclosure) {
+    super(`MIA API request failed with HTTP status ${disclosure.status}.`);
+    this.name = "ApiHttpError";
+    this.disclosure = disclosure;
+
+    let parsedBody: unknown;
+    try {
+      parsedBody = JSON.parse(disclosure.body);
+    } catch {
+      parsedBody = null;
+    }
+    const parsedError = errorCodeSchema.safeParse(parsedBody);
+    this.code = parsedError.success ? parsedError.data.errors[0].code : null;
+  }
+}
+
+export class ApiProtocolError extends Error {
+  readonly kind = "protocol";
+
+  constructor() {
+    super("MIA API returned an unexpected response.");
+    this.name = "ApiProtocolError";
+  }
+}
+
+export class ApiTransportError extends Error {
+  readonly kind = "transport";
+
+  constructor(cause: unknown) {
+    super("MIA API could not be reached.", { cause });
+    this.name = "ApiTransportError";
+  }
+}
+
+export type ApiFailure = ApiHttpError | ApiProtocolError | ApiTransportError;
+
+type ReadJsonApiOptions<T> = {
+  readonly path: string;
+  readonly schema: z.ZodType<T>;
+  readonly initiator: "background" | "user";
+  readonly signal?: AbortSignal;
+};
+
+export async function readJsonApi<T>({
+  path,
+  schema,
+  initiator,
+  signal,
+}: ReadJsonApiOptions<T>): Promise<T> {
+  void initiator;
+  let response: Response;
+  try {
+    response = await fetch(path, {
+      cache: "no-store",
+      credentials: "same-origin",
+      headers: { Accept: jsonApiMediaType },
+      method: "GET",
+      signal,
+    });
+  } catch (error) {
+    throw new ApiTransportError(error);
+  }
+
+  const body = await response.text();
+  if (!response.ok) {
+    throw new ApiHttpError({ status: response.status, body });
+  }
+  if (response.headers.get("Content-Type") !== jsonApiMediaType) {
+    throw new ApiProtocolError();
+  }
+
+  let value: unknown;
+  try {
+    value = JSON.parse(body);
+  } catch {
+    throw new ApiProtocolError();
+  }
+
+  const result = schema.safeParse(value);
+  if (!result.success) {
+    throw new ApiProtocolError();
+  }
+  return result.data;
+}
+
+type UnsafeRequestOptions = {
+  readonly path: string;
+  readonly csrfToken: string;
+  readonly signal?: AbortSignal;
+};
+
+export async function sendUnsafeRequest({
+  path,
+  csrfToken,
+  signal,
+}: UnsafeRequestOptions): Promise<Response> {
+  try {
+    return await fetch(path, {
+      cache: "no-store",
+      credentials: "same-origin",
+      headers: {
+        Accept: jsonApiMediaType,
+        "X-CSRF-Token": csrfToken,
+      },
+      method: "POST",
+      signal,
+    });
+  } catch (error) {
+    throw new ApiTransportError(error);
+  }
+}

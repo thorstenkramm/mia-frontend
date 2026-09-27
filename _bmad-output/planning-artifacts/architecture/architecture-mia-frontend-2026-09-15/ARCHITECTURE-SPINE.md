@@ -137,7 +137,10 @@ graph TD
   data-layer revalidation is hard-wired `'background'`. The controller is also the single security-epoch fan-out
   point: on epoch loss it invokes, in fixed order, transfer aborts (AD-14), the cache purge funnel (AD-1), then UI
   notification — subscribers never wire each other. Deadline shapes that depend on BCG-001 remain blocked, not
-  guessed.
+  guessed. Logout coordination covers known live work, including authentication transitions; it is not server-side
+  per-browser revocation. Follow the 2026-09-27 owner decision in `FRONTEND-PRD-FOUNDATION.md` and the security
+  companion's logout phases: confirmation is `204` plus subsequent anonymous discovery, independently checked per tab;
+  late transitions require shielding and explicit reconciliation. No all-context atomic logout guarantee is assumed.
 
 ### AD-8 — The tutoring stream is a feature-owned controller outside the data layer
 

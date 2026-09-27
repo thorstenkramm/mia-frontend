@@ -1,7 +1,7 @@
 ---
 name: MIA frontend backend contract gaps
 status: draft
-updated: 2026-09-13
+updated: 2026-09-27
 sources:
   - .memlog.md
   - mia/docs/product-requirements.md
@@ -32,44 +32,158 @@ illustrative vocabulary in this handoff.
 
 ### BCG-001: Anonymous CSRF and authentication-session discovery
 
+Status: **OPEN — owner approved the documented cold-entry slice; lifecycle, logout, and release evidence remain.**
+
+Reconciled on 2026-09-27 against backend revision `b83102114802b981a022c237c0746023c0aa6b79`, whose entry correction
+followed baseline `0626b751558c8baa7e4645708ef588b309446ed8`. Backend paths and line references in this BCG-001 assessment
+refer to the maintained contract at the correction revision. The backend handoff records a passing full backend suite;
+the frontend did not rerun backend checks. Other BCG entries have not been broadly re-audited by this update.
+
 #### BCG-001 frontend capability blocked
 
-The complete authentication journey is blocked: cold start, login, invitation preview and acceptance, password recovery,
-password reset, MFA continuation, required password replacement, reload, history restoration, and safe logout recovery.
-The SPA cannot safely choose between signed out, MFA required, password replacement required, and authenticated.
+The complete authentication journey remains blocked for credentials, continuation forms, invitation and recovery work,
+lifecycle/BFCache handling, and safe logout recovery. The owner-approved 2026-09-27 partial exception permits only cold
+`GET /api/v1/auth/session`, authenticated-only `GET /api/v1/users/me/capabilities`, and canonical dispatch among
+`/login`, `/`, `/auth/mfa`, and `/auth/password-change`. It does not close this composite blocker.
 
 #### BCG-001 authoritative product requirement
 
 - Browser authentication uses expiring stateless cookies and must require reauthentication after idle or absolute expiry
-  (`mia/docs/product-requirements.md:524-540`).
+  (`mia/docs/product-requirements.md:583-607`).
 - Restricted `mfa` and `password-change` stages permit only their named actions and logout, expire after 30 minutes, and
-  rotate on successful transitions (`mia/docs/product-requirements.md:560-575`).
-- Public invitation, reset, and other unauthenticated security operations are rate limited. They must not disclose
-  sensitive identifier existence (`mia/docs/product-requirements.md:1587-1625`).
+  rotate on successful transitions (`mia/docs/product-requirements.md:627-642`).
 - The concrete cross-route transport requires `GET /api/v1/auth/session` to issue or refresh anonymous CSRF state and
-  requires the token on every unsafe public operation (`mia/docs/api.md:100-128`).
-- An authenticated browser session expires after 30 minutes without an authenticated user action, while successful
-  authenticated requests currently reset idle expiry (`mia/docs/product-requirements.md:524-538`).
+  requires the token on every unsafe public operation (`mia/docs/api.md:133-147`). Discovery's public rate limit and
+  uniform invalid-authentication result are documented in `mia/api-doc/paths/auth.yaml#/sessionDiscovery` and
+  `mia/api-doc/responses/errors.yaml#/RateLimited`.
+- Only explicit Continue working advances authenticated idle expiry; ordinary requests, polling, SSE establishment,
+  reconnection, heartbeats, and background work do not. The absolute lifetime begins at completion of the final login
+  stage and remains fixed (`mia/docs/product-requirements.md:583-598`).
+- The maintained backend deliberately provides a reduced stateless logout guarantee: delayed ordinary and Continue
+  working responses cannot restore usable authentication, but delayed authentication transitions may restore it
+   (`mia/docs/product-requirements.md:599-607`). The frontend owner accepted this limitation on 2026-09-27, as recorded
+   in `FRONTEND-PRD-FOUNDATION.md` §Security, Privacy, and Safety; only the former logout product conflict is closed.
 
-#### BCG-001 current docs/OpenAPI mismatch
+#### BCG-001 transport and implementation progress
 
-- The API narrative lists `GET /api/v1/auth/session` as an authentication operation
-  (`mia/docs/api.md:176-195`).
-- The root OpenAPI path map starts with login and proceeds directly through auth mutations; it has no
-  `/api/v1/auth/session` path (`mia/api-doc/openapi.yaml:38-64`).
-- Login and all public unsafe auth operations require `csrfToken` (`mia/api-doc/paths/auth.yaml:1-123`), but OpenAPI
-  defines no operation that can obtain the matching CSRF cookie from a no-cookie state.
-- The existing `AuthSession` schema represents only `authenticated`, `mfa`, and `password-change`. It cannot represent
-  an anonymous result and exposes no stage or session expiry
-  (`mia/api-doc/schemas/resources/resources.yaml:67-89`).
-- The architecture confirms that cookie policy is server-owned and shared by session and CSRF middleware
-  (`mia/docs/architecture.md:126-135`); the frontend cannot reconstruct it.
-- Current session semantics reissue the sliding cookie after every successful authenticated request, while logout clears
-  only the browser cookie (`mia/docs/api.md:100-113`; `mia/docs/product-requirements.md:524-540`). A response started in
-  another tab before logout can therefore arrive later and reinstall authenticated cookie state.
-- Neither docs nor OpenAPI provide the non-refreshing ordered reads needed after explicit Refresh, Try now, or Continue
-  working. Opening an authenticated SSE connection and every current successful authenticated request reset idle expiry
-  under the current request-wide rule.
+These are requirement-level findings, not partial closure or permission to bypass the open-gap rule.
+
+- **Stage discovery:** OpenAPI 3.2 now maps `GET /api/v1/auth/session` and `POST /api/v1/auth/session-continuations`
+  (`mia/api-doc/openapi.yaml:42-47`). Discovery permits anonymous or cookie-authenticated access, needs no body or CSRF
+  header, and defines `200`, `406`, `429`, and `500` responses. `SessionDiscoveryDocument` selects `data: null` with
+  `meta.stage: anonymous`, or an `AuthSession` with `data.attributes.stage`. The implementation returns the bound MFA
+  challenge ID, and the schema conditionally requires that non-empty opaque identity only for `stage: mfa`.
+  Invalid/stale/banned/deleted/generation-invalid authentication collapses to anonymous. References:
+  `mia/api-doc/paths/auth.yaml:31-61`, `mia/api-doc/schemas/resources/resources.yaml:269-320`,
+  `mia/internal/auth/auth.go:474-518`, and `mia/internal/httpserver/httpserver.go:312-331,450-503`.
+- **Minimal disclosure and entry order:** the discovery implementation returns stage, deadlines, account resource
+  identity, and the stage-applicable opaque challenge, not roles, profile, factor secrets, or destinations. Restricted flows remain
+  focused; MFA precedes password replacement. Authenticated discovery proceeds to capabilities, not directly to Home.
+  The maintained Home contract permits an empty Home after successful capability discovery and gates each dependent
+  section by its action and scope (`mia/docs/product-requirements.md:235-255`,
+  `mia/api-doc/paths/users.yaml:50-82`). This is relevant entry evidence, not closure of BCG-003.
+- **Anonymous CSRF:** anonymous discovery rotates the readable public cookie, including after invalid session clearing.
+  Unsafe operations declare `csrfToken`; cookie/header names and same-origin handling are maintained in
+  `mia/api-doc/openapi.yaml:217-233` and `mia/docs/api.md:133-147`. Login-stage transitions and logout rotate CSRF;
+  bootstrap and middleware are implemented in `mia/internal/auth/auth.go:474-486` and
+  `mia/internal/httpserver/httpserver.go:770-804`. The all-stage issuance and stale-token evidence qualifications below
+  remain open.
+- **Restricted and authenticated deadlines:** `AuthSession` requires `idle_expires_at` and `absolute_expires_at`;
+  discovery and shared `Session` responses also declare both deadline headers. Restricted stages have a non-refreshing
+  30-minute lifetime; a full session starts a 30-minute idle and 12-hour absolute lifetime. Implementation serializes UTC
+  instants and rejects either expired deadline (`mia/api-doc/paths/auth.yaml:485-493`,
+  `mia/api-doc/schemas/resources/resources.yaml:269-299`, `mia/internal/httpserver/httpserver.go:402-503`,
+  `mia/internal/auth/auth.go:507-518`). Deadline availability is implemented; complete expiry evidence remains open.
+- **Non-refreshing reads and SSE:** ordinary access is non-refreshing by default; no invented request flag is needed.
+  This is maintained product behavior (`mia/docs/product-requirements.md:589-598`) and API narrative
+  (`mia/docs/api.md:122-131`), with explicit capability and current-work read descriptions in
+  `mia/api-doc/paths/users.yaml#/capabilities` and `mia/api-doc/paths/tutoring.yaml#/tutoringSessionCurrentWork`.
+  The SSE operation is `mia/api-doc/paths/tutoring.yaml#/tutorResponseEvents`. Operation-level OpenAPI coverage and
+  browser reconnect evidence still need reconciliation as listed below.
+- **Continue working:** `sessionContinuations` requires a full session plus CSRF and returns shared `Session` on `200`;
+  `401`, restricted-stage/CSRF `403`, and `406` are defined. `ExtendSession` advances idle to at most the existing
+  absolute deadline, and the same response contains both deadlines; no second deadline read is necessary
+  (`mia/api-doc/paths/auth.yaml:63-78,485-493`, `mia/internal/httpserver/httpserver.go:334-353`,
+  `mia/internal/auth/auth.go:489-518`). The operation itself does not open/reconnect SSE.
+- **Representations and caching:** discovery's JSON:API success/error media types, optional authentication, public
+  rate-limit response, and `Cache-Control: no-store` are declared. The root contract applies no-store to every API
+  response, including streaming and errors (`mia/api-doc/openapi.yaml:9-15`,
+  `mia/api-doc/responses/errors.yaml:19-30,43-48`). This does not close BCG-005's separate acceptance evidence.
+
+#### BCG-001 remaining conflicts and transport questions
+
+1. **Resolved product conflict — reduced stateless logout accepted, 2026-09-27.** Source owner instruction:
+   "frontend’s logout requirements shall be revised", choosing the documented backend limitation. The decision in
+   `FRONTEND-PRD-FOUNDATION.md` accepts that delayed login, MFA-completion, or password-change responses admitted before
+   logout may restore authentication, and no server-side per-browser revocation or durable guarantee across suspended
+   or terminated contexts exists. Backend authorities remain `mia/docs/product-requirements.md:599-607`,
+   `mia/api-doc/paths/auth.yaml:80-99`, and `mia/api-doc/openapi.yaml:217-228`. The reduced guarantee protects usable
+   authentication against ordinary/Continue responses, not physical absence of every late cookie. Frontend requirements
+   retain shielding, known-transition quiescence, `204` plus subsequent anonymous discovery, independent tab checks,
+   explicit late-transition reconciliation, and no automatic unsafe replay. Unrelated-device logout scope is unchanged.
+   This closes only the product-conflict portion; logout browser evidence and the composite BCG-001 remain open.
+2. **Non-refreshing transport completeness.** Maintained product behavior covers ordinary reads, mutations, and SSE,
+   and the implementation exposes deadline headers centrally. OpenAPI declares these headers on discovery/auth-session
+   responses, but not capability, current-work, or SSE success responses. The SSE operation does not explicitly describe
+   the non-refreshing reconnect or the client sequence after Continue working. “The continuation POST does not reconnect”
+   does not settle whether the frontend may subsequently open one replacement after the non-refreshing ordered checks
+   required by `FRONTEND-STATE-MACHINES.md:176-185`. Publish that transport guarantee and sequence rather than infer it
+   from implementation. Lifecycle no-request behavior remains a frontend evidence obligation.
+3. **Historical frontend lifetime wording.** `FRONTEND-PRD-FOUNDATION.md:387-394` still describes SSE opening as refreshing
+   under the former backend rule; that factual premise no longer matches maintained backend behavior. The frontend's
+   local baseline wording (`EXPERIENCE.md:279-295`, `SECURITY-PRIVACY-ACCEPTANCE.md:184-209`) must not be used to extend a
+   server deadline after an ordinary user request: backend policy permits refresh only through Continue working.
+   `.memlog.md:77` already names Continue working as the sole activity-refresh operation. This assessment records the
+   stale wording without silently rewriting the binding artifacts or inventing automatic continuation requests.
+The 2026-09-27 backend correction at `b83102114802b981a022c237c0746023c0aa6b79` aligned CSRF replacement wording,
+declared duplicate-cookie `403` responses, conditionally requires the MFA challenge identity, and supplies all four
+session examples. Those corrections authorize only the partial cold-entry slice above.
+
+#### BCG-001 acceptance evidence assessment
+
+- **Inspected backend coverage:** `mia/internal/auth/auth_test.go` contains
+  `TestSessionDiscoveryReturnsAnonymousAndAuthoritativeStages` (349-389),
+  `TestMFADiscoveryReturnsOnlyOpaqueChallenge` (391-406),
+  `TestOnlyContinueWorkingExtendsAuthenticatedSession` (252-315),
+  `TestBrowserRestartRetainsBoundAuthenticatedSession` (317-347), and
+  `TestBanDeletionAndSecurityGenerationInvalidateCookies` (444-475). These cover selected stage reloads, deadlines,
+  non-refresh, invalidation, and restart behavior. `TestRestrictedRoutesRequireValidUnexpiredSession` (131-155) forces an
+  expired idle value; it is not a complete clock-controlled restricted/absolute-expiry matrix.
+- **Reduced logout evidence:** `TestLogoutReorderingUsesReducedStatelessGuarantee` (408-442) deliberately asserts that a
+  delayed login pair is authenticated after logout, while a delayed Continue cookie with the new marker is anonymous and
+  another browser stays authenticated. This is backend cookie-pair simulation, not multi-tab browser evidence, and
+  supports the accepted limitation rather than proving frontend shielding, transition quiescence, or reconciliation.
+- **CSRF coverage is incomplete for the specified journey:** no-cookie discovery asserts CSRF issuance, and
+  `mia/internal/httpserver/httpserver_test.go:17-214` covers cookie attributes and missing/mismatched/duplicate/cross-site
+  rejection. Auth and invitation tests obtain their public CSRF through `/api/v1/missing`
+  (`mia/internal/auth/auth_test.go:1775-1786`, `mia/internal/invitation/invitation_test.go:574-585`). Those tests do not prove
+  the required no-cookie **documented discovery → login/recovery/reset/preview/acceptance** integration sequences.
+  Rotation and stale-token rejection across all transitions still need a requirement-mapped evidence record.
+- **Capability evidence relevant to entry:** `mia/internal/capability/capability_test.go:59-80` checks non-refreshing
+  access; tests beginning at lines 82, 105, 130, and 185 cover unassigned accounts, restricted-stage denial, exact mentor
+  pair/removal behavior, and failure without partial scope. These do not supply browser mounting or lifecycle evidence.
+- **Recorded backend verification, not a new run:**
+  `mia/_bmad-output/implementation-artifacts/spec-2-2-discover-and-extend-browser-sessions-safely.md:94-122` records the
+  reduced-guarantee decision and full-check result.
+  `mia/_bmad-output/implementation-artifacts/spec-frontend-entry-contracts.md:111-132` records the later full check,
+  including race, lint, duplication, Trivy, OpenAPI, and Markdown; optional `govulncheck` was unavailable/skipped. It
+  explicitly says frontend mounting was not browser-tested. Neither record closes this frontend blocker.
+- **Still required after the entry correction:** complete documented-bootstrap/CSRF and restricted/idle/absolute boundary
+  tests; clock-controlled browser tests for lifecycle silence, explicit Refresh/Try now, same-response continuation
+  deadlines, and bounded SSE reopening; multi-tab delayed response/logout tests including authentication transitions and
+  unrelated-device preservation; and BFCache no-protected-paint evidence. Backend recorder tests and cookie simulation
+  cannot stand in for these browser results. Story 1-2 supplies only cold-entry browser evidence.
+
+#### BCG-001 Story 1-2 partial resumption decision
+
+Owner decision, 2026-09-27: Story 1-2 may resume for the documented cold-entry pair and four canonical entry paths named
+above. A successful session response alone never mounts Home; successful capability discovery is also required. Failed
+or malformed reads retain a neutral localized error with no protected content. The same decision authorizes only the
+restricted-stage logout path at `/auth/logout`: one explicit CSRF-protected logout request, phase-specific safe CSRF
+recovery after explicit Retry, independent anonymous confirmation, and explicit reconciliation behind the privacy
+shield. Protocol-fake and Playwright evidence is required. This exception does not authorize credentials,
+MFA/password forms, broader logout or lifecycle/BFCache behavior, Home features, broader protected routing, or
+automatic revalidation, and does not close BCG-001 or BCG-003.
 
 #### BCG-001 required observable contract
 
@@ -80,8 +194,10 @@ The SPA cannot safely choose between signed out, MFA required, password replacem
 - Return the relevant non-refreshing restricted-stage expiry and authenticated idle and absolute expiry as UTC
   instants sufficient for truthful warning and reauthentication behavior.
 - Define CSRF rotation after every auth transition and the result when a stale or invalid session cookie is cleared.
-- Define atomic logout ordering so no response authorized with pre-logout cookie state can reinstall authenticated state
-  after logout is confirmed. Preserve the intended scope of logout rather than silently invalidating other devices.
+- Define the reduced stateless logout guarantee and discovery reconciliation as maintained in the backend authorities
+  above. Accept late authentication-transition restoration; do not require universal anti-restoration or physical
+  cookie absence. Preserve logout scope without invalidating unrelated devices. The security companion owns frontend
+  confirmation and shielding obligations under the 2026-09-27 decision.
 - Provide a documented non-refreshing mode for the ordered session, capability, scope, resource, work-state, and SSE
   operations started only by explicit Refresh or reconnect actions. Browser lifecycle events themselves send no request.
 - Provide one explicit Continue working operation whose success returns the refreshed authoritative idle deadline and
@@ -103,13 +219,16 @@ authentication. Automatic lifecycle traffic must not be presented as user activi
 
 #### BCG-001 acceptance evidence needed
 
-- OpenAPI 3.2 path, response schema, security, headers, rate-limit errors, and examples for all four stages.
+- The OpenAPI path, schema, security, headers, rate-limit errors, and four stage examples are implemented; retain their
+  schema/example regression evidence while this composite entry remains open.
 - Backend tests beginning with no cookies and obtaining valid CSRF before login, recovery, reset, invitation preview,
   and invitation acceptance.
 - Backend tests for MFA and password-change reload, expiry, invalid security generation, CSRF rotation, stale-token
   rejection, logout, and authenticated idle/absolute expiry.
-- Multi-tab browser tests in which a pre-logout session or protected response arrives after logout; authenticated cookie
-  state must remain absent after confirmed logout without signing out unrelated devices.
+- Multi-tab browser tests distinguishing delayed ordinary/Continue responses from login, MFA-completion, and
+  password-change responses. Prove known-transition quiescence, `204` plus independent subsequent anonymous checks,
+  truthful confirmation, shielding and explicit reconciliation after a late transition, and no automatic unsafe replay.
+  Include suspended/terminated contexts and preserve unrelated devices; do not assert universal cookie absence.
 - Clock-controlled tests proving lifecycle events send no authenticated request; explicit Refresh and Try now do not
   move idle expiry; and Continue working returns a refreshed idle and unchanged absolute deadline in one response.
 - Browser integration evidence that cold load and BFCache restoration reveal no protected content before discovery.
@@ -172,6 +291,8 @@ discovery returns none.
 
 ### BCG-003: Server-authored current-account capabilities and scope
 
+Status: **OPEN — cold-entry capability discovery implemented; broader authorization evidence and bounds remain.**
+
 #### BCG-003 frontend capability blocked
 
 The unified Learn, Prepare, Mentor, Administer, and Profile/security shell cannot be rendered or updated safely for
@@ -189,15 +310,16 @@ duplicating authorization policy or learning it through denials.
 - Every authenticated request reloads current roles and assignments rather than trusting the cookie
   (`mia/docs/api.md:100-113`).
 
-#### BCG-003 current docs/OpenAPI mismatch
+#### BCG-003 transport progress
 
-- `GET /api/v1/users/me` returns only `UserDocument` (`mia/api-doc/paths/users.yaml:1-17`).
-- `User` includes profile attributes but no role, assignment, capability, or authorized-scope representation
-  (`mia/api-doc/schemas/resources/resources.yaml:4-52`).
-- OpenAPI has a role-grant mutation but no current-role or current-capability read contract
-  (`mia/api-doc/openapi.yaml:75-97`; `mia/api-doc/paths/users.yaml:213-242`).
-- Course, mentor, and student collections are resource reads, not an authoritative answer to which shell capabilities or
-  actions the current account may use globally.
+- OpenAPI now defines authenticated-only `GET /api/v1/users/me/capabilities` with the complete release-one action catalog,
+  explicit unavailable actions, complete currently unpaginated assignment arrays, empty-scope examples, `no-store`, and
+  non-refreshing semantics. The operation permits the basic empty Home shell after successful discovery; every section
+  and target operation remains independently gated.
+- The 2026-09-27 owner decision permits Story 1-2 to use this operation only after session discovery reports
+  `authenticated`. It does not authorize broader shell sections or close BCG-003.
+- Bounded retrieval for potentially large assignment scope and the broader mutation, cross-tab, and authorization
+  evidence remain deferred release work.
 
 #### BCG-003 required observable contract
 

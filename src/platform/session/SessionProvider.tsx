@@ -1,0 +1,61 @@
+import {
+  createContext,
+  use,
+  useEffect,
+  useState,
+  useSyncExternalStore,
+  type ReactNode,
+} from "react";
+import {
+  SessionController,
+  type AuthenticationBootstrapState,
+} from "./sessionController";
+
+const SessionContext = createContext<SessionController | null>(null);
+
+export function SessionProvider({
+  children,
+  controller: suppliedController,
+}: {
+  readonly children: ReactNode;
+  readonly controller?: SessionController;
+}) {
+  const [ownedController] = useState(() => new SessionController());
+  const controller = suppliedController ?? ownedController;
+  useEffect(() => {
+    controller.start();
+    return () => controller.stop();
+  }, [controller]);
+
+  return <SessionContext value={controller}>{children}</SessionContext>;
+}
+
+function useSessionController(): SessionController {
+  const controller = use(SessionContext);
+  if (controller === null) {
+    throw new Error("SessionProvider is required.");
+  }
+  return controller;
+}
+
+export function useAuthenticationBootstrapState(): AuthenticationBootstrapState {
+  const controller = useSessionController();
+  return useSyncExternalStore(
+    controller.subscribe,
+    controller.getSnapshot,
+    controller.getSnapshot,
+  );
+}
+
+export function useSessionActions(): {
+  readonly beginRestrictedLogout: () => void;
+  readonly retryRestrictedLogout: () => void;
+  readonly refreshLogoutStatus: () => void;
+} {
+  const controller = useSessionController();
+  return {
+    beginRestrictedLogout: () => controller.beginRestrictedLogout(),
+    retryRestrictedLogout: () => controller.retryRestrictedLogout(),
+    refreshLogoutStatus: () => controller.refreshLogoutStatus(),
+  };
+}

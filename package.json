@@ -18,7 +18,10 @@
     "build": "BUILD_REVISION=$(git rev-parse HEAD) vite build",
     "test:e2e": "npm run build && playwright install chromium && playwright test",
     "check:architecture": "node scripts/check-architecture.mjs",
-    "check:bundle-size": "node scripts/check-bundle-size.mjs"
+    "check:bundle-size": "node scripts/check-bundle-size.mjs",
+    "check:i18n": "node scripts/check-i18n-catalogs.mjs",
+    "generate:api": "openapi-typescript mia/api-doc/openapi.yaml -o src/platform/api/generated.ts && prettier --write src/platform/api/generated.ts",
+    "check:api-types": "bash scripts/check-api-types.sh"
   },
   "dependencies": {
     "@headlessui/react": "2.2.10",
@@ -40,17 +43,19 @@
     "zod": "4.6.5"
   },
   "devDependencies": {
+    "@axe-core/playwright": "4.13.0",
     "@eslint/js": "9.39.5",
     "@formatjs/cli": "6.16.29",
+    "@formatjs/icu-messageformat-parser": "3.5.19",
     "@playwright/test": "1.63.0",
     "@tailwindcss/vite": "4.3.3",
     "@testing-library/jest-dom": "7.0.1",
     "@testing-library/react": "16.3.3",
     "@testing-library/user-event": "14.6.7",
-    "@vitejs/plugin-react": "6.1.1",
     "@types/node": "24.10.1",
     "@types/react": "19.3.0",
     "@types/react-dom": "19.3.0",
+    "@vitejs/plugin-react": "6.1.1",
     "eslint": "9.39.5",
     "eslint-plugin-import": "2.32.0",
     "eslint-plugin-react": "7.37.5",

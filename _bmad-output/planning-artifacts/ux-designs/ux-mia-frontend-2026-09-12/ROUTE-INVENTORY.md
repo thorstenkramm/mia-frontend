@@ -136,7 +136,9 @@ unknown mutation outcome remains on its owning route without success copy until 
 - Title: `Sign out`
 - H1 purpose: confirm or safely recover restricted-stage logout.
 - Gate: `Restricted(mfa or password-change)`.
-- Fallback: `/login` only after confirmed anonymous discovery; otherwise remain on the privacy screen.
+- Fallback: `/login` only after logout confirmation under `SECURITY-PRIVACY-ACCEPTANCE.md` §Logout and Privacy Screen
+  (`204` plus subsequent independent anonymous discovery); otherwise remain on the privacy screen. A detected late
+  authentication transition returns to that shield for explicit reconciliation, not protected navigation.
 
 ## Home
 

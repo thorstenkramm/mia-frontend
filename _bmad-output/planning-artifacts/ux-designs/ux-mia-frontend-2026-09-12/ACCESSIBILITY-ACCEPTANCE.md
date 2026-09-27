@@ -332,11 +332,17 @@ expiry, the tab replaces the warning with a local privacy lock and requires fres
 reveal.
 Clock rollback, sleep or wake, suspended timers, and delayed callbacks lock rather than extend the deadline.
 
-A content-free logout-start signal immediately privacy-shields every tab, moves focus into that shield, and prevents new
-authenticated discovery or protected requests. Tabs remain shielded until the initiating tab broadcasts definitive
-logout success or failure. Responses from the pre-logout epoch cannot render, announce, or unlock content. `CP-02`
-remains Blocked on `BCG-001` until the backend contract prevents an old in-flight request from reinstalling an
-authenticated cookie after confirmed logout; frontend timing cannot prove that property.
+A content-free logout-start signal immediately privacy-shields each live receiving tab, moves focus into that shield,
+and prevents unrelated authenticated discovery or protected requests. A terminal signal alone never removes a shield:
+each tab independently establishes anonymous state before confirmation, following the phase-specific checks in
+`SECURITY-PRIVACY-ACCEPTANCE.md` §Logout and Privacy Screen. Responses from the pre-logout epoch cannot render,
+announce, or unlock content. The 2026-09-27 owner decision in `FRONTEND-PRD-FOUNDATION.md` accepts that a delayed
+authentication transition may restore authentication, including from suspended or terminated contexts, without a
+server-side per-browser revocation guarantee. A detected late transition withdraws current confirmation, returns focus
+to the shield heading, and announces a concise need to check sign-in status. Explicit Refresh and Retry logout remain
+keyboard reachable; visible and spoken copy distinguish local hiding from server logout and never promise permanent
+revocation. `CP-02` remains Blocked on BCG-001's remaining transport and evidence obligations, not the withdrawn atomic
+guarantee. Its evidence must cover late-transition reconciliation, per-tab checks, and failure without success speech.
 
 BCG-014 applies only to invitation Revoke/Delete faulty, permanent role grant, course-supervisor removal, membership
 removal, mentor removal, account deletion, and course deletion. Their final submission requires a backend-enforced

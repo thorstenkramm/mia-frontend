@@ -502,9 +502,18 @@ detected account change without carrying account, route, resource, or scope data
 aborts protected work, and marks the conjunctive protected-render gate for explicit revalidation. The security companion
 owns exact mechanics.
 
-Logout start shields every tab and quiesces authenticated requests until terminal outcome. No pre-logout response may
-restore authentication after confirmed logout. `BCG-001` owns logout request quiescence and the atomic ordering that
-prevents a late pre-logout response from reinstalling authenticated state; it must close before release.
+Logout start shields the initiating and live receiving tabs and quiesces known in-flight requests, including login,
+MFA completion, and password replacement, until terminal outcome. Local shielding does not revoke cookies.
+
+Product Owner decision, 2026-09-27: the source user instruction was "frontend’s logout requirements shall be revised",
+choosing acceptance of the backend's reduced stateless logout guarantee rather than strengthening the backend.
+As defined in `mia/docs/product-requirements.md` §Authentication session lifetime and
+`mia/api-doc/paths/auth.yaml#/logout`, delayed ordinary and Continue working responses cannot restore usable
+authentication, but delayed login, MFA-completion, or password-change responses admitted before logout may restore it.
+The owner accepts that there is no server-side per-browser revocation or durable logout guarantee across suspended or
+terminated contexts. The former universal no-pre-logout-response guarantee is withdrawn. The security companion owns
+quiescence, independent tab confirmation, and explicit reconciliation after a late transition; `BCG-001` remains open
+for its remaining transport and evidence gaps and must close before dependent behavior ships.
 
 Each tab's idle-warning baseline is its own last successful user-initiated authenticated request. Other-tab activity
 does not reset it. The non-modal warning says local inactivity was detected, sign-in status must be checked, and unsaved
@@ -523,9 +532,12 @@ sleep, wake, suspended timers, or delayed callbacks lock rather than extend it. 
 discovery are required to reveal content; `BCG-001` owns the deadline contract, including the authenticated idle and
 absolute expiry instants and the non-refreshing restricted-stage expiry.
 
-Logout is complete only after backend success and authoritative anonymous discovery. On failure, a blocking privacy
-screen removes protected content, says logout is unconfirmed, offers safe CSRF refresh and retry, and gives
-close-browser or operator guidance. It never presents a successful logout while the HttpOnly cookie may remain valid.
+Logout confirmation requires known transitions to settle, backend `204`, and subsequent authoritative anonymous
+discovery. It confirms the observed state, not permanent cookie revocation or immunity to later transitions. Every tab
+checks independently before claiming confirmation. A late transition withdraws current confirmation, retains or
+reinstalls the shield, and requires explicit reconciliation. On failure or ambiguity, a blocking privacy screen says
+logout is unconfirmed, offers safe explicit CSRF recovery and retry, and gives close-browser or operator guidance
+without claiming browser closure revokes authentication. No unsafe request is automatically replayed.
 
 TOTP provisioning data remains route-local after a correctable verification failure while the same authorized pending
 enrollment remains valid. Page hide masks setup and suspends copy; return requires fresh authorization before reveal. It

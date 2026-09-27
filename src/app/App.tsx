@@ -1,57 +1,219 @@
-// Tailwind Plus: Application UI > Feedback > Empty States > Simple
-// Library version: 2026-09-13-083323. The product-action button is removed because this is a public scaffold only.
-export function App() {
+import { ExclamationTriangleIcon } from "@heroicons/react/20/solid";
+import { Suspense } from "react";
+import { useIntl } from "react-intl";
+import {
+  BrowserRouter,
+  Navigate,
+  Route,
+  Routes,
+  useLocation,
+} from "react-router";
+import {
+  EntryDataProvider,
+  useAuthenticationBootstrapState,
+  type AuthenticationBootstrapState,
+  type EntryError,
+} from "../platform/data/EntryDataProvider";
+import { messages } from "../platform/i18n/messages";
+import { TechnicalErrorDisclosure } from "../platform/api/TechnicalErrorDisclosure";
+import type { TextSize } from "../platform/prefs/preferences";
+import { entryRoutes, type EntryRouteKey } from "./routes/entryRoutes";
+import { SimpleEntrySurface } from "./routes/SimpleEntrySurface";
+
+type AppProps = {
+  initialTextSize: TextSize;
+  queryClient?: Parameters<typeof EntryDataProvider>[0]["queryClient"];
+};
+
+export function App({ initialTextSize, queryClient }: AppProps) {
   return (
-    <>
-      <title>MIA scaffold | MIA</title>
-      <a
-        className="sr-only focus:not-sr-only focus:absolute focus:top-4 focus:left-4 focus:z-10 focus:rounded-md focus:bg-white focus:px-3 focus:py-2 focus:text-sm focus:font-semibold focus:text-gray-900 focus:shadow-xs"
-        href="#main-content"
-      >
-        Skip to main content
-      </a>
-      <main
-        id="main-content"
-        className="mx-auto flex min-h-screen max-w-3xl items-center px-6 py-12"
-        tabIndex={-1}
-      >
-        <section
-          className="w-full text-center"
-          aria-labelledby="scaffold-title"
-        >
-          <svg
-            fill="none"
-            stroke="currentColor"
-            viewBox="0 0 24 24"
-            aria-hidden="true"
-            className="mx-auto size-12 text-gray-400"
-          >
-            <path
-              d="M9 13h6m-3-3v6m-9 1V7a2 2 0 012-2h6l2 2h6a2 2 0 012 2v8a2 2 0 01-2 2H5a2 2 0 01-2-2z"
-              strokeWidth={2}
-              vectorEffect="non-scaling-stroke"
-              strokeLinecap="round"
-              strokeLinejoin="round"
+    <EntryDataProvider {...(queryClient ? { queryClient } : {})}>
+      <BrowserRouter>
+        <Routes>
+          <Route
+            path="*"
+            element={<CanonicalEntry initialTextSize={initialTextSize} />}
+          />
+        </Routes>
+      </BrowserRouter>
+    </EntryDataProvider>
+  );
+}
+
+function routeKey(state: AuthenticationBootstrapState): EntryRouteKey | null {
+  switch (state.kind) {
+    case "Cold":
+    case "Checking":
+    case "Access checking":
+      return null;
+    case "Signed out":
+      return "signedOut";
+    case "MFA required":
+      return "mfa";
+    case "Password change":
+      return "passwordChange";
+    case "Authenticated":
+      return "home";
+    case "Restricted expired":
+      return "signedOut";
+    case "Rotating":
+      return null;
+    case "Logout confirmed":
+      return "signedOut";
+    case "Logout start":
+    case "Logout quiescing":
+    case "Logout dispatch":
+    case "Logout confirming":
+    case "Logout unconfirmed":
+    case "Logout reconciliation needed":
+      return "restrictedLogout";
+    default:
+      return assertNever(state);
+  }
+}
+
+function CanonicalEntry({ initialTextSize }: AppProps) {
+  const state = useAuthenticationBootstrapState();
+  const location = useLocation();
+  const key = routeKey(state);
+
+  if (key === null) {
+    return <EntryStateSurface state={state} />;
+  }
+
+  const route = entryRoutes[key];
+  if (location.pathname !== route.path) {
+    return <Navigate replace to={route.path} />;
+  }
+
+  const RouteContent = route.component;
+  return (
+    <SimpleEntrySurface
+      titleMessage={route.titleMessage}
+      headingMessage={
+        key === "restrictedLogout" &&
+        (state.kind === "Logout unconfirmed" ||
+          state.kind === "Logout reconciliation needed")
+          ? messages.logoutUnconfirmedHeading
+          : route.headingMessage
+      }
+    >
+      <Suspense fallback={null}>
+        <RouteContent
+          initialTextSize={initialTextSize}
+          {...(state.kind === "Logout confirmed"
+            ? { logoutConfirmed: true }
+            : {})}
+        />
+      </Suspense>
+    </SimpleEntrySurface>
+  );
+}
+
+function EntryStateSurface({ state }: { state: AuthenticationBootstrapState }) {
+  switch (state.kind) {
+    case "Cold":
+      return <CheckingAccess />;
+    case "Checking":
+      return state.phase === "loading" ? (
+        <CheckingAccess />
+      ) : (
+        <EntryFailure error={state.error} source="session" />
+      );
+    case "Access checking":
+      return state.phase === "loading" ? (
+        <CheckingAccess />
+      ) : (
+        <EntryFailure error={state.error} source="capabilities" />
+      );
+    case "Rotating":
+      return <CheckingAccess />;
+    case "Signed out":
+    case "MFA required":
+    case "Password change":
+    case "Authenticated":
+    case "Restricted expired":
+    case "Logout confirmed":
+      throw new Error("A resolved entry state must render through its route.");
+    case "Logout start":
+    case "Logout quiescing":
+    case "Logout dispatch":
+    case "Logout confirming":
+    case "Logout unconfirmed":
+    case "Logout reconciliation needed":
+      throw new Error("A logout state must render through its route.");
+    default:
+      return assertNever(state);
+  }
+}
+
+function assertNever(value: never): never {
+  throw new Error(`Unhandled authentication bootstrap state: ${String(value)}`);
+}
+
+function EntryIntroduction({
+  message,
+}: {
+  message: (typeof messages)[keyof typeof messages];
+}) {
+  const intl = useIntl();
+  return (
+    <p className="mt-3 text-center text-sm/6 text-gray-600">
+      {intl.formatMessage(message)}
+    </p>
+  );
+}
+
+function CheckingAccess() {
+  return (
+    <SimpleEntrySurface
+      titleMessage={messages.checkingPageTitle}
+      headingMessage={messages.checkingHeading}
+    >
+      <EntryIntroduction message={messages.checkingIntroduction} />
+    </SimpleEntrySurface>
+  );
+}
+
+function EntryFailure({
+  error,
+  source,
+}: {
+  error: EntryError;
+  source: "session" | "capabilities";
+}) {
+  const intl = useIntl();
+  const explanation =
+    source === "session"
+      ? messages.sessionErrorIntroduction
+      : messages.capabilityErrorIntroduction;
+
+  return (
+    <SimpleEntrySurface
+      titleMessage={messages.errorPageTitle}
+      headingMessage={messages.errorHeading}
+    >
+      {/* Tailwind Plus: Application UI > Feedback > Alerts > With description */}
+      {/* Library version: 2026-09-13-083323. MIA adds the required inert raw-error disclosure. */}
+      <div className="mt-8 rounded-md bg-yellow-50 p-4">
+        <div className="flex">
+          <div className="shrink-0">
+            <ExclamationTriangleIcon
+              aria-hidden="true"
+              className="size-5 text-yellow-400"
             />
-          </svg>
-          <h1
-            id="scaffold-title"
-            className="mt-2 text-sm font-semibold text-gray-900"
-            tabIndex={-1}
-          >
-            MIA scaffold
-          </h1>
-          <p className="mt-1 text-sm text-gray-500">
-            The application shell is being prepared.
-          </p>
-          <p
-            className="mt-6 text-sm text-gray-500"
-            data-testid="build-identifier"
-          >
-            Build {__MIA_BUILD_ID__}
-          </p>
-        </section>
-      </main>
-    </>
+          </div>
+          <div className="ml-3 min-w-0">
+            <h2 className="text-sm font-medium text-yellow-800">
+              {intl.formatMessage(messages.errorSummary)}
+            </h2>
+            <div className="mt-2 text-sm text-yellow-700">
+              <p>{intl.formatMessage(explanation)}</p>
+              <TechnicalErrorDisclosure error={error} />
+            </div>
+          </div>
+        </div>
+      </div>
+    </SimpleEntrySurface>
   );
 }

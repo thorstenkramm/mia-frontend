@@ -152,7 +152,7 @@ Security, privacy, and safety (PRD, unnumbered):
 - NFR-16: Shared-device containment: on logout, expiry, authorization loss, or cookie rejection clear sensitive memory, protected trees, scoped caches, streams, media, object URLs, titles, and history state before neutral UI; never persist unsent drafts or sensitive content in browser storage (L493-498).
 - NFR-17: A content-free cross-tab security epoch signals auth transitions; every tab immediately privacy-shields, aborts protected work, and marks the gate for explicit revalidation; logout quiesces authenticated requests until terminal outcome (L500-507).
 - NFR-18: Per-tab idle warning appears five minutes before the earlier backend-authored deadline, moves no focus, states no remaining time; Continue working makes one explicit auth-session request; the privacy shield replaces protected content at the deadline; clock manipulation locks rather than extends (L509-524).
-- NFR-19: Logout is complete only after backend success and authoritative anonymous discovery; on failure a blocking privacy screen states logout unconfirmed with safe retry and guidance (L526-528).
+- NFR-19: Logout confirmation requires settled known transitions, backend `204`, and subsequent anonymous discovery independently per tab; failure remains shielded with safe explicit recovery. The 2026-09-27 owner decision in `FRONTEND-PRD-FOUNDATION.md` accepts delayed authentication-transition restoration and no server-side per-browser revocation. Late transitions require shielding and explicit reconciliation, not unsafe replay. See `SECURITY-PRIVACY-ACCEPTANCE.md` §Logout and Privacy Screen.
 - NFR-20: TOTP provisioning data stays route-local, masks on page hide, requires fresh authorization on return, and is removed on terminal events (L530-533).
 - NFR-21: Mobile verification renders only backend-derived states; resend returns neither code nor destination; no local receipt-time inference (`BCG-015` open) (L535-540).
 - NFR-22: Protected downloads only after explicit activation and fresh scope authorization, never prefetched or cache-reused; object URLs revoked; protected printing suppressed except the codes-only recovery-code print view; transfers abort on epoch loss (L542-551).
@@ -532,7 +532,7 @@ So that my data is protected when my session ends.
 
 **Given** logout
 **When** it starts
-**Then** every tab shields via the content-free `BroadcastChannel` epoch, authenticated requests quiesce, and success is claimed only after backend confirmation plus anonymous discovery; on failure the blocking screen states logout unconfirmed with safe retry (NFR-17, NFR-19)
+**Then** initiating and live receiving tabs shield via the content-free `BroadcastChannel` epoch, known requests including authentication transitions quiesce, and confirmation is claimed only after `204` plus each tab's subsequent anonymous discovery; failure remains unconfirmed with safe explicit retry. Delayed authentication transitions may restore authentication under the accepted stateless limitation; observing one withdraws current confirmation and requires shielding and explicit reconciliation without unsafe replay (NFR-17, NFR-19). Suspended or terminated contexts have no server-side per-browser revocation guarantee.
 **And** all BCG-001-dependent shapes are implemented against protocol fakes and marked blocked for closure until BCG-001 lands (AR-17).
 
 ### Story 1.9: TOTP enrollment and recovery codes

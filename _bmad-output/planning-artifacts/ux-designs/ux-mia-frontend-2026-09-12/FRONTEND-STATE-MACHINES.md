@@ -51,11 +51,12 @@ session check alone never authorizes a route: capability/scope, route resource, 
 | Rotating | Auth transition | Controls disabled | No queued mutation | Reread CSRF cookie |
 | Restricted expired | Auth loss | Neutral login | Sign in | Clear protected memory |
 | Logout start | User activates logout | Local privacy shield | Broadcast start; abort work | Origin request barrier |
-| Logout quiescing | Start received | Every tab shielded | No authenticated request | Shared leases settle |
-| Logout dispatch | Exclusive barrier acquired | Logout in progress | One logout request | `204` or failure |
-| Logout confirming | `204` received | Still shielded | Anonymous non-refreshing check | Anonymous session result |
+| Logout quiescing | Start received | Initiating/live receiving tabs shielded | No new authenticated request | Known shared leases settle |
+| Logout dispatch | Exclusive barrier acquired | Logout in progress; retain pending reconciliation marker if signaled | One logout request; no Refresh or Retry while pending | Own attempt result recorded; marked reconciliation waits until phase ends |
+| Logout confirming | Active attempt returns `204` without reconciliation marker | Still shielded | Anonymous non-refreshing check; no overlapping Refresh or Retry | Current anonymous result; a late transition fences the read |
 | Logout confirmed | Anonymous confirmed | Neutral login | Broadcast confirmed | Release barrier signed out |
 | Logout unconfirmed | Phase fails | Privacy screen | `Retry logout` or close browser | New barrier cycle |
+| Logout reconciliation needed | Late transition or security epoch in retained logout flow; active phase ended | Privacy screen; withdraw confirmation | Serialized explicit Refresh; Retry only after read ends; no unsafe replay | Current session discovery |
 
 The session-discovery operation, anonymous CSRF issuance, stages, expiries, and safe logout recovery are `BLOCKED` on
 `BCG-001: Anonymous CSRF and authentication-session discovery`. Protected responses also depend on
@@ -64,14 +65,31 @@ The session-discovery operation, anonymous CSRF issuance, stages, expiries, and 
 Auth transitions are serialized per tab. Every unsafe request reads CSRF immediately before dispatch. Rotation cancels
 older queued mutations. No unsafe request is automatically replayed after `csrf_invalid` or an ambiguous result.
 
-Every same-origin request that can carry or reissue an authenticated cookie must hold a shared lease from one
-origin-wide request coordinator. Logout start closes admission, shields every tab, aborts abortable work, waits for all
-pre-logout leases to settle, and holds an exclusive barrier through logout and anonymous confirmation. Content-free
+Every same-origin request that can carry or reissue an authenticated cookie, including login, MFA completion, and
+password replacement, must hold a shared lease from one origin-wide request coordinator. Logout start closes admission,
+shields initiating and live receiving tabs, aborts abortable work, waits for known pre-logout leases to settle, and holds
+an exclusive barrier through logout and anonymous confirmation. Abort alone does not prove transition settlement;
+unknown outcomes remain shielded and unconfirmed. Content-free
 `logout-start`, `logout-confirmed`, and `logout-unconfirmed` phases coordinate tabs; no outcome phase reveals content.
-The browser mechanism is required, but its cookie-ordering guarantee remains `BLOCKED` on
-`BCG-001: Anonymous CSRF and authentication-session discovery` until that topic owns an observable server generation or
-equivalent atomic logout contract.
-An unconfirmed outcome keeps admission closed and every tab shielded; only `Retry logout` starts a new barrier cycle.
+The browser mechanism coordinates known live work, not suspended or terminated contexts. The 2026-09-27 owner decision
+in `FRONTEND-PRD-FOUNDATION.md` accepts the backend's reduced stateless guarantee: delayed authentication transitions
+may restore authentication; there is no server-side per-browser revocation. `BCG-001` remains open for remaining
+transport and evidence obligations. Confirmation requires `204` and subsequent anonymous discovery, independently
+checked per tab; it is an observation, not permanent revocation. A late transition, including a security-epoch signal
+received by a tab retaining its logout flow, marks reconciliation needed and withdraws current confirmation. While
+dispatch or confirmation is active, retain that phase and barrier: no Refresh or Retry can dispatch. Accept the active
+POST's own result by attempt nonce for bookkeeping only; a marked attempt does not automatically start confirmation.
+After the phase ends and its exclusive lease is released, enter Logout reconciliation needed behind the retained
+shield and ordinary-request admission block. Stale discovery results and ended/superseded attempt callbacks cannot
+confirm logout. Serialize explicit reconciliation and any subsequent explicitly activated Retry logout; never queue
+disabled actions for later replay. The security companion owns the exact success, failure, and ambiguity handling.
+Explicit Refresh returning anonymous restores confirmation only with a prior `204` and settled known transitions;
+any other stage or failed check keeps logout unconfirmed. `SECURITY-PRIVACY-ACCEPTANCE.md` owns detailed recovery.
+An unconfirmed outcome keeps ordinary request admission closed and participating tabs shielded; only `Retry logout`
+starts a new barrier cycle. Explicit reconciliation uses the phase-specific discovery exception above.
+Retained logout participants use this recovery instead of the ordinary protected gate after a security-epoch signal.
+BFCache retains local flow state. A fresh document has no durable logout record and uses the ordinary ordered mount
+gate; a restored session may authorize newly fetched content, but never stale pre-logout content or prior-logout success.
 
 ## 2. Session and Message Request-ID Lifecycle
 

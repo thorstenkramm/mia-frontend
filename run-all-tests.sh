@@ -34,7 +34,7 @@ else
     npm ci
   fi
 
-  for target in typecheck lint format:check test build check:bundle-size; do
+  for target in typecheck lint format:check test build check:bundle-size check:i18n check:api-types; do
     if has_script "$target"; then
       echo "Running npm run $target ..."
       npm run "$target"
@@ -67,6 +67,7 @@ while IFS= read -r file; do
 done < <(git ls-files --cached --others --exclude-standard \
   -- 'src/**/*.ts' 'src/**/*.tsx' \
   ':(exclude)src/**/components/**' \
+  ':(exclude)src/platform/api/generated.ts' \
   ':(exclude)src/**/*.test.ts' ':(exclude)src/**/*.test.tsx')
 
 if [[ ${#source_files[@]} -eq 0 ]]; then

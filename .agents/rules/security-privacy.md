@@ -133,12 +133,20 @@ interactive external link.
 
 ## Logout
 
-Logout has explicit start, quiescing, dispatch, confirming, confirmed, and unconfirmed phases. It reaches confirmed
-only after in-flight work settles, the backend returns `204`, and subsequent session discovery establishes an anonymous
-state with fresh anonymous CSRF.
+Logout has explicit start, quiescing, dispatch, confirming, confirmed, unconfirmed, and reconciliation-needed phases.
+Quiesce known in-flight work, including login, MFA completion, and password replacement; abort alone does not prove a
+transition settled. Confirmation requires settled known transitions, backend `204`, and subsequent anonymous discovery
+with fresh anonymous CSRF.
 
 Every tab stays shielded until it independently establishes anonymous state. Only then may its neutral login surface
-say logout completed.
+confirm the observed signed-out state, not permanent revocation. Follow the detailed phase-specific discovery rules in
+`SECURITY-PRIVACY-ACCEPTANCE.md` §Logout and Privacy Screen; a broadcast is never authority.
+
+The 2026-09-27 owner decision in `FRONTEND-PRD-FOUNDATION.md` accepts the backend's reduced stateless guarantee:
+delayed login, MFA-completion, or password-change responses admitted before logout may restore authentication. There
+is no server-side per-browser revocation or guarantee across suspended or terminated contexts. Local shielding does
+not revoke cookies. An observed late transition withdraws current confirmation, shields content, and requires explicit
+session reconciliation; never reveal protected content or replay an unsafe request automatically.
 
 If logout, CSRF refresh, or anonymous confirmation fails, **keep the privacy screen**. State that logout is not
 confirmed, that the browser may still hold a valid sign-in cookie, and that protected content has been hidden locally.

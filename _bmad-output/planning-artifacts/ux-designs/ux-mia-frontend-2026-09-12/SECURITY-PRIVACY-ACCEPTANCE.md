@@ -266,27 +266,63 @@ blockers and never reasons to persist request bodies, request IDs, or file handl
 
 ## Logout and Privacy Screen
 
-Logout has explicit `logout-start`, `logout-quiescing`, `logout-requesting`, `logout-confirmed`, and
-`logout-unconfirmed` phases. `logout-start` first replaces protected UI in the initiating tab with a blocking neutral
+Logout has explicit `logout-start`, `logout-quiescing`, `logout-requesting`, `logout-confirming`, `logout-confirmed`,
+`logout-unconfirmed`, and `logout-reconciliation-needed` phases. `logout-start` first replaces protected UI in the initiating tab with a blocking neutral
 privacy screen, tears down local protected state, closes admission to the origin-wide authenticated-request coordinator,
-and broadcasts the content-free start phase. Every authenticated request and SSE connection holds a shared coordinator
-lease from before dispatch through final response and cookie processing. Every live receiving tab applies the same
+and broadcasts the content-free start phase. Every authenticated request, login/MFA-completion/password-change
+transition, and SSE connection holds a shared coordinator lease from before dispatch through settlement. Every live receiving tab applies the same
 shield and admission block, aborts authenticated fetches, closes SSE, fences late callbacks, and releases settled
-leases. It returns a content-free quiescence acknowledgement for that logout nonce. No tab starts session discovery,
-reads, reconnects, or mutations while that logout remains in progress.
+leases. Abort or a rejected local wait alone does not prove that a transition cannot still deliver cookies; known
+unsettled transitions keep logout unconfirmed. A tab returns a content-free quiescence acknowledgement for that logout
+nonce. No tab starts unrelated discovery, reads, reconnects, or mutations while that logout remains in progress;
+the initiator's permitted CSRF recovery and post-`204` anonymous confirmation are the phase-specific exceptions.
 
 The initiator waits for an exclusive coordinator lease before sending one explicit CSRF-protected logout request and
 holds it through anonymous confirmation. Quiescence acknowledgements aid observability but never substitute for the
-exclusive lease. Frontend coordination cannot cover suspended or terminated contexts or prevent every already accepted
-pre-logout response from reissuing the stateless cookie. Therefore confirmed logout is release-blocked until `BCG-001`
-provides a backend-observable generation or equivalent atomic guarantee that no request carrying the pre-logout session
-can install an authenticated cookie after logout confirmation. Timeouts, grace periods, tab counts, and response-order
-guesses are forbidden substitutes.
+exclusive lease. This coordinates known live work; it cannot cover suspended or terminated contexts or prevent every
+already admitted authentication-transition response from restoring authentication. The owner accepted this limitation
+on 2026-09-27 in `FRONTEND-PRD-FOUNDATION.md`. The authoritative backend contract is
+`mia/docs/product-requirements.md` §Authentication session lifetime and `mia/api-doc/paths/auth.yaml#/logout`:
+delayed ordinary and Continue working responses cannot restore usable authentication, but delayed login,
+MFA-completion, or password-change responses may. There is no server-side per-browser revocation guarantee.
+Timeouts, grace periods, tab counts, aborts, and response-order guesses do not prove revocation or settlement.
 
-Logout reaches `logout-confirmed` only after that guarantee, backend `204`, and subsequent session discovery establish
-an anonymous state with fresh anonymous CSRF. The initiator then broadcasts a content-free confirmed outcome. Every tab
-stays shielded until it independently establishes anonymous state; only then may its neutral login surface say logout
-completed.
+Logout reaches `logout-confirmed` only after known transitions settle, backend `204`, and subsequent session discovery
+establish an anonymous state with fresh anonymous CSRF. The initiator then broadcasts a content-free confirmed outcome.
+Each tab stays shielded until its own permitted non-refreshing discovery establishes anonymous state; receiving the
+signal alone never confirms logout. Other tabs use explicit Refresh for that check, not lifecycle-triggered traffic.
+Confirmation means anonymous at that check, not immunity to a later transition. Neutral login copy may say
+"Signed out at the last check. A sign-in already in progress in another tab may sign this browser in again."
+
+If a late authentication transition is observed after dispatch or confirmation, fence its UI result, retain or
+reinstate the shield, and withdraw current confirmation. While the logout POST is pending, remain in
+`logout-requesting` with reconciliation needed recorded locally: Refresh and Retry logout are unavailable, and no
+discovery or second logout dispatch may overlap that POST. A transition during `logout-confirming` similarly fences
+the outstanding discovery result and waits for that phase to terminate. Neither event releases the exclusive barrier
+early or queues an action for automatic execution.
+
+The still-active logout attempt accepts its own eventual POST result by attempt nonce solely for outcome bookkeeping,
+even if the security epoch changed: `204` records backend success, never anonymous state or permission to reveal.
+If reconciliation was marked, that result does not start the normal automatic confirmation check. A non-`204`, timeout,
+network loss, or local abort records an unconfirmed outcome; it never manufactures backend success. End the active
+phase and release its exclusive lease before enabling recovery, retaining the ordinary-request admission block and
+shield. A callback from an attempt already ended or superseded cannot change its result or confirm logout; an observed
+late transition still marks reconciliation needed. Local termination does not prove server cancellation or cookie
+revocation, and known unsettled authentication transitions still prevent confirmation.
+
+After the active phase ends, enter `logout-reconciliation-needed` and offer explicit Refresh using documented session
+discovery, serialized through the coordinator. Retry logout cannot overlap this read; it starts a new attempt only
+after the read ends and explicit activation with safe CSRF recovery. No disabled activation is remembered or replayed.
+If discovery returns anonymous after a recorded `204` for the applicable logout attempt and known transitions are settled,
+confirmation may be restored; without a `204`, anonymous discovery alone does not confirm the logout attempt.
+An MFA, password-change, or authenticated result keeps logout unconfirmed and offers explicit Retry logout through
+safe CSRF recovery, never automatic protected reveal or replay. Failed or ambiguous reconciliation keeps the shield.
+Suspended/restored tabs apply the existing lifecycle shield and explicit-check rules; no durable all-context logout
+record is implied. A retained document, including BFCache restoration, retains its local logout recovery state. A new
+document after Reload or context termination has no such record and uses the ordinary ordered mount gate. If a late
+transition restored authentication, fresh session, capability/scope, route, and dependent-data checks may authorize
+newly fetched protected content; this is not restoration of pre-logout UI or confirmation of the prior logout attempt.
+Local shielding, response fencing, and browser closure do not revoke cookies.
 
 If logout, CSRF refresh, or anonymous confirmation fails, keep the privacy screen. It must state that logout is not
 confirmed, that the browser may still hold a valid sign-in cookie, and that protected content has been hidden locally.
@@ -295,8 +331,9 @@ Broadcast a content-free unconfirmed outcome so every tab remains shielded. Do n
 success, restore protected UI, run authenticated discovery automatically, or retry automatically. `Retry logout` starts
 a new phased attempt only after explicit activation and safe CSRF recovery.
 
-Backend dependency: `BCG-001` owns logout rotation, request quiescence, the atomic anti-resurrection guarantee,
-non-refreshing lifecycle checks, and post-logout anonymous discovery. This flow cannot ship while that blocker is open.
+Backend dependency: `BCG-001` tracks logout rotation, the reduced guarantee and reconciliation evidence,
+non-refreshing lifecycle checks, and post-logout anonymous discovery. Only its logout product conflict is resolved;
+this flow cannot ship while the composite blocker remains open.
 
 ### Logout Checks
 
@@ -307,16 +344,33 @@ non-refreshing lifecycle checks, and post-logout anonymous discovery. This flow 
 3. Given explicit Retry logout, when fresh CSRF can be obtained, then exactly one new logout request is sent.
 4. Given a logout-start phase in one tab, when another tab receives it, then that tab shields and aborts authenticated
    work, acknowledges quiescence, and sends no authenticated request until a terminal outcome and permitted next action.
-5. Given a pre-logout request resolves after backend logout, when its response attempts to reissue a cookie, then the
-   backend atomic contract prevents that response from restoring authentication after confirmed logout.
+5. Given a delayed ordinary or Continue working response, when it arrives after logout, then subsequent discovery
+   remains anonymous under the backend's reduced guarantee; no physical cookie-absence assertion is required.
+6. Given a delayed login, MFA-completion, or password-change response admitted before logout, when it arrives late,
+   then authentication may be restored; the frontend shields, withdraws current confirmation, and requires explicit
+   reconciliation without automatic unsafe replay or protected reveal.
+7. Given a pending logout POST, when a late authentication transition arrives and the user attempts Refresh or Retry,
+   then neither action dispatches. When the original POST returns `204`, record only its outcome, end the active phase,
+   release its exclusive lease, and keep the shield; only a new explicit Refresh starts reconciliation. Test non-`204`
+   and ambiguous outcomes too: neither records success, and a callback after termination cannot upgrade the outcome.
+8. Given a transition during anonymous confirmation or explicit reconciliation, when the old discovery resolves, then
+   its fenced result cannot confirm logout or reveal content; another explicit check is required after the read ends.
+9. Given a receiving tab retaining its logout flow, when a security-epoch notification arrives after confirmation, then
+   it withdraws confirmation and follows logout reconciliation, not the ordinary protected mount gate. An authenticated
+   reconciliation result retains the shield and offers explicit Retry logout, not protected navigation.
 
 ### Logout Negative Tests
 
 - Fail logout at every transport phase and assert neither a success announcement nor the normal login screen appears.
-- Press Back, Forward, and Reload from both logout outcomes and assert protected content does not reappear.
+- Press Back, Forward, and Reload from both logout outcomes and assert no stale pre-logout content reappears. Retained
+  documents, including BFCache entries, keep their shield and local logout recovery rules. Fresh documents must pass
+  the entire ordered mount gate before newly fetched protected content appears; exercise a restored authentication
+  cookie from a late transition and allow freshly authorized entry without claiming the earlier logout was confirmed.
 - Verify screen-reader focus enters the privacy-screen heading and that Retry and close-browser guidance are reachable.
-- Delay an authenticated response in each tab across logout and assert no response can restore authentication or content
-  after confirmation; run the same case with one tab suspended and unable to acknowledge.
+- Delay ordinary, Continue working, login, MFA-completion, and password-change responses separately across logout.
+  Assert the distinct outcomes above, known-transition quiescence, independent tab checks, and no stale UI reveal.
+  Include a suspended tab unable to acknowledge and a terminated context; prove achievable shielding/recovery on return,
+  not universal revocation. Preserve unrelated-device authentication. Backend cookie-pair simulation alone is insufficient.
 
 ## Cross-Tab Security Epoch
 
@@ -333,18 +387,30 @@ transition before broadcasting. A receiving tab immediately enters the privacy s
 aborts protected work, drops protected reachable references, and blocks mutation and protected render until the message
 kind's permitted next gate completes. Logout-start never triggers the ordinary protected mount gate.
 
+A receiving tab that still retains a local logout flow or its confirmed outcome treats a subsequent security-epoch
+notification as possible late-transition reconciliation, not permission to enter the ordinary protected mount gate.
+It withdraws current confirmation and follows the logout phase ordering above, including deferral while a known active
+logout phase holds the barrier. It cannot infer the account, stage, or cause from the content-free signal. Only explicit
+session reconciliation determines the current state; any non-anonymous result keeps this participant shielded with
+explicit Retry logout. This precedence uses existing local flow state and existing messages, not a durable logout
+record or a new channel payload.
+
 The channel is notification only, never authority. It carries no session state and causes no automatic unsafe request.
-A suspended tab or tab opened after a broadcast still starts behind the ordinary mount gate. `localStorage` events are
+A suspended tab retaining a logout flow resumes behind that flow's shield and explicit reconciliation; a newly created
+document with no retained logout flow starts behind the ordinary mount gate. `localStorage` events are
 not a substitute because they persist a cross-tab signal. If `BroadcastChannel` construction or delivery fails, the tab
-must remain safe through the mount gate on entry, visibility return, BFCache restoration, and before mutation; it must
-not claim immediate cross-tab invalidation coverage.
+must remain safe through its applicable gate on entry, visibility return, BFCache restoration, and before mutation:
+retained logout recovery takes precedence over the ordinary mount gate. Lifecycle return only shields and marks
+revalidation needed, without dispatch. The tab must not claim immediate cross-tab invalidation coverage.
 
 ### Security-Epoch Checks
 
 1. Given account A in two visible windows, when one starts logout, then both show a privacy shield before either sends
    an authenticated request; each receiving window acknowledges quiescence without session discovery.
 2. Given one window completes login, MFA, password replacement, or an account switch, when the signal arrives, then an
-   older window drops account A state and passes session, capability, scope, and route checks before protected mount.
+   older window drops account A state. A window retaining logout state follows logout reconciliation and cannot mount
+   protected content from that signal or an authenticated reconciliation result. Other windows pass the ordinary
+   session, capability, scope, and route checks before protected mount under the existing explicit-revalidation rules.
 3. Given delayed reads and SSE callbacks from an older epoch, when they resolve, then they cannot render, announce,
    mutate cache, create a blob, or restore a form.
 

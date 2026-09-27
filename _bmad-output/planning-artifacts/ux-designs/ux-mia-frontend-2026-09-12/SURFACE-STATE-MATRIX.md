@@ -184,7 +184,7 @@ neither proves acceptance, token consumption, authentication, or session creatio
 | MFA challenge | `G,F,T,P` | TOTP/SMS; cooldown; five-failure invalid; expired | next stage or logout | `AUTH` |
 | MFA recovery code | `G,F,T` | unused; consumed; invalid; challenge expired | next stage or logout | `AUTH` |
 | Required password replacement | `G,F,T` | required; policy error; complete | Home or logout | `AUTH,INPUT` |
-| Restricted logout | `G,T,P` | submitting; confirmed; unconfirmed failure | Login/privacy screen | `AUTH` |
+| Restricted logout | `G,T,P` | quiescing; submitting; confirming; confirmed observation; unconfirmed; late-transition reconciliation needed | Login/privacy screen; explicit reconciliation per security companion | `AUTH` |
 
 ### Home
 

@@ -301,9 +301,12 @@ the neutral privacy shield, aborts protected work, and marks the protected-rende
 exposing content or allowing mutation. `SECURITY-PRIVACY-ACCEPTANCE.md` owns transport, ordering, deduplication, and
 teardown detail.
 
-Logout start shields every tab and quiesces authenticated requests until the initiating logout reaches a terminal
-outcome. No pre-logout response may restore authentication after confirmed logout. The ledger's logout request-
-quiescence blocker must close before this behavior ships; timing assumptions are not a substitute.
+Logout start shields the initiating and live receiving tabs and quiesces known in-flight work, including authentication
+transitions, until the initiating logout reaches a terminal outcome. The 2026-09-27 owner decision in
+`FRONTEND-PRD-FOUNDATION.md` accepts that delayed login, MFA-completion, or password-change responses admitted before
+logout may restore authentication. There is no server-side per-browser revocation or guarantee across suspended or
+terminated contexts. Local shielding hides content; it does not revoke cookies. `BCG-001` remains open for remaining
+transport and evidence obligations.
 
 On logout, expiry, authorization loss, or security-generation rejection, synchronously clear protected trees,
 sensitive memory, scoped caches, titles, breadcrumbs, history state, streams, media, partial downloads, and object URLs
@@ -311,10 +314,13 @@ before showing neutral UI. Never persist unsent chat drafts, passwords, MFA valu
 tokens, private content, or authenticated API bodies in browser storage. A chat draft may survive only page-local
 reconnection while that page remains open and authorization remains confirmed.
 
-Logout is complete only after backend success and authoritative anonymous-session discovery. Failure replaces the
-protected application with `privacy-screen`, states that logout is not confirmed, retries only through the safe CSRF
-path, and provides close-browser or operator guidance. It never displays a successful neutral login while a valid
-HttpOnly session cookie may remain.
+Logout confirmation requires known transitions to settle, backend `204`, and subsequent authoritative anonymous-session
+discovery. Each tab independently checks before showing neutral login with confirmation of that observed state, not
+permanent revocation. A late transition retains or reinstalls `privacy-screen`, withdraws current confirmation, and
+offers explicit session reconciliation; it never automatically reveals protected content or replays an unsafe request.
+Failure states that logout is unconfirmed and content is hidden locally, retries only through explicit safe CSRF
+recovery, and provides close-browser or operator guidance without promising cookie revocation. Detailed recovery and
+truthful copy are owned by `SECURITY-PRIVACY-ACCEPTANCE.md` §Logout and Privacy Screen.
 
 Device-local locale and Standard, Large, or Extra large text size may persist because they are not account content.
 After reauthentication, route the student to any still-active tutoring session and restore authoritative saved work
