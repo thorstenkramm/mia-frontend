@@ -2,6 +2,7 @@ import {
   discoverSession,
   getCurrentAccountCapabilities,
   logoutCurrentBrowser,
+  loginWithPassword,
   type EntryApiFailure,
   type EntrySession,
 } from "../api/entry";
@@ -15,7 +16,7 @@ export type AuthenticationBootstrapState =
       readonly phase: "failed";
       readonly error: EntryApiFailure;
     }
-  | { readonly kind: "Signed out" }
+  | { readonly kind: "Signed out"; readonly outcome?: LoginOutcome }
   | { readonly kind: "MFA required" }
   | { readonly kind: "Password change" }
   | { readonly kind: "Access checking"; readonly phase: "loading" }
@@ -25,7 +26,12 @@ export type AuthenticationBootstrapState =
       readonly error: EntryApiFailure;
     }
   | { readonly kind: "Authenticated" }
-  | { readonly kind: "Rotating" }
+  | {
+      readonly kind: "Rotating";
+      readonly phase: "submitting" | "reconciling" | "reconciliation failed";
+      readonly error?: EntryApiFailure;
+      readonly reconciliationError?: EntryApiFailure;
+    }
   | { readonly kind: "Restricted expired" }
   | { readonly kind: "Logout start" }
   | { readonly kind: "Logout quiescing" }
@@ -39,6 +45,12 @@ export type AuthenticationBootstrapState =
   | { readonly kind: "Logout reconciliation needed" };
 
 type Listener = () => void;
+type LoginRecoveryOrigin = "none" | "local ambiguity" | "passive revalidation";
+type LoginOutcome = {
+  readonly kind:
+    "rejected" | "blocked" | "throttled" | "failed" | "unconfirmed";
+  readonly error: EntryApiFailure;
+};
 type LogoutAttemptOutcome =
   | { readonly kind: "confirmed" }
   | { readonly kind: "unconfirmed"; readonly error?: EntryApiFailure }
@@ -89,6 +101,7 @@ export class SessionController {
   private logoutNonce: string | null = null;
   private recordedLogoutSuccess = false;
   private reconciliationNeeded = false;
+  private loginRecoveryOrigin: LoginRecoveryOrigin = "none";
   private channel: BroadcastChannel | null = null;
   private readonly receivedEventNonces = new Set<string>();
 
@@ -104,12 +117,7 @@ export class SessionController {
       return;
     }
     this.openSecurityChannel();
-    const work = this.bootstrap();
-    this.activeReadSettled = work;
-    void work.then(
-      () => this.clearSettledRead(work),
-      () => this.clearSettledRead(work),
-    );
+    this.trackSettlement(this.bootstrap());
   }
 
   stop(): void {
@@ -123,6 +131,7 @@ export class SessionController {
     this.logoutNonce = null;
     this.recordedLogoutSuccess = false;
     this.reconciliationNeeded = false;
+    this.loginRecoveryOrigin = "none";
     this.receivedEventNonces.clear();
     this.state = { kind: "Cold" };
   }
@@ -135,6 +144,7 @@ export class SessionController {
     this.logoutNonce = crypto.randomUUID();
     this.recordedLogoutSuccess = false;
     this.reconciliationNeeded = false;
+    this.loginRecoveryOrigin = "none";
     this.sequence += 1;
     this.setState({ kind: "Logout start" });
     this.activeRead?.abort();
@@ -165,6 +175,207 @@ export class SessionController {
     this.logoutActive = true;
     this.reconciliationNeeded = false;
     void this.runLogoutReconciliation();
+  }
+
+  login(username: string, password: string): Promise<void> {
+    if (
+      this.state.kind !== "Signed out" &&
+      this.state.kind !== "Logout confirmed"
+    ) {
+      return Promise.resolve();
+    }
+    // A new deliberate sign-in ends this tab's previously confirmed logout flow.
+    this.logoutNonce = null;
+    this.recordedLogoutSuccess = false;
+    this.reconciliationNeeded = false;
+    this.loginRecoveryOrigin = "none";
+    const sequence = ++this.sequence;
+    this.setState({ kind: "Rotating", phase: "submitting" });
+    const work = this.runLogin(username, password, sequence);
+    this.trackSettlement(work);
+    return work;
+  }
+
+  async recheckLogin(): Promise<void> {
+    if (
+      this.state.kind !== "Restricted expired" &&
+      (this.state.kind !== "Rotating" ||
+        this.state.phase !== "reconciliation failed")
+    ) {
+      return;
+    }
+    const work = this.reconcileLogin(++this.sequence, {
+      origin:
+        this.loginRecoveryOrigin === "local ambiguity"
+          ? "local ambiguity"
+          : "passive revalidation",
+      ...(this.state.kind === "Rotating" && this.state.error
+        ? { error: this.state.error }
+        : {}),
+    });
+    this.trackSettlement(work);
+    await work;
+  }
+
+  private async runLogin(
+    username: string,
+    password: string,
+    sequence: number,
+  ): Promise<void> {
+    let reconcileError: EntryApiFailure | undefined;
+    let mutationDispatched = false;
+    try {
+      // Transitions are exclusive across the origin; safe reads wait for their
+      // cookie settlement before discovering state. Logout uses the same barrier.
+      await withLoginCoordinatorLock(async (queued) => {
+        // A queued lease is not permission to dispatch after an epoch change.
+        if (sequence !== this.sequence) return;
+        if (queued) {
+          const controller = new AbortController();
+          this.activeRead = controller;
+          let current: EntrySession;
+          try {
+            current = await discoverSession(controller.signal);
+          } finally {
+            if (this.activeRead === controller) this.activeRead = null;
+          }
+          if (sequence !== this.sequence) return;
+          if (current.kind !== "anonymous") {
+            this.loginRecoveryOrigin = "passive revalidation";
+            this.setState({ kind: "Restricted expired" });
+            return;
+          }
+        }
+        const csrf = readCurrentCsrfCookie();
+        if (csrf === null) throw new ApiProtocolError();
+        // Do not abort an admitted transition: local abort cannot prove cookie settlement.
+        let session: EntrySession;
+        try {
+          mutationDispatched = true;
+          session = await loginWithPassword(username, password, csrf);
+        } catch (error) {
+          if (sequence !== this.sequence) this.observeLateLogin();
+          throw error;
+        }
+        if (sequence !== this.sequence) {
+          this.observeLateLogin();
+          return;
+        }
+        const controller = new AbortController();
+        this.activeRead = controller;
+        const applied = this.applySession(session, sequence, controller.signal);
+        this.loginRecoveryOrigin = "none";
+        this.broadcast("security-epoch");
+        await applied;
+        if (this.activeRead === controller) this.activeRead = null;
+      });
+    } catch (error) {
+      if (sequence !== this.sequence) {
+        if (this.state.kind.startsWith("Logout"))
+          this.markLogoutReconciliationNeeded();
+        return;
+      }
+      const failure = toEntryFailure(error);
+      if (
+        mutationDispatched &&
+        failure.kind === "http" &&
+        failure.disclosure.status < 500 &&
+        failure.code !== "csrf_invalid"
+      ) {
+        this.loginRecoveryOrigin = "none";
+        const status = failure.disclosure.status;
+        this.setState({
+          kind: "Signed out",
+          outcome: {
+            kind:
+              status === 401
+                ? "rejected"
+                : status === 422
+                  ? "blocked"
+                  : status === 429
+                    ? "throttled"
+                    : "failed",
+            error: failure,
+          },
+        });
+      } else {
+        if (mutationDispatched) reconcileError = failure;
+        else {
+          this.loginRecoveryOrigin = "passive revalidation";
+          this.setState({
+            kind: "Rotating",
+            phase: "reconciliation failed",
+            reconciliationError: failure,
+          });
+        }
+      }
+    }
+    if (reconcileError !== undefined && sequence === this.sequence) {
+      await this.reconcileLogin(sequence, {
+        origin: "local ambiguity",
+        error: reconcileError,
+      });
+    }
+  }
+
+  private async reconcileLogin(
+    sequence: number,
+    recovery: {
+      readonly origin: Exclude<LoginRecoveryOrigin, "none">;
+      readonly error?: EntryApiFailure;
+    },
+  ): Promise<void> {
+    this.loginRecoveryOrigin = recovery.origin;
+    this.setState({
+      kind: "Rotating",
+      phase: "reconciling",
+      ...(recovery.error ? { error: recovery.error } : {}),
+    });
+    const controller = new AbortController();
+    this.activeRead = controller;
+    try {
+      await withCoordinatorLock("shared", async () => {
+        if (sequence !== this.sequence) return;
+        const session = await discoverSession(controller.signal);
+        if (sequence !== this.sequence) return;
+        if (session.kind === "anonymous" && recovery.error) {
+          this.setState({
+            kind: "Signed out",
+            outcome: { kind: "unconfirmed", error: recovery.error },
+          });
+        } else {
+          const applied = this.applySession(
+            session,
+            sequence,
+            controller.signal,
+          );
+          if (
+            session.kind !== "anonymous" &&
+            recovery.origin === "local ambiguity"
+          )
+            this.broadcast("security-epoch");
+          await applied;
+        }
+        this.loginRecoveryOrigin = "none";
+      });
+    } catch (failure) {
+      if (sequence === this.sequence) {
+        this.setState({
+          kind: "Rotating",
+          phase: "reconciliation failed",
+          ...(recovery.error ? { error: recovery.error } : {}),
+          reconciliationError: toEntryFailure(failure),
+        });
+      }
+    } finally {
+      if (this.activeRead === controller) this.activeRead = null;
+    }
+  }
+
+  private observeLateLogin(): void {
+    if (this.state.kind.startsWith("Logout"))
+      this.markLogoutReconciliationNeeded();
+    this.broadcast("security-epoch");
   }
 
   private async bootstrap(): Promise<void> {
@@ -358,6 +569,14 @@ export class SessionController {
     }
   }
 
+  private trackSettlement(work: Promise<void>): void {
+    this.activeReadSettled = work;
+    void work.then(
+      () => this.clearSettledRead(work),
+      () => this.clearSettledRead(work),
+    );
+  }
+
   private acknowledgeQuiescenceWhenSettled(logoutNonce: string): void {
     const pendingRead = this.activeReadSettled;
     if (pendingRead === null) {
@@ -439,16 +658,22 @@ export class SessionController {
         if (this.logoutActive) {
           this.markLogoutReconciliationNeeded();
         } else {
+          this.sequence += 1;
+          this.activeRead?.abort();
           this.setState({ kind: "Logout reconciliation needed" });
         }
         return;
       case "logout-unconfirmed":
         if (this.logoutActive) {
           this.markLogoutReconciliationNeeded();
-        } else if (this.reconciliationNeeded) {
-          this.setState({ kind: "Logout reconciliation needed" });
         } else {
-          this.setState({ kind: "Logout unconfirmed" });
+          this.sequence += 1;
+          this.activeRead?.abort();
+          this.setState(
+            this.reconciliationNeeded
+              ? { kind: "Logout reconciliation needed" }
+              : { kind: "Logout unconfirmed" },
+          );
         }
         return;
       case "security-epoch":
@@ -457,6 +682,7 @@ export class SessionController {
         } else {
           this.sequence += 1;
           this.activeRead?.abort();
+          this.loginRecoveryOrigin = "passive revalidation";
           this.setState({ kind: "Restricted expired" });
         }
         return;
@@ -472,7 +698,9 @@ export class SessionController {
       version: 1,
       kind,
       eventNonce: crypto.randomUUID(),
-      ...(this.logoutNonce === null ? {} : { logoutNonce: this.logoutNonce }),
+      ...(kind === "security-epoch" || this.logoutNonce === null
+        ? {}
+        : { logoutNonce: this.logoutNonce }),
     };
     try {
       this.channel?.postMessage(message);
@@ -496,9 +724,33 @@ async function withCoordinatorLock<T>(
   action: () => Promise<T>,
 ): Promise<T> {
   if (!("locks" in navigator)) {
-    return action();
+    // Current supported browsers provide Web Locks. Without an origin-wide
+    // coordinator, proceeding would permit concurrent authentication mutations.
+    throw new ApiProtocolError();
   }
-  return navigator.locks.request(coordinatorLockName, { mode }, action);
+  return navigator.locks.request(coordinatorLockName, { mode }, () => action());
+}
+
+async function withLoginCoordinatorLock(
+  action: (queued: boolean) => Promise<void>,
+): Promise<void> {
+  if (!("locks" in navigator)) throw new ApiProtocolError();
+  let acquiredImmediately = false;
+  await navigator.locks.request(
+    coordinatorLockName,
+    { mode: "exclusive", ifAvailable: true },
+    async (lock) => {
+      if (lock === null) return;
+      acquiredImmediately = true;
+      await action(false);
+    },
+  );
+  if (acquiredImmediately) return;
+  await navigator.locks.request(
+    coordinatorLockName,
+    { mode: "exclusive" },
+    () => action(true),
+  );
 }
 
 function parseSecurityMessage(value: unknown): SecurityMessage | null {

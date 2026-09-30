@@ -57,7 +57,7 @@ function routeKey(state: AuthenticationBootstrapState): EntryRouteKey | null {
     case "Restricted expired":
       return "signedOut";
     case "Rotating":
-      return null;
+      return "signedOut";
     case "Logout confirmed":
       return "signedOut";
     case "Logout start":

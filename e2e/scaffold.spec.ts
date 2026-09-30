@@ -1,3 +1,4 @@
+import { createHash } from "node:crypto";
 import { mkdtemp, rm } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
@@ -28,6 +29,340 @@ const headings = {
 
 const appUrl = "http://127.0.0.1:4173/";
 const mediaType = "application/vnd.api+json";
+
+function fingerprint(value: string): string {
+  return createHash("sha256").update(value).digest("hex");
+}
+
+test.use({ trace: "off", screenshot: "off", video: "off" });
+
+test.describe("password sign-in", () => {
+  test("successful login produces the epoch that tears down another page's credentials without discovery", async ({
+    page,
+    context,
+  }) => {
+    const receiver = await context.newPage();
+    await mockSession(page);
+    await mockSession(receiver);
+    await context.addCookies([
+      { name: "mia_csrf", value: crypto.randomUUID(), url: appUrl },
+    ]);
+    let receiverReads = 0;
+    receiver.on("request", (request) => {
+      if (new URL(request.url()).pathname === "/api/v1/auth/session")
+        receiverReads++;
+    });
+    await page.route("**/api/v1/auth/login", async (route) =>
+      route.fulfill({
+        status: 200,
+        contentType: mediaType,
+        body: JSON.stringify({
+          data: {
+            type: "auth-sessions",
+            id: "account-id",
+            attributes: {
+              stage: "password-change",
+              idle_expires_at: "2026-09-30T10:30:00.000000Z",
+              absolute_expires_at: "2026-09-30T10:30:00.000000Z",
+            },
+          },
+        }),
+      }),
+    );
+    await page.goto("/");
+    await receiver.goto("/");
+    await receiver.locator("#username").fill("example");
+    await receiver.locator("#password").fill(crypto.randomUUID());
+    const oldControl = await receiver.locator("#password").elementHandle();
+    await page.locator("#username").fill("example");
+    await page.locator("#password").fill(crypto.randomUUID());
+    await page.getByRole("button", { name: "Sign in", exact: true }).click();
+    await expect(page).toHaveURL(/\/auth\/password-change$/u);
+    await expect(
+      receiver.getByRole("button", { name: "Check sign-in status" }),
+    ).toBeFocused();
+    expect(await oldControl?.evaluate((element) => element.isConnected)).toBe(
+      false,
+    );
+    expect(
+      (await receiver.locator("#password").inputValue()).length === 0,
+    ).toBe(true);
+    expect(
+      (await receiver.locator("#username").inputValue()).length === 0,
+    ).toBe(true);
+    await expect(
+      receiver.getByRole("button", { name: "Sign in", exact: true }),
+    ).toHaveAttribute("aria-disabled", "true");
+    expect(receiverReads).toBe(1);
+    await oldControl?.dispose();
+    await receiver.close();
+  });
+  test("a security epoch destroys entered credentials and enables only an explicit safe recheck", async ({
+    page,
+  }) => {
+    await mockSession(page);
+    let reads = 0;
+    page.on("request", (request) => {
+      if (new URL(request.url()).pathname === "/api/v1/auth/session") reads++;
+    });
+    await page.goto("/");
+    await page.locator("#username").fill("example");
+    await page.locator("#password").fill(crypto.randomUUID());
+    await page.evaluate(() => {
+      const channel = new BroadcastChannel("mia-security-v1");
+      channel.postMessage({
+        version: 1,
+        kind: "security-epoch",
+        eventNonce: crypto.randomUUID(),
+      });
+      channel.close();
+    });
+    await expect(
+      page.getByRole("button", { name: "Check sign-in status" }),
+    ).toBeVisible();
+    expect((await page.locator("#password").inputValue()).length === 0).toBe(
+      true,
+    );
+    expect((await page.locator("#username").inputValue()).length === 0).toBe(
+      true,
+    );
+    await expect(
+      page.getByRole("button", { name: "Sign in", exact: true }),
+    ).toHaveAttribute("aria-disabled", "true");
+    expect(reads).toBe(1);
+    await page.getByRole("button", { name: "Check sign-in status" }).click();
+    await expect(
+      page.getByRole("button", { name: "Sign in", exact: true }),
+    ).toHaveAttribute("aria-disabled", "false");
+    expect(reads).toBe(2);
+  });
+  test("keyboard submission retains exact input on throttling and isolates the next restricted stage", async ({
+    page,
+    context,
+  }) => {
+    await mockSession(page);
+    await context.grantPermissions(["clipboard-read", "clipboard-write"]);
+    const csrf = crypto.randomUUID();
+    await context.addCookies([{ name: "mia_csrf", value: csrf, url: appUrl }]);
+    let posts = 0;
+    let correctWire = false;
+    let reads = 0;
+    let protectedRequests = 0;
+    let protectedChunks = 0;
+    page.on("request", (request) => {
+      const path = new URL(request.url()).pathname;
+      if (path === "/api/v1/auth/session") reads++;
+      if (
+        path.startsWith("/api/") &&
+        !["/api/v1/auth/session", "/api/v1/auth/login"].includes(path)
+      )
+        protectedRequests++;
+      if (path.includes("HomeEntryRoute")) protectedChunks++;
+    });
+    const username = "Example.User";
+    const password = ` ${crypto.randomUUID()} é `;
+    await page.route("**/api/v1/auth/login", async (route) => {
+      posts++;
+      const expectedBody = JSON.stringify({
+        data: {
+          type: "login-attempts",
+          attributes: { username, password },
+        },
+      });
+      const requestBody = route.request().postData();
+      correctWire =
+        requestBody !== null &&
+        fingerprint(requestBody) === fingerprint(expectedBody) &&
+        route.request().headers()["x-csrf-token"] === csrf &&
+        !route.request().headers()["x-request-id"];
+      if (posts === 1) {
+        await route.fulfill({
+          status: 429,
+          headers: { "Retry-After": "60" },
+          body: "<p>Throttled</p>",
+        });
+      } else {
+        await route.fulfill({
+          status: 200,
+          contentType: mediaType,
+          body: JSON.stringify({
+            data: {
+              type: "auth-sessions",
+              id: "account-id",
+              attributes: {
+                stage: "mfa",
+                mfa_challenge_id: "challenge-id",
+                idle_expires_at: "2026-09-30T10:30:00.000000Z",
+                absolute_expires_at: "2026-09-30T10:30:00.000000Z",
+              },
+            },
+          }),
+        });
+      }
+    });
+    await page.goto("/");
+    await pasteInto(page, page.locator("#username"), username);
+    await pasteInto(page, page.locator("#password"), password);
+    await expect(page.locator("#username")).toHaveAttribute(
+      "autocomplete",
+      "username",
+    );
+    await expect(page.locator("#password")).toHaveAttribute(
+      "autocomplete",
+      "current-password",
+    );
+    await page
+      .locator("#password")
+      .evaluate((input: HTMLInputElement) => input.setSelectionRange(1, 5));
+    await page.keyboard.press("Tab");
+    await page.keyboard.press("Space");
+    await expect(
+      page.getByRole("button", { name: "Hide password" }),
+    ).toBeFocused();
+    expect(
+      await page
+        .locator("#password")
+        .evaluate(
+          (input: HTMLInputElement) =>
+            input.selectionStart === 1 && input.selectionEnd === 5,
+        ),
+    ).toBe(true);
+    await page.keyboard.press("Tab");
+    await page.keyboard.press("Enter");
+    await expect(page.getByRole("alert")).toContainText("60 seconds");
+    await expect(
+      page.getByRole("button", { name: "Sign in", exact: true }),
+    ).toBeFocused();
+    expect((await page.locator("#password").inputValue()) === password).toBe(
+      true,
+    );
+    expect(correctWire).toBe(true);
+    await expect(
+      page.getByRole("button", { name: "Technical details" }),
+    ).toHaveAttribute("aria-expanded", "false");
+    await page.getByRole("button", { name: "Technical details" }).click();
+    for (const textSize of textSizes) {
+      await page.setViewportSize({ width: 320, height: 900 });
+      await page.locator(`#text-size-${textSize}`).check();
+      await expectNoPageOverflow(page);
+      await expectFocusedAndUnobscured(
+        page,
+        page.getByRole("button", { name: "Sign in", exact: true }),
+      );
+    }
+    await expectNoWcagViolations(page);
+    await page.getByRole("button", { name: "Sign in", exact: true }).click();
+    await expect(page).toHaveURL(/\/auth\/mfa$/u);
+    await expect(
+      page.getByRole("button", { name: "Sign out", exact: true }),
+    ).toBeVisible();
+    expect(await page.locator("#password").count()).toBe(0);
+    expect(protectedChunks).toBe(0);
+    await expect(page).toHaveTitle("Verify sign-in | MIA");
+    expect(await page.getByRole("navigation").count()).toBe(0);
+    expect(
+      await page.getByRole("heading", { name: "Home", exact: true }).count(),
+    ).toBe(0);
+    expect(
+      await page
+        .getByText("Access checks are complete.", { exact: true })
+        .count(),
+    ).toBe(0);
+    expect(
+      await page.evaluate(async () => ({
+        cacheEntries: (await caches.keys()).length,
+        sessionEntries: sessionStorage.length,
+        unexpectedLocalEntries: Object.keys(localStorage).filter(
+          (key) => !key.includes("text-size") && !key.includes("locale"),
+        ).length,
+        protectedResources: performance
+          .getEntriesByType("resource")
+          .filter(
+            (entry) =>
+              entry.name.includes("HomeEntryRoute") ||
+              (new URL(entry.name).pathname.startsWith("/api/") &&
+                !["/api/v1/auth/session", "/api/v1/auth/login"].includes(
+                  new URL(entry.name).pathname,
+                )),
+          ).length,
+      })),
+    ).toEqual({
+      cacheEntries: 0,
+      sessionEntries: 0,
+      unexpectedLocalEntries: 0,
+      protectedResources: 0,
+    });
+    expect({ reads, posts, protectedRequests }).toEqual({
+      reads: 1,
+      posts: 2,
+      protectedRequests: 0,
+    });
+  });
+
+  test("a logout barrier waits for an admitted login and requires explicit late-transition reconciliation", async ({
+    page,
+    context,
+  }) => {
+    await mockSession(page);
+    await context.addCookies([
+      { name: "mia_csrf", value: crypto.randomUUID(), url: appUrl },
+    ]);
+    const peer = await context.newPage();
+    await mockSession(peer, "mfa");
+    let release: (() => void) | undefined;
+    const pending = new Promise<void>((resolve) => {
+      release = resolve;
+    });
+    let posts = 0;
+    let logouts = 0;
+    let peerReads = 0;
+    peer.on("request", (request) => {
+      if (new URL(request.url()).pathname === "/api/v1/auth/session")
+        peerReads++;
+    });
+    await page.route("**/api/v1/auth/login", async (route) => {
+      posts++;
+      await pending;
+      await route.fulfill({
+        status: 200,
+        contentType: mediaType,
+        body: JSON.stringify({
+          data: {
+            type: "auth-sessions",
+            id: "account-id",
+            attributes: {
+              stage: "password-change",
+              idle_expires_at: "2026-09-30T10:30:00.000000Z",
+              absolute_expires_at: "2026-09-30T10:30:00.000000Z",
+            },
+          },
+        }),
+      });
+    });
+    await peer.route("**/api/v1/auth/logout", async (route) => {
+      logouts++;
+      await route.fulfill({ status: 204 });
+    });
+    await page.goto("/");
+    await peer.goto("/");
+    await page.locator("#username").fill("example");
+    await page.locator("#password").fill(crypto.randomUUID());
+    await page.getByRole("button", { name: "Sign in", exact: true }).click();
+    await expect.poll(() => posts).toBe(1);
+    await peer.getByRole("button", { name: "Sign out", exact: true }).click();
+    await expect(page).toHaveURL(/\/auth\/logout$/u);
+    expect(logouts).toBe(0);
+    release?.();
+    await expect.poll(() => logouts).toBe(1);
+    await expect(
+      peer.getByRole("button", { name: "Refresh sign-out status" }),
+    ).toBeVisible();
+    expect(peerReads).toBe(1);
+    expect(await page.locator("#password").count()).toBe(0);
+    expect(await page.getByRole("navigation").count()).toBe(0);
+    await peer.close();
+  });
+});
 const browserZoomExtension = fileURLToPath(
   new URL("./fixtures/browser-zoom-extension", import.meta.url),
 );
@@ -187,6 +522,21 @@ async function expectNoWcagViolations(page: Page): Promise<void> {
   expect(safeViolationSummary).toEqual([]);
 }
 
+async function pasteInto(
+  page: Page,
+  control: Locator,
+  value: string,
+): Promise<void> {
+  await control.focus();
+  await page.evaluate(
+    async (clipboardValue) => navigator.clipboard.writeText(clipboardValue),
+    value,
+  );
+  await page.keyboard.press(
+    process.platform === "darwin" ? "Meta+V" : "Control+V",
+  );
+}
+
 async function expectFocusedAndUnobscured(
   page: Page,
   control: Locator,
@@ -330,7 +680,36 @@ for (const zoomFactor of [2, 4] as const) {
 
     try {
       const page = await context.newPage();
-      await mockSession(page);
+      let sessionReads = 0;
+      let loginPosts = 0;
+      if (zoomFactor === 2) {
+        await context.grantPermissions(["clipboard-read", "clipboard-write"]);
+        await context.addCookies([
+          { name: "mia_csrf", value: crypto.randomUUID(), url: appUrl },
+        ]);
+        await page.emulateMedia({ forcedColors: "active" });
+        await page.route("**/api/v1/auth/session", async (route) => {
+          sessionReads++;
+          await route.fulfill(
+            sessionReads === 1
+              ? {
+                  status: 200,
+                  contentType: mediaType,
+                  body: JSON.stringify({
+                    data: null,
+                    meta: { stage: "anonymous" },
+                  }),
+                }
+              : { status: 500, contentType: mediaType, body: "unavailable" },
+          );
+        });
+        await page.route("**/api/v1/auth/login", async (route) => {
+          loginPosts++;
+          if (loginPosts === 1)
+            await route.fulfill({ status: 401, body: "rejected" });
+          else await route.abort("failed");
+        });
+      } else await mockSession(page);
       await page.goto(appUrl);
       await setActualBrowserZoom(page, zoomFactor);
 
@@ -344,6 +723,57 @@ for (const zoomFactor of [2, 4] as const) {
       expect(browserMetrics.innerWidth).toBe(1280 / zoomFactor);
       expect(browserMetrics.devicePixelRatio).toBeCloseTo(zoomFactor, 2);
       expect(browserMetrics.cssZoom).toBe("1");
+
+      if (zoomFactor === 2) {
+        await pasteInto(page, page.locator("#username"), "example");
+        await pasteInto(page, page.locator("#password"), crypto.randomUUID());
+        await page
+          .getByRole("button", { name: "Sign in", exact: true })
+          .click();
+        await expect(page.getByRole("alert")).toBeVisible();
+        for (const textSize of textSizes) {
+          await page.locator(`#text-size-${textSize}`).check();
+          for (const control of [
+            page.locator("#username"),
+            page.locator("#password"),
+            page.getByRole("button", { name: "Show password" }),
+            page.getByRole("button", { name: "Sign in", exact: true }),
+            page.getByRole("button", { name: "Technical details" }),
+          ]) {
+            await expectMinimumPointerTarget(control);
+            await expectFocusedAndUnobscured(page, control);
+            expect(
+              await control.evaluate(
+                (element) => getComputedStyle(element).forcedColorAdjust,
+              ),
+            ).toBe("auto");
+          }
+          await expectNoPageOverflow(page);
+        }
+        await page
+          .getByRole("button", { name: "Sign in", exact: true })
+          .click();
+        const recheck = page.getByRole("button", {
+          name: "Check sign-in status",
+        });
+        await expect(recheck).toBeFocused();
+        for (const textSize of textSizes) {
+          await page.locator(`#text-size-${textSize}`).check();
+          await expectMinimumPointerTarget(recheck);
+          await expectFocusedAndUnobscured(page, recheck);
+          expect(
+            await recheck.evaluate(
+              (element) => getComputedStyle(element).forcedColorAdjust,
+            ),
+          ).toBe("auto");
+          await expectNoPageOverflow(page);
+        }
+        expect(
+          await page.evaluate(
+            () => window.matchMedia("(forced-colors: active)").matches,
+          ),
+        ).toBe(true);
+      }
 
       for (const textSize of textSizes) {
         const radio = page.locator(`#text-size-${textSize}`);

@@ -1,6 +1,7 @@
 import { ChevronDownIcon } from "@heroicons/react/16/solid";
 import { useState } from "react";
 import { useIntl } from "react-intl";
+import { PasswordSignInForm } from "./PasswordSignInForm";
 import {
   isLocale,
   localeDisplayName,
@@ -46,6 +47,7 @@ export default function SignedOutEntryRoute({
         )}
       </p>
       <div className="mt-8 bg-white px-6 py-12 shadow-sm sm:rounded-lg sm:px-12">
+        <PasswordSignInForm />
         <div className="space-y-8">
           <div>
             {/* Tailwind Plus: Application UI > Forms > Select Menus > Simple native */}

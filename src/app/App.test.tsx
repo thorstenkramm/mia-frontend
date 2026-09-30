@@ -1,4 +1,5 @@
-import { render, screen } from "@testing-library/react";
+import { createHash } from "node:crypto";
+import { render, screen, waitFor } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
 import { delay, http, HttpResponse } from "msw";
 import { afterEach, describe, expect, it, vi } from "vitest";
@@ -21,6 +22,10 @@ import {
 } from "../platform/prefs/preferences";
 
 const mediaType = "application/vnd.api+json";
+
+function fingerprint(value: string): string {
+  return createHash("sha256").update(value).digest("hex");
+}
 
 function anonymousHandler() {
   return http.get("/api/v1/auth/session", () =>
@@ -131,6 +136,321 @@ afterEach(() => {
 });
 
 describe("localized anonymous entry", () => {
+  it.each(["transport", "csrf_invalid"])(
+    "keeps credentials and safe focus through %s ambiguity and explicit anonymous recovery",
+    async (failure) => {
+      const user = userEvent.setup();
+      const password = ` ${crypto.randomUUID()} é `;
+      const raw = JSON.stringify({
+        errors: [
+          {
+            status: "403",
+            code: "csrf_invalid",
+            detail: "<img src=x onerror=alert(1)>",
+          },
+        ],
+      });
+      let reads = 0;
+      let posts = 0;
+      renderEntry(
+        http.get("/api/v1/auth/session", () => {
+          reads++;
+          return reads === 2
+            ? HttpResponse.error()
+            : HttpResponse.json(
+                { data: null, meta: { stage: "anonymous" } },
+                { headers: { "Content-Type": mediaType } },
+              );
+        }),
+        http.post("/api/v1/auth/login", () => {
+          posts++;
+          return failure === "transport"
+            ? HttpResponse.error()
+            : new HttpResponse(raw, {
+                status: 403,
+                headers: { "Content-Type": mediaType },
+              });
+        }),
+      );
+      document.cookie = `mia_csrf=${crypto.randomUUID()}; Path=/`;
+      const username = await screen.findByLabelText<HTMLInputElement>(
+        "Username (required)",
+      );
+      const input = screen.getByLabelText<HTMLInputElement>(
+        "Password (required)",
+      );
+      username.focus();
+      await user.paste("Example.User");
+      input.focus();
+      await user.paste(password);
+      await user.click(
+        screen.getByRole("button", { name: "Sign in", exact: true }),
+      );
+      const recheck = await screen.findByRole("button", {
+        name: "Check sign-in status",
+      });
+      await waitFor(() => expect(recheck).toHaveFocus());
+      expect({
+        password: fingerprint(input.value),
+        username: fingerprint(username.value),
+      }).toEqual({
+        password: fingerprint(password),
+        username: fingerprint("Example.User"),
+      });
+      expect(input.readOnly).toBe(true);
+      const submit = screen.getByRole("button", {
+        name: "Sign in",
+        exact: true,
+      });
+      expect(submit).toHaveAttribute("aria-disabled", "true");
+      await user.click(submit);
+      expect({ posts, reads }).toEqual({ posts: 1, reads: 2 });
+      if (failure === "csrf_invalid") {
+        const disclosure = screen.getByRole("button", {
+          name: "Technical details",
+        });
+        expect(disclosure).toHaveAttribute("aria-expanded", "false");
+        await user.click(disclosure);
+        expect(document.querySelector("pre")?.textContent === raw).toBe(true);
+        expect(document.querySelector("img[src=x]") === null).toBe(true);
+        expect(screen.getByRole("alert").textContent?.includes(raw)).toBe(
+          false,
+        );
+        await user.click(disclosure);
+      }
+      await user.click(recheck);
+      await waitFor(() => expect(username).toHaveFocus());
+      expect({
+        password: fingerprint(input.value),
+        username: fingerprint(username.value),
+      }).toEqual({
+        password: fingerprint(password),
+        username: fingerprint("Example.User"),
+      });
+      expect(input.readOnly).toBe(false);
+      expect({ posts, reads }).toEqual({ posts: 1, reads: 3 });
+    },
+  );
+  it("restores username focus only when an auto-reconciliation control disappears", async () => {
+    const user = userEvent.setup();
+    let reads = 0;
+    let release = () => {};
+    const pending = new Promise<void>((resolve) => {
+      release = resolve;
+    });
+    renderEntry(
+      http.get("/api/v1/auth/session", async () => {
+        reads++;
+        if (reads === 2) await pending;
+        return HttpResponse.json(
+          { data: null, meta: { stage: "anonymous" } },
+          { headers: { "Content-Type": mediaType } },
+        );
+      }),
+      http.post("/api/v1/auth/login", () => HttpResponse.error()),
+    );
+    document.cookie = `mia_csrf=${crypto.randomUUID()}; Path=/`;
+    const username = await screen.findByLabelText("Username (required)");
+    await user.type(username, "example");
+    await user.type(screen.getByLabelText("Password (required)"), "example");
+    await user.click(
+      screen.getByRole("button", { name: "Sign in", exact: true }),
+    );
+    const recheck = await screen.findByRole("button", {
+      name: "Check sign-in status",
+    });
+    recheck.focus();
+    expect(recheck).toHaveFocus();
+
+    release();
+
+    await waitFor(() => expect(username).toHaveFocus());
+    expect(
+      screen.queryByRole("button", { name: "Check sign-in status" }),
+    ).not.toBeInTheDocument();
+  });
+  it("does not steal focus when auto reconciliation removes an unfocused control", async () => {
+    const user = userEvent.setup();
+    let reads = 0;
+    let release = () => {};
+    const pending = new Promise<void>((resolve) => {
+      release = resolve;
+    });
+    renderEntry(
+      http.get("/api/v1/auth/session", async () => {
+        reads++;
+        if (reads === 2) await pending;
+        return HttpResponse.json(
+          { data: null, meta: { stage: "anonymous" } },
+          { headers: { "Content-Type": mediaType } },
+        );
+      }),
+      http.post("/api/v1/auth/login", () => HttpResponse.error()),
+    );
+    document.cookie = `mia_csrf=${crypto.randomUUID()}; Path=/`;
+    await user.type(
+      await screen.findByLabelText("Username (required)"),
+      "example",
+    );
+    await user.type(screen.getByLabelText("Password (required)"), "example");
+    await user.click(
+      screen.getByRole("button", { name: "Sign in", exact: true }),
+    );
+    await screen.findByRole("button", { name: "Check sign-in status" });
+    const language = screen.getByLabelText("Language");
+    language.focus();
+
+    release();
+
+    await waitFor(() =>
+      expect(
+        screen.queryByRole("button", { name: "Check sign-in status" }),
+      ).not.toBeInTheDocument(),
+    );
+    expect(language).toHaveFocus();
+  });
+  it.each([401, 422, 429, 400])(
+    "preserves native input and focus after HTTP %s without replay or raw announcements",
+    async (status) => {
+      const user = userEvent.setup();
+      const password = ` ${crypto.randomUUID()} é `;
+      const raw = `<script>${crypto.randomUUID()}</script>\r\n`;
+      let posts = 0;
+      renderEntry(
+        anonymousHandler(),
+        http.post("/api/v1/auth/login", () => {
+          posts++;
+          return new HttpResponse(raw, {
+            status,
+            headers: { "Retry-After": "60" },
+          });
+        }),
+      );
+      document.cookie = `mia_csrf=${crypto.randomUUID()}; Path=/`;
+      const username = await screen.findByLabelText("Username (required)");
+      const input = screen.getByLabelText<HTMLInputElement>(
+        "Password (required)",
+      );
+      await user.type(username, "Example.User");
+      input.focus();
+      await user.paste(password);
+      input.setSelectionRange(1, 5);
+      await user.tab();
+      const reveal = screen.getByRole("button", { name: "Show password" });
+      await user.keyboard(" ");
+      expect(reveal).toHaveFocus();
+      expect(reveal).toHaveAttribute("aria-pressed", "true");
+      expect(input.selectionStart === 1 && input.selectionEnd === 5).toBe(true);
+      expect(input.value === password).toBe(true);
+      const submit = screen.getByRole("button", {
+        name: "Sign in",
+        exact: true,
+      });
+      await user.click(submit);
+      await waitFor(() => expect(posts).toBe(1));
+      await screen.findByRole("alert");
+      expect(submit).toHaveFocus();
+      expect(input.value === password).toBe(true);
+      expect((username as HTMLInputElement).value === "Example.User").toBe(
+        true,
+      );
+      expect(screen.getByRole("alert").textContent?.includes(raw)).toBe(false);
+      expect(
+        screen.getByRole("button", { name: "Technical details" }),
+      ).toHaveAttribute("aria-expanded", "false");
+      await user.click(
+        screen.getByRole("button", { name: "Technical details" }),
+      );
+      await user.click(
+        screen.getByRole("button", { name: "Copy technical details" }),
+      );
+      expect(posts).toBe(1);
+      if (status === 429)
+        expect(screen.getByRole("alert")).toHaveTextContent("60 seconds");
+      expect(posts).toBe(1);
+    },
+  );
+
+  it.each(["mfa", "password-change", "authenticated"] as const)(
+    "routes validated login to %s without redundant discovery",
+    async (stage) => {
+      const user = userEvent.setup();
+      let reads = 0;
+      let capabilities = 0;
+      renderEntry(
+        http.get("/api/v1/auth/session", () => {
+          reads++;
+          return HttpResponse.json(
+            { data: null, meta: { stage: "anonymous" } },
+            { headers: { "Content-Type": mediaType } },
+          );
+        }),
+        http.post("/api/v1/auth/login", () =>
+          HttpResponse.json(
+            {
+              data: {
+                type: "auth-sessions",
+                id: "account-id",
+                attributes: {
+                  stage,
+                  ...(stage === "mfa"
+                    ? { mfa_challenge_id: "challenge-id" }
+                    : {}),
+                  idle_expires_at: "2026-09-30T10:30:00.000000Z",
+                  absolute_expires_at: "2026-09-30T22:00:00.000000Z",
+                },
+              },
+            },
+            { headers: { "Content-Type": mediaType } },
+          ),
+        ),
+        http.get("/api/v1/users/me/capabilities", async () => {
+          capabilities++;
+          await delay(50);
+          return HttpResponse.json(capabilityDocument(), {
+            headers: { "Content-Type": mediaType },
+          });
+        }),
+      );
+      document.cookie = `mia_csrf=${crypto.randomUUID()}; Path=/`;
+      await user.type(
+        await screen.findByLabelText("Username (required)"),
+        "example",
+      );
+      await user.type(
+        screen.getByLabelText("Password (required)"),
+        crypto.randomUUID(),
+      );
+      await user.click(
+        screen.getByRole("button", { name: "Sign in", exact: true }),
+      );
+      if (stage === "authenticated") {
+        await screen.findByRole("heading", { name: "Checking access" });
+        expect(
+          screen.queryByRole("heading", { name: "Home" }),
+        ).not.toBeInTheDocument();
+      }
+      await screen.findByRole("heading", {
+        name:
+          stage === "mfa"
+            ? "Verify sign-in"
+            : stage === "password-change"
+              ? "Choose a new password"
+              : "Home",
+      });
+      expect(reads).toBe(1);
+      expect(capabilities).toBe(stage === "authenticated" ? 1 : 0);
+      expect(
+        screen.queryByLabelText("Password (required)"),
+      ).not.toBeInTheDocument();
+      if (stage !== "authenticated") {
+        expect(screen.queryByRole("navigation")).not.toBeInTheDocument();
+        expect(
+          await screen.findByRole("button", { name: "Sign out", exact: true }),
+        ).toBeInTheDocument();
+      }
+    },
+  );
   it("renders the accessible entry and public build identifier", async () => {
     renderEntry();
 

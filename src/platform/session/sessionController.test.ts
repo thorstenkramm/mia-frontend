@@ -1,13 +1,23 @@
 import { waitFor } from "@testing-library/react";
 import { http, HttpResponse } from "msw";
 import { afterEach, describe, expect, it, vi } from "vitest";
+import { installTestOriginLocks } from "../../../test/originLocks";
 import { server } from "../../../test/server";
 import { SessionController } from "./sessionController";
 
 const mediaType = "application/vnd.api+json";
 
+function anonymousSession() {
+  return HttpResponse.json(
+    { data: null, meta: { stage: "anonymous" } },
+    { headers: { "Content-Type": mediaType } },
+  );
+}
+
 class TestBroadcastChannel extends EventTarget {
   static readonly channels = new Map<string, Set<TestBroadcastChannel>>();
+  static deferSecurityEpoch = false;
+  static readonly deferredSecurityEpochs: Array<() => void> = [];
   readonly name: string;
 
   constructor(name: string) {
@@ -21,9 +31,23 @@ class TestBroadcastChannel extends EventTarget {
   postMessage(message: unknown): void {
     for (const peer of TestBroadcastChannel.channels.get(this.name) ?? []) {
       if (peer !== this) {
-        peer.dispatchEvent(new MessageEvent("message", { data: message }));
+        const dispatch = () =>
+          peer.dispatchEvent(new MessageEvent("message", { data: message }));
+        if (
+          TestBroadcastChannel.deferSecurityEpoch &&
+          typeof message === "object" &&
+          message !== null &&
+          "kind" in message &&
+          message.kind === "security-epoch"
+        )
+          TestBroadcastChannel.deferredSecurityEpochs.push(dispatch);
+        else dispatch();
       }
     }
+  }
+
+  static flushSecurityEpochs(): void {
+    for (const dispatch of this.deferredSecurityEpochs.splice(0)) dispatch();
   }
 
   close(): void {
@@ -52,10 +76,683 @@ function restrictedSession() {
 afterEach(() => {
   vi.unstubAllGlobals();
   TestBroadcastChannel.channels.clear();
+  TestBroadcastChannel.deferSecurityEpoch = false;
+  TestBroadcastChannel.deferredSecurityEpochs.length = 0;
   document.cookie = "mia_csrf=; Max-Age=0; Path=/";
 });
 
 describe("SessionController logout coordination", () => {
+  it("fails closed without origin locks and never dispatches concurrent login", async () => {
+    const restore = installTestOriginLocks();
+    const first = new SessionController();
+    const second = new SessionController();
+    let posts = 0;
+    server.use(
+      http.get("/api/v1/auth/session", anonymousSession),
+      http.post("/api/v1/auth/login", () => {
+        posts++;
+        return restrictedSession();
+      }),
+    );
+    try {
+      first.start();
+      second.start();
+      await waitFor(() =>
+        expect([first.getSnapshot().kind, second.getSnapshot().kind]).toEqual([
+          "Signed out",
+          "Signed out",
+        ]),
+      );
+      restore();
+      Reflect.deleteProperty(navigator, "locks");
+      document.cookie = `mia_csrf=${crypto.randomUUID()}; Path=/`;
+
+      await Promise.all([
+        first.login("example", crypto.randomUUID()),
+        second.login("example", crypto.randomUUID()),
+      ]);
+
+      expect(posts).toBe(0);
+      expect(first.getSnapshot()).toMatchObject({
+        kind: "Rotating",
+        phase: "reconciliation failed",
+      });
+      expect(second.getSnapshot()).toMatchObject({
+        kind: "Rotating",
+        phase: "reconciliation failed",
+      });
+    } finally {
+      first.stop();
+      second.stop();
+      restore();
+    }
+  });
+
+  it("serializes two tabs' admitted login transitions across the origin", async () => {
+    const restore = installTestOriginLocks();
+    const first = new SessionController();
+    const second = new SessionController();
+    let release = () => {};
+    const pending = new Promise<void>((resolve) => {
+      release = resolve;
+    });
+    let posts = 0;
+    server.use(
+      http.get("/api/v1/auth/session", anonymousSession),
+      http.post("/api/v1/auth/login", async () => {
+        posts++;
+        if (posts === 1) await pending;
+        return new HttpResponse("rejected", { status: 401 });
+      }),
+    );
+    try {
+      first.start();
+      second.start();
+      await waitFor(() =>
+        expect([first.getSnapshot().kind, second.getSnapshot().kind]).toEqual([
+          "Signed out",
+          "Signed out",
+        ]),
+      );
+      document.cookie = `mia_csrf=${crypto.randomUUID()}; Path=/`;
+      const a = first.login("example", crypto.randomUUID());
+      await waitFor(() => expect(posts).toBe(1));
+      const b = second.login("example", crypto.randomUUID());
+      await new Promise((resolve) => setTimeout(resolve, 30));
+      expect(posts).toBe(1);
+      release();
+      await Promise.all([a, b]);
+      expect(posts).toBe(2);
+    } finally {
+      release();
+      first.stop();
+      second.stop();
+      restore();
+    }
+  });
+
+  it("invalidates a queued login through authoritative discovery before a delayed peer epoch arrives", async () => {
+    vi.stubGlobal(
+      "BroadcastChannel",
+      TestBroadcastChannel as unknown as typeof BroadcastChannel,
+    );
+    TestBroadcastChannel.deferSecurityEpoch = true;
+    const first = new SessionController();
+    const second = new SessionController();
+    let transitioned = false;
+    let release = () => {};
+    const pending = new Promise<void>((resolve) => {
+      release = resolve;
+    });
+    let posts = 0;
+    let reads = 0;
+    server.use(
+      http.get("/api/v1/auth/session", () => {
+        reads++;
+        return transitioned ? restrictedSession() : anonymousSession();
+      }),
+      http.post("/api/v1/auth/login", async () => {
+        posts++;
+        await pending;
+        transitioned = true;
+        return restrictedSession();
+      }),
+    );
+    first.start();
+    second.start();
+    await waitFor(() =>
+      expect([first.getSnapshot().kind, second.getSnapshot().kind]).toEqual([
+        "Signed out",
+        "Signed out",
+      ]),
+    );
+    document.cookie = `mia_csrf=${crypto.randomUUID()}; Path=/`;
+
+    const firstLogin = first.login("example", crypto.randomUUID());
+    await waitFor(() => expect(posts).toBe(1));
+    const queuedLogin = second.login("example", crypto.randomUUID());
+    release();
+    await Promise.all([firstLogin, queuedLogin]);
+
+    expect({ posts, reads }).toEqual({ posts: 1, reads: 3 });
+    expect(first.getSnapshot().kind).toBe("MFA required");
+    expect(second.getSnapshot().kind).toBe("Restricted expired");
+    TestBroadcastChannel.flushSecurityEpochs();
+    expect(first.getSnapshot().kind).toBe("MFA required");
+    expect(second.getSnapshot().kind).toBe("Restricted expired");
+    first.stop();
+    second.stop();
+  });
+
+  it("makes explicit ambiguity reconciliation wait behind another admitted login", async () => {
+    const restore = installTestOriginLocks();
+    const recovering = new SessionController();
+    const signingIn = new SessionController();
+    let reads = 0;
+    let posts = 0;
+    let release = () => {};
+    const pending = new Promise<void>((resolve) => {
+      release = resolve;
+    });
+    server.use(
+      http.get("/api/v1/auth/session", () => {
+        reads++;
+        return reads === 3 ? HttpResponse.error() : anonymousSession();
+      }),
+      http.post("/api/v1/auth/login", async () => {
+        posts++;
+        if (posts === 1) return HttpResponse.error();
+        await pending;
+        return new HttpResponse("rejected", { status: 401 });
+      }),
+    );
+    try {
+      recovering.start();
+      signingIn.start();
+      await waitFor(() =>
+        expect([
+          recovering.getSnapshot().kind,
+          signingIn.getSnapshot().kind,
+        ]).toEqual(["Signed out", "Signed out"]),
+      );
+      document.cookie = `mia_csrf=${crypto.randomUUID()}; Path=/`;
+      await recovering.login("example", crypto.randomUUID());
+      expect(recovering.getSnapshot()).toMatchObject({
+        kind: "Rotating",
+        phase: "reconciliation failed",
+      });
+      const login = signingIn.login("example", crypto.randomUUID());
+      await waitFor(() => expect(posts).toBe(2));
+      const recheck = recovering.recheckLogin();
+      await new Promise((resolve) => setTimeout(resolve, 30));
+      expect(reads).toBe(3);
+      release();
+      await Promise.all([login, recheck]);
+      expect(reads).toBe(4);
+      expect(recovering.getSnapshot().kind).toBe("Signed out");
+    } finally {
+      release();
+      recovering.stop();
+      signingIn.stop();
+      restore();
+    }
+  });
+
+  it.each([false, true])(
+    "broadcasts only a locally applied non-anonymous ambiguity recovery (restricted: %s)",
+    async (restricted) => {
+      vi.stubGlobal(
+        "BroadcastChannel",
+        TestBroadcastChannel as unknown as typeof BroadcastChannel,
+      );
+      const peer = new TestBroadcastChannel("mia-security-v1");
+      const signals: unknown[] = [];
+      const controller = new SessionController();
+      const stages: string[] = [];
+      peer.addEventListener("message", (event) => {
+        signals.push((event as MessageEvent<unknown>).data);
+        stages.push(controller.getSnapshot().kind);
+      });
+      let reads = 0;
+      server.use(
+        http.get("/api/v1/auth/session", () => {
+          reads++;
+          return reads > 1 && restricted
+            ? restrictedSession()
+            : anonymousSession();
+        }),
+        http.post("/api/v1/auth/login", () => HttpResponse.error()),
+      );
+      controller.start();
+      await waitFor(() =>
+        expect(controller.getSnapshot().kind).toBe("Signed out"),
+      );
+      document.cookie = `mia_csrf=${crypto.randomUUID()}; Path=/`;
+      await controller.login("example", crypto.randomUUID());
+      expect(signals.length).toBe(restricted ? 1 : 0);
+      if (restricted) {
+        expect(stages).toEqual(["MFA required"]);
+        expect(signals[0]).toEqual({
+          version: 1,
+          kind: "security-epoch",
+          eventNonce: expect.any(String),
+        });
+      }
+      controller.stop();
+      peer.close();
+    },
+  );
+
+  it("fences a pending new login on delayed logout confirmation without starting discovery", async () => {
+    vi.stubGlobal(
+      "BroadcastChannel",
+      TestBroadcastChannel as unknown as typeof BroadcastChannel,
+    );
+    const controller = new SessionController();
+    const peer = new TestBroadcastChannel("mia-security-v1");
+    let release = () => {};
+    const pending = new Promise<void>((resolve) => {
+      release = resolve;
+    });
+    let posts = 0;
+    let reads = 0;
+    server.use(
+      http.get("/api/v1/auth/session", () => {
+        reads++;
+        return anonymousSession();
+      }),
+      http.post("/api/v1/auth/login", async () => {
+        posts++;
+        await pending;
+        return restrictedSession();
+      }),
+    );
+    controller.start();
+    await waitFor(() =>
+      expect(controller.getSnapshot().kind).toBe("Signed out"),
+    );
+    document.cookie = `mia_csrf=${crypto.randomUUID()}; Path=/`;
+    const work = controller.login("example", crypto.randomUUID());
+    await waitFor(() => expect(posts).toBe(1));
+    peer.postMessage({
+      version: 1,
+      kind: "logout-confirmed",
+      logoutNonce: crypto.randomUUID(),
+      eventNonce: crypto.randomUUID(),
+    });
+    expect(controller.getSnapshot().kind).toBe("Logout reconciliation needed");
+    release();
+    await work;
+    expect(controller.getSnapshot().kind).toBe("Logout reconciliation needed");
+    expect(reads).toBe(1);
+    controller.stop();
+    peer.close();
+  });
+
+  it("fences a pending login on delayed logout-unconfirmed notification", async () => {
+    vi.stubGlobal(
+      "BroadcastChannel",
+      TestBroadcastChannel as unknown as typeof BroadcastChannel,
+    );
+    const controller = new SessionController();
+    const peer = new TestBroadcastChannel("mia-security-v1");
+    let release = () => {};
+    const pending = new Promise<void>((resolve) => {
+      release = resolve;
+    });
+    let posts = 0;
+    server.use(
+      http.get("/api/v1/auth/session", anonymousSession),
+      http.post("/api/v1/auth/login", async () => {
+        posts++;
+        await pending;
+        return restrictedSession();
+      }),
+    );
+    controller.start();
+    await waitFor(() =>
+      expect(controller.getSnapshot().kind).toBe("Signed out"),
+    );
+    document.cookie = `mia_csrf=${crypto.randomUUID()}; Path=/`;
+    const work = controller.login("example", crypto.randomUUID());
+    await waitFor(() => expect(posts).toBe(1));
+
+    peer.postMessage({
+      version: 1,
+      kind: "logout-unconfirmed",
+      logoutNonce: crypto.randomUUID(),
+      eventNonce: crypto.randomUUID(),
+    });
+    expect(controller.getSnapshot().kind).toBe("Logout unconfirmed");
+    release();
+    await work;
+    expect(controller.getSnapshot().kind).toBe("Logout reconciliation needed");
+    controller.stop();
+    peer.close();
+  });
+
+  it("fences pending capability discovery on logout-unconfirmed notification", async () => {
+    vi.stubGlobal(
+      "BroadcastChannel",
+      TestBroadcastChannel as unknown as typeof BroadcastChannel,
+    );
+    const controller = new SessionController();
+    const peer = new TestBroadcastChannel("mia-security-v1");
+    let release = () => {};
+    const pending = new Promise<void>((resolve) => {
+      release = resolve;
+    });
+    server.use(
+      http.get("/api/v1/auth/session", () =>
+        HttpResponse.json(
+          {
+            data: {
+              type: "auth-sessions",
+              id: "account-id",
+              attributes: {
+                stage: "authenticated",
+                idle_expires_at: "2026-09-27T10:30:00.000000Z",
+                absolute_expires_at: "2026-09-27T22:00:00.000000Z",
+              },
+            },
+          },
+          { headers: { "Content-Type": mediaType } },
+        ),
+      ),
+      http.get("/api/v1/users/me/capabilities", async () => {
+        await pending;
+        return HttpResponse.json(
+          {
+            data: {
+              type: "account-capabilities",
+              id: "account-id",
+              attributes: { capabilities: [] },
+            },
+          },
+          { headers: { "Content-Type": mediaType } },
+        );
+      }),
+    );
+    controller.start();
+    await waitFor(() =>
+      expect(controller.getSnapshot()).toEqual({
+        kind: "Access checking",
+        phase: "loading",
+      }),
+    );
+
+    peer.postMessage({
+      version: 1,
+      kind: "logout-unconfirmed",
+      logoutNonce: crypto.randomUUID(),
+      eventNonce: crypto.randomUUID(),
+    });
+    expect(controller.getSnapshot().kind).toBe("Logout unconfirmed");
+    release();
+    await new Promise((resolve) => setTimeout(resolve, 0));
+    expect(controller.getSnapshot().kind).toBe("Logout unconfirmed");
+    controller.stop();
+    peer.close();
+  });
+
+  it("keeps both tabs stable when passive peer revalidation finds the completed restricted stage", async () => {
+    vi.stubGlobal(
+      "BroadcastChannel",
+      TestBroadcastChannel as unknown as typeof BroadcastChannel,
+    );
+    const signingIn = new SessionController();
+    const peer = new SessionController();
+    let transitioned = false;
+    let posts = 0;
+    server.use(
+      http.get("/api/v1/auth/session", () =>
+        transitioned ? restrictedSession() : anonymousSession(),
+      ),
+      http.post("/api/v1/auth/login", () => {
+        posts++;
+        transitioned = true;
+        return restrictedSession();
+      }),
+    );
+    signingIn.start();
+    peer.start();
+    await waitFor(() =>
+      expect([signingIn.getSnapshot().kind, peer.getSnapshot().kind]).toEqual([
+        "Signed out",
+        "Signed out",
+      ]),
+    );
+    document.cookie = `mia_csrf=${crypto.randomUUID()}; Path=/`;
+    await signingIn.login("example", crypto.randomUUID());
+    expect(signingIn.getSnapshot().kind).toBe("MFA required");
+    expect(peer.getSnapshot().kind).toBe("Restricted expired");
+
+    await peer.recheckLogin();
+
+    expect(posts).toBe(1);
+    expect(signingIn.getSnapshot().kind).toBe("MFA required");
+    expect(peer.getSnapshot().kind).toBe("MFA required");
+    signingIn.stop();
+    peer.stop();
+  });
+  it.each([false, true])(
+    "checks a queued login lease against fresh CSRF and superseding epochs (superseded: %s)",
+    async (superseded) => {
+      vi.stubGlobal(
+        "BroadcastChannel",
+        TestBroadcastChannel as unknown as typeof BroadcastChannel,
+      );
+      let release: (() => void) | undefined;
+      const pending = new Promise<void>((resolve) => {
+        release = resolve;
+      });
+      let posts = 0;
+      let fresh = false;
+      const token = crypto.randomUUID();
+      server.use(
+        http.get("/api/v1/auth/session", () =>
+          HttpResponse.json(
+            { data: null, meta: { stage: "anonymous" } },
+            { headers: { "Content-Type": mediaType } },
+          ),
+        ),
+        http.post("/api/v1/auth/login", ({ request }) => {
+          posts++;
+          fresh = request.headers.get("X-CSRF-Token") === token;
+          return restrictedSession();
+        }),
+      );
+      const controller = new SessionController();
+      controller.start();
+      await waitFor(() =>
+        expect(controller.getSnapshot().kind).toBe("Signed out"),
+      );
+      const original = Object.getOwnPropertyDescriptor(navigator, "locks");
+      Object.defineProperty(navigator, "locks", {
+        configurable: true,
+        value: {
+          request: async (
+            _name: string,
+            _options: unknown,
+            action: () => Promise<void>,
+          ) => {
+            await pending;
+            return action();
+          },
+        },
+      });
+      const peer = new TestBroadcastChannel("mia-security-v1");
+      try {
+        document.cookie = `mia_csrf=${crypto.randomUUID()}; Path=/`;
+        const work = controller.login("example", crypto.randomUUID());
+        document.cookie = `mia_csrf=${token}; Path=/`;
+        if (superseded)
+          peer.postMessage({
+            version: 1,
+            kind: "security-epoch",
+            eventNonce: crypto.randomUUID(),
+          });
+        release?.();
+        await work;
+        expect(posts).toBe(superseded ? 0 : 1);
+        expect(fresh).toBe(!superseded);
+        expect(controller.getSnapshot().kind).toBe(
+          superseded ? "Restricted expired" : "MFA required",
+        );
+      } finally {
+        if (original) Object.defineProperty(navigator, "locks", original);
+        else Reflect.deleteProperty(navigator, "locks");
+        controller.stop();
+        peer.close();
+      }
+    },
+  );
+
+  it("recovers an ambiguous login to an authoritative restricted stage without another mutation", async () => {
+    let reads = 0;
+    let posts = 0;
+    server.use(
+      http.get("/api/v1/auth/session", () => {
+        reads++;
+        return reads === 1
+          ? HttpResponse.json(
+              { data: null, meta: { stage: "anonymous" } },
+              { headers: { "Content-Type": mediaType } },
+            )
+          : restrictedSession();
+      }),
+      http.post("/api/v1/auth/login", () => {
+        posts++;
+        return HttpResponse.error();
+      }),
+    );
+    const controller = new SessionController();
+    controller.start();
+    await waitFor(() =>
+      expect(controller.getSnapshot().kind).toBe("Signed out"),
+    );
+    document.cookie = `mia_csrf=${crypto.randomUUID()}; Path=/`;
+    await controller.login("example", crypto.randomUUID());
+    expect(controller.getSnapshot().kind).toBe("MFA required");
+    expect({ reads, posts }).toEqual({ reads: 2, posts: 1 });
+    controller.stop();
+  });
+  it("serializes login and uses the CSRF cookie current at dispatch with direct restricted routing", async () => {
+    let posts = 0;
+    let reads = 0;
+    let fresh = false;
+    const token = crypto.randomUUID();
+    server.use(
+      http.get("/api/v1/auth/session", () => {
+        reads++;
+        return HttpResponse.json(
+          { data: null, meta: { stage: "anonymous" } },
+          { headers: { "Content-Type": mediaType } },
+        );
+      }),
+      http.post("/api/v1/auth/login", ({ request }) => {
+        posts++;
+        fresh = request.headers.get("X-CSRF-Token") === token;
+        return restrictedSession();
+      }),
+    );
+    const controller = new SessionController();
+    controller.start();
+    await waitFor(() =>
+      expect(controller.getSnapshot().kind).toBe("Signed out"),
+    );
+    document.cookie = `mia_csrf=${token}; Path=/`;
+    const first = controller.login("example", crypto.randomUUID());
+    await controller.login("example", crypto.randomUUID());
+    await first;
+    expect(controller.getSnapshot().kind).toBe("MFA required");
+    expect({ posts, reads, fresh }).toEqual({
+      posts: 1,
+      reads: 1,
+      fresh: true,
+    });
+    controller.stop();
+  });
+
+  it.each(["network", "malformed", "internal"])(
+    "reconciles %s ambiguity once and requires explicit safe recheck after discovery failure",
+    async (failure) => {
+      let reads = 0;
+      let posts = 0;
+      server.use(
+        http.get("/api/v1/auth/session", () => {
+          reads++;
+          return reads === 2
+            ? HttpResponse.error()
+            : HttpResponse.json(
+                { data: null, meta: { stage: "anonymous" } },
+                { headers: { "Content-Type": mediaType } },
+              );
+        }),
+        http.post("/api/v1/auth/login", () => {
+          posts++;
+          return failure === "network"
+            ? HttpResponse.error()
+            : new HttpResponse("unconfirmed", {
+                status: failure === "internal" ? 500 : 200,
+              });
+        }),
+      );
+      const controller = new SessionController();
+      controller.start();
+      await waitFor(() =>
+        expect(controller.getSnapshot().kind).toBe("Signed out"),
+      );
+      document.cookie = `mia_csrf=${crypto.randomUUID()}; Path=/`;
+      await controller.login("example", crypto.randomUUID());
+      expect(controller.getSnapshot()).toMatchObject({
+        kind: "Rotating",
+        phase: "reconciliation failed",
+      });
+      await controller.login("example", crypto.randomUUID());
+      expect({ reads, posts }).toEqual({ reads: 2, posts: 1 });
+      await controller.recheckLogin();
+      expect(controller.getSnapshot().kind).toBe("Signed out");
+      expect({ reads, posts }).toEqual({ reads: 3, posts: 1 });
+      controller.stop();
+    },
+  );
+
+  it("fences admitted login when a peer starts logout and does not discover or reveal after late success", async () => {
+    vi.stubGlobal(
+      "BroadcastChannel",
+      TestBroadcastChannel as unknown as typeof BroadcastChannel,
+    );
+    let release: (() => void) | undefined;
+    const pending = new Promise<void>((resolve) => {
+      release = resolve;
+    });
+    let posts = 0;
+    let reads = 0;
+    server.use(
+      http.get("/api/v1/auth/session", () => {
+        reads++;
+        return HttpResponse.json(
+          { data: null, meta: { stage: "anonymous" } },
+          { headers: { "Content-Type": mediaType } },
+        );
+      }),
+      http.post("/api/v1/auth/login", async () => {
+        posts++;
+        await pending;
+        return restrictedSession();
+      }),
+    );
+    const controller = new SessionController();
+    controller.start();
+    await waitFor(() =>
+      expect(controller.getSnapshot().kind).toBe("Signed out"),
+    );
+    document.cookie = `mia_csrf=${crypto.randomUUID()}; Path=/`;
+    const work = controller.login("example", crypto.randomUUID());
+    await waitFor(() => expect(posts).toBe(1));
+    const peer = new TestBroadcastChannel("mia-security-v1");
+    const logoutNonce = crypto.randomUUID();
+    peer.postMessage({
+      version: 1,
+      kind: "logout-start",
+      eventNonce: crypto.randomUUID(),
+      logoutNonce,
+    });
+    expect(controller.getSnapshot().kind).toBe("Logout quiescing");
+    release?.();
+    await work;
+    peer.postMessage({
+      version: 1,
+      kind: "logout-confirmed",
+      eventNonce: crypto.randomUUID(),
+      logoutNonce,
+    });
+    expect(controller.getSnapshot().kind).toBe("Logout reconciliation needed");
+    expect({ posts, reads }).toEqual({ posts: 1, reads: 1 });
+    controller.stop();
+    peer.close();
+  });
   it("restarts cleanly after React Strict Mode effect cleanup", async () => {
     server.use(
       http.get("/api/v1/auth/session", () =>

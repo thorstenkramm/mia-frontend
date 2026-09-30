@@ -17,6 +17,7 @@
     "test": "vitest run",
     "build": "BUILD_REVISION=$(git rev-parse HEAD) vite build",
     "test:e2e": "npm run build && playwright install chromium && playwright test",
+    "check:secret-hygiene": "npm run build && node scripts/check-secret-hygiene.mjs",
     "check:architecture": "node scripts/check-architecture.mjs",
     "check:bundle-size": "node scripts/check-bundle-size.mjs",
     "check:i18n": "node scripts/check-i18n-catalogs.mjs",

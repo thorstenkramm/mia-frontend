@@ -5,6 +5,7 @@ import {
   ApiProtocolError,
   jsonApiMediaType,
   readJsonApi,
+  parseJsonApiResponse,
   sendUnsafeRequest,
   type ApiFailure,
 } from "./client";
@@ -25,40 +26,33 @@ const sessionResourceBase = {
   id: resourceId,
 };
 
+const sessionDeadlines = {
+  idle_expires_at: utcInstant,
+  absolute_expires_at: utcInstant,
+};
+
 const sessionDocumentSchema = z.union([
   z.object({
+    errors: z.never().optional(),
     data: z.null(),
     meta: z.object({ stage: z.literal("anonymous") }),
   }),
   z.object({
+    errors: z.never().optional(),
     data: z.object({
       ...sessionResourceBase,
-      attributes: z.object({
-        stage: z.literal("mfa"),
-        mfa_challenge_id: resourceId,
-        idle_expires_at: utcInstant,
-        absolute_expires_at: utcInstant,
-      }),
-    }),
-  }),
-  z.object({
-    data: z.object({
-      ...sessionResourceBase,
-      attributes: z.object({
-        stage: z.literal("password-change"),
-        idle_expires_at: utcInstant,
-        absolute_expires_at: utcInstant,
-      }),
-    }),
-  }),
-  z.object({
-    data: z.object({
-      ...sessionResourceBase,
-      attributes: z.object({
-        stage: z.literal("authenticated"),
-        idle_expires_at: utcInstant,
-        absolute_expires_at: utcInstant,
-      }),
+      attributes: z.union([
+        z.object({
+          ...sessionDeadlines,
+          stage: z.literal("mfa"),
+          mfa_challenge_id: resourceId,
+        }),
+        z.object({
+          ...sessionDeadlines,
+          stage: z.enum(["password-change", "authenticated"]),
+          mfa_challenge_id: z.never().optional(),
+        }),
+      ]),
     }),
   }),
 ]) satisfies z.ZodType<SessionDocument>;
@@ -181,6 +175,26 @@ export async function discoverSession(
     ...(signal === undefined ? {} : { signal }),
   });
   return toEntrySession(document);
+}
+
+export async function loginWithPassword(
+  username: string,
+  password: string,
+  csrfToken: string,
+): Promise<EntrySession> {
+  const document = {
+    data: { type: "login-attempts", attributes: { username, password } },
+  } satisfies operations["login"]["requestBody"]["content"][typeof jsonApiMediaType];
+  const response = await sendUnsafeRequest({
+    path: "/api/v1/auth/login",
+    csrfToken,
+    body: JSON.stringify(document),
+  });
+  const session = await parseJsonApiResponse(response, sessionDocumentSchema);
+  if (session.data === null) {
+    throw new ApiProtocolError();
+  }
+  return toEntrySession(session);
 }
 
 export async function getCurrentAccountCapabilities(

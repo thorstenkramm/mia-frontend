@@ -11,6 +11,7 @@ import {
   discoverSession,
   getCurrentAccountCapabilities,
   logoutCurrentBrowser,
+  loginWithPassword,
 } from "./entry";
 
 function jsonApiResponse(body: unknown): HttpResponse {
@@ -21,6 +22,150 @@ function jsonApiResponse(body: unknown): HttpResponse {
 }
 
 describe("entry API boundary", () => {
+  it.each([400, 401, 403, 406, 413, 415, 422, 429, 500])(
+    "retains exact login HTTP %s disclosure and never replays",
+    async (status) => {
+      const raw = `unconfirmed ${crypto.randomUUID()}\r\n`;
+      let posts = 0;
+      server.use(
+        http.post("/api/v1/auth/login", () => {
+          posts++;
+          return new HttpResponse(raw, { status });
+        }),
+      );
+      const result = await loginWithPassword(
+        "example",
+        crypto.randomUUID(),
+        crypto.randomUUID(),
+      ).catch((error: unknown) => error);
+      expect(
+        result instanceof ApiHttpError &&
+          result.disclosure.status === status &&
+          result.disclosure.body === raw,
+      ).toBe(true);
+      expect(posts).toBe(1);
+    },
+  );
+
+  it.each([
+    "missing-challenge",
+    "forbidden-challenge",
+    "error-and-data",
+    "unknown-stage",
+  ])("rejects malformed login session case %s", async (scenario) => {
+    server.use(
+      http.post("/api/v1/auth/login", () =>
+        jsonApiResponse({
+          ...(scenario === "error-and-data" ? { errors: [] } : {}),
+          data: {
+            type: "auth-sessions",
+            id: "account-id",
+            attributes: {
+              stage:
+                scenario === "missing-challenge"
+                  ? "mfa"
+                  : scenario === "unknown-stage"
+                    ? "unknown"
+                    : "authenticated",
+              ...(scenario === "forbidden-challenge"
+                ? { mfa_challenge_id: "challenge-id" }
+                : {}),
+              idle_expires_at: "2026-09-30T10:30:00.000000Z",
+              absolute_expires_at: "2026-09-30T22:00:00.000000Z",
+            },
+          },
+        }),
+      ),
+    );
+    await expect(
+      loginWithPassword("example", crypto.randomUUID(), crypto.randomUUID()),
+    ).rejects.toBeInstanceOf(ApiProtocolError);
+  });
+  it("sends exact login bytes and only the documented headers without wire correlation", async () => {
+    const password = ` ${crypto.randomUUID()} é `;
+    const csrf = crypto.randomUUID();
+    let exactWire = false;
+    server.use(
+      http.post("/api/v1/auth/login", async ({ request }) => {
+        exactWire =
+          (await request.text()) ===
+            JSON.stringify({
+              data: {
+                type: "login-attempts",
+                attributes: { username: "Example.User", password },
+              },
+            }) &&
+          request.headers.get("X-CSRF-Token") === csrf &&
+          request.headers.get("Content-Type") === jsonApiMediaType &&
+          request.headers.get("Accept") === jsonApiMediaType &&
+          !request.headers.has("X-Request-ID") &&
+          !request.headers.has("Idempotency-Key");
+        return jsonApiResponse({
+          data: {
+            type: "auth-sessions",
+            id: "account-id",
+            attributes: {
+              stage: "password-change",
+              idle_expires_at: "2026-09-30T10:30:00.000000Z",
+              absolute_expires_at: "2026-09-30T10:30:00.000000Z",
+            },
+          },
+        });
+      }),
+    );
+    expect((await loginWithPassword("Example.User", password, csrf)).kind).toBe(
+      "password-change",
+    );
+    expect(exactWire).toBe(true);
+  });
+
+  it.each([
+    null,
+    "-1",
+    "1.5",
+    "Wed, 30 Sep 2026 12:00:00 GMT",
+    "9007199254740992",
+    "60",
+    "0",
+  ])(
+    "validates throttle metadata case %# separately from untouched disclosure",
+    async (header) => {
+      const body = `<p>${crypto.randomUUID()}</p>\r\n`;
+      server.use(
+        http.post(
+          "/api/v1/auth/login",
+          () =>
+            new HttpResponse(body, {
+              status: 429,
+              headers: header === null ? {} : { "Retry-After": header },
+            }),
+        ),
+      );
+      const error = await loginWithPassword(
+        "example",
+        crypto.randomUUID(),
+        crypto.randomUUID(),
+      ).catch((reason: unknown) => reason);
+      if (!(error instanceof ApiHttpError))
+        throw new Error("Expected HTTP failure");
+      expect(error.disclosure.body === body).toBe(true);
+      expect(Object.keys(error.disclosure).sort()).toEqual(["body", "status"]);
+      expect(error.retryAfterSeconds).toBe(
+        header === "60" ? 60 : header === "0" ? 0 : null,
+      );
+    },
+  );
+
+  it("rejects anonymous login success as ambiguous", async () => {
+    server.use(
+      http.post("/api/v1/auth/login", () =>
+        jsonApiResponse({ data: null, meta: { stage: "anonymous" } }),
+      ),
+    );
+    await expect(
+      loginWithPassword("example", crypto.randomUUID(), crypto.randomUUID()),
+    ).rejects.toBeInstanceOf(ApiProtocolError);
+  });
   it("sends the documented read protocol and validates anonymous discovery", async () => {
     let accept = "";
     let csrfHeader: string | null = null;

@@ -1,7 +1,7 @@
 ---
 name: MIA frontend backend contract gaps
 status: draft
-updated: 2026-09-27
+updated: 2026-09-30
 sources:
   - .memlog.md
   - mia/docs/product-requirements.md
@@ -32,7 +32,7 @@ illustrative vocabulary in this handoff.
 
 ### BCG-001: Anonymous CSRF and authentication-session discovery
 
-Status: **OPEN — owner approved the documented cold-entry slice; lifecycle, logout, and release evidence remain.**
+Status: **OPEN — cold-entry and Story 1-3 login slices approved; broader obligations remain.**
 
 Reconciled on 2026-09-27 against backend revision `b83102114802b981a022c237c0746023c0aa6b79`, whose entry correction
 followed baseline `0626b751558c8baa7e4645708ef588b309446ed8`. Backend paths and line references in this BCG-001 assessment
@@ -45,6 +45,8 @@ The complete authentication journey remains blocked for credentials, continuatio
 lifecycle/BFCache handling, and safe logout recovery. The owner-approved 2026-09-27 partial exception permits only cold
 `GET /api/v1/auth/session`, authenticated-only `GET /api/v1/users/me/capabilities`, and canonical dispatch among
 `/login`, `/`, `/auth/mfa`, and `/auth/password-change`. It does not close this composite blocker.
+The separate 2026-09-30 Story 1-3 decision below resolves credential-slice authorization and sequencing after the
+login error-response correction was rechecked; it does not expand the earlier Story 1-2 decision.
 
 #### BCG-001 authoritative product requirement
 
@@ -184,6 +186,49 @@ recovery after explicit Retry, independent anonymous confirmation, and explicit 
 shield. Protocol-fake and Playwright evidence is required. This exception does not authorize credentials,
 MFA/password forms, broader logout or lifecycle/BFCache behavior, Home features, broader protected routing, or
 automatic revalidation, and does not close BCG-001 or BCG-003.
+
+#### BCG-001 Story 1-3 login-slice decision
+
+Owner decision, 2026-09-30: align Story 1-3 with the existing flow in
+`mia/docs/api-authentication-and-user-invitation.md` §Password sign-in and restricted-stage isolation. The guide is
+sequencing guidance, not a second transport contract. This focused reconciliation inspected backend revision
+`b83102114802b981a022c237c0746023c0aa6b79`; product requirements and the implemented OpenAPI remain authoritative.
+
+The approved slice is username/password submission through `POST /api/v1/auth/login`, authoritative stage dispatch,
+restricted-stage isolation, and the authenticated capability/scope gate before the basic Home shell. It has no
+server-side request-ID or idempotency requirement. Any internal attempt correlation is page-local only, adds nothing
+to the wire, and grants no replay guarantee. Request/response schemas, media types, security, and errors are referenced
+from `mia/api-doc/paths/auth.yaml#/login`, `#/Session`, and their referenced schemas rather than copied here.
+
+A definitive successful login response in the current security epoch supplies the authoritative stage directly; no
+redundant discovery is inherently required. Its `authenticated` stage proceeds to the non-refreshing capability/scope
+gate; its restricted stages expose only the focused entry flow plus approved logout. Discovery remains the authority
+for cold entry, reload, and permitted reconciliation. This is the owner-approved login-specific clarification of
+generic post-transition rediscovery wording, not an exception to CSRF freshness or the ordered protected-mount gate.
+Serialize transitions, invalidate work queued under the old token, and read the current CSRF cookie immediately before
+the next unsafe dispatch. Timeout, abort, response loss, or an internal failure must not be treated as proof that no
+transition occurred; reconcile current state without automatic unsafe replay or an invented login-attempt lookup.
+
+The existing reduced stateless logout decision and `SECURITY-PRIVACY-ACCEPTANCE.md` §Logout and Privacy Screen still own
+late-transition handling: known-transition quiescence, response fencing, retained shielding, and phase-specific explicit
+reconciliation. A late login cannot bypass a retained logout flow or restore protected UI automatically. Logout
+confirmation still requires settled known transitions, `204`, and subsequent independent anonymous discovery; neither
+local correlation nor abort proves server cancellation or cookie revocation.
+
+**Transport correction rechecked for this narrow login alignment:** the maintained backend checkout at revision
+`b83102114802b981a022c237c0746023c0aa6b79` now declares login's `500` response at
+`mia/api-doc/paths/auth.yaml:30` through `../responses/errors.yaml#/InternalError`. This matches the existing shared
+handler behavior and clears the sole operation-level transport finding recorded for Story 1-3. It does not close
+BCG-001's broader lifecycle, logout, continuation, SSE, BFCache, or release-evidence obligations.
+
+Inspected evidence, not a new test run: `mia/docs/entry-contract-evidence.md` maps schema/stage, CSRF, non-refreshing
+capability, and reduced-logout tests. `mia/internal/auth/auth_test.go` additionally covers login validation and password
+gating (`TestLoginPasswordGateStrictInputAndAuditEvents`), throttling (`TestLoginFailuresDelayThenThrottleAndAudit`),
+and rejection of client IDs (`TestAuthCreateResourcesRejectClientGeneratedIDsAsDomainErrors`). Backend evidence is not
+frontend browser acceptance; direct-success dispatch, no redundant read, restricted non-fetch, ambiguity, and late-login
+logout ordering still need implementation evidence. This decision preserves Story 1-2 and its approved restricted
+logout. It does not authorize MFA/password-replacement forms, recovery/invitations, Home features, broader lifecycle,
+SSE or BFCache work, or close BCG-001, BCG-003, or other gaps. Their remaining evidence obligations are unchanged.
 
 #### BCG-001 required observable contract
 

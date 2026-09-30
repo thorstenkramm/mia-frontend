@@ -3408,6 +3408,7 @@ export interface operations {
       422: components["responses"]["Unprocessable"];
       /** @description Global or layered login limit (`rate_limited` or `auth_login_throttled`). */
       429: components["responses"]["RateLimited"];
+      500: components["responses"]["InternalError"];
     };
   };
   discoverSession: {

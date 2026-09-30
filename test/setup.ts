@@ -1,7 +1,16 @@
 import "@testing-library/jest-dom/vitest";
-import { afterAll, afterEach, beforeAll } from "vitest";
+import { afterAll, afterEach, beforeAll, beforeEach } from "vitest";
+import { installTestOriginLocks } from "./originLocks";
 import { server } from "./server";
 
 beforeAll(() => server.listen({ onUnhandledRequest: "error" }));
-afterEach(() => server.resetHandlers());
+let restoreOriginLocks: (() => void) | undefined;
+beforeEach(() => {
+  restoreOriginLocks = installTestOriginLocks();
+});
+afterEach(() => {
+  restoreOriginLocks?.();
+  restoreOriginLocks = undefined;
+  server.resetHandlers();
+});
 afterAll(() => server.close());

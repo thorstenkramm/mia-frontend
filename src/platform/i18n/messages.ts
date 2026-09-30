@@ -1,6 +1,61 @@
 import { defineMessages } from "react-intl";
 
 export const messages = defineMessages({
+  loginUsername: {
+    id: "login.username",
+    defaultMessage: "Username (required)",
+  },
+  loginPassword: {
+    id: "login.password",
+    defaultMessage: "Password (required)",
+  },
+  loginPasswordHelp: {
+    id: "login.passwordHelp",
+    defaultMessage:
+      "Spaces, Unicode, and password-manager values are allowed. Your password is not trimmed or normalized.",
+  },
+  loginReveal: { id: "login.reveal", defaultMessage: "Show password" },
+  loginHide: { id: "login.hide", defaultMessage: "Hide password" },
+  loginSubmit: { id: "login.submit", defaultMessage: "Sign in" },
+  loginSubmitting: { id: "login.submitting", defaultMessage: "Signing in…" },
+  loginRejected: {
+    id: "login.rejected",
+    defaultMessage: "Sign-in was rejected. Check your username and password.",
+  },
+  loginBlocked: {
+    id: "login.blocked",
+    defaultMessage:
+      "Sign-in could not continue. Check your input or contact your local operator.",
+  },
+  loginThrottled: {
+    id: "login.throttled",
+    defaultMessage: "Sign-in is temporarily limited. Wait before trying again.",
+  },
+  loginWait: {
+    id: "login.wait",
+    defaultMessage:
+      "Wait at least {seconds, number} seconds before trying again.",
+  },
+  loginFailed: {
+    id: "login.failed",
+    defaultMessage: "MIA could not complete sign-in. Try again later.",
+  },
+  loginUnconfirmed: {
+    id: "login.unconfirmed",
+    defaultMessage:
+      "The sign-in outcome was not confirmed. The latest check found this browser signed out. You can sign in again.",
+  },
+  loginReconciling: {
+    id: "login.reconciling",
+    defaultMessage:
+      "The sign-in outcome is uncertain. Checking current sign-in status…",
+  },
+  loginRecheckNeeded: {
+    id: "login.recheckNeeded",
+    defaultMessage:
+      "The sign-in outcome is uncertain and status could not be checked. Check status before signing in again.",
+  },
+  loginRecheck: { id: "login.recheck", defaultMessage: "Check sign-in status" },
   pageTitle: {
     id: "entry.pageTitle",
     defaultMessage: "Sign in | MIA",

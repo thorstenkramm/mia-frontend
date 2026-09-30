@@ -15,11 +15,20 @@ export class ApiHttpError extends Error {
   readonly kind = "http";
   readonly disclosure: RawErrorDisclosure;
   readonly code: string | null;
+  readonly retryAfterSeconds: number | null;
 
-  constructor(disclosure: RawErrorDisclosure) {
+  constructor(
+    disclosure: RawErrorDisclosure,
+    retryAfter: string | null = null,
+  ) {
     super(`MIA API request failed with HTTP status ${disclosure.status}.`);
     this.name = "ApiHttpError";
     this.disclosure = disclosure;
+    const seconds =
+      retryAfter !== null && /^\d+$/u.test(retryAfter)
+        ? Number(retryAfter)
+        : NaN;
+    this.retryAfterSeconds = Number.isSafeInteger(seconds) ? seconds : null;
 
     let parsedBody: unknown;
     try {
@@ -79,11 +88,24 @@ export async function readJsonApi<T>({
     throw new ApiTransportError(error);
   }
 
+  return parseJsonApiResponse(response, schema);
+}
+
+export async function parseJsonApiResponse<T>(
+  response: Response,
+  schema: z.ZodType<T>,
+): Promise<T> {
   const body = await response.text();
   if (!response.ok) {
-    throw new ApiHttpError({ status: response.status, body });
+    throw new ApiHttpError(
+      { status: response.status, body },
+      response.headers.get("Retry-After"),
+    );
   }
-  if (response.headers.get("Content-Type") !== jsonApiMediaType) {
+  if (
+    response.status !== 200 ||
+    response.headers.get("Content-Type") !== jsonApiMediaType
+  ) {
     throw new ApiProtocolError();
   }
 
@@ -105,12 +127,14 @@ type UnsafeRequestOptions = {
   readonly path: string;
   readonly csrfToken: string;
   readonly signal?: AbortSignal;
+  readonly body?: string;
 };
 
 export async function sendUnsafeRequest({
   path,
   csrfToken,
   signal,
+  body,
 }: UnsafeRequestOptions): Promise<Response> {
   try {
     return await fetch(path, {
@@ -119,9 +143,11 @@ export async function sendUnsafeRequest({
       headers: {
         Accept: jsonApiMediaType,
         "X-CSRF-Token": csrfToken,
+        ...(body === undefined ? {} : { "Content-Type": jsonApiMediaType }),
       },
       method: "POST",
       signal,
+      ...(body === undefined ? {} : { body }),
     });
   } catch (error) {
     throw new ApiTransportError(error);

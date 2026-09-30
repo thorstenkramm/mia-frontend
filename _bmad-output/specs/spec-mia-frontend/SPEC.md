@@ -107,9 +107,19 @@ confirms it. The planning package is complete; this spec binds it to the archite
   `GET /api/v1/auth/session`, followed only for `authenticated` by `GET /api/v1/users/me/capabilities`, and dispatch
   `/login`, `/`, `/auth/mfa`, and `/auth/password-change`. The same approval includes restricted-stage logout at
   `/auth/logout`: one explicit CSRF-protected `POST /api/v1/auth/logout`, safe CSRF recovery for an explicit retry, and
-  independent anonymous confirmation or reconciliation behind the privacy shield. This does not close BCG-001 or
+  independent anonymous confirmation or reconciliation behind the privacy shield. That Story 1-2 approval does not close BCG-001 or
   BCG-003, authorize credentials, restricted forms, broader logout/lifecycle behavior, Home features, BFCache behavior,
   or waive their remaining release evidence.
+- Owner-approved login alignment, 2026-09-30: Story 1-3 follows the existing backend authentication flow, with the exact
+  conditional slice recorded in `BACKEND-CONTRACT-GAPS.md` §BCG-001 Story 1-3 login-slice decision. Login has no
+  server-side request-ID/idempotency requirement; any attempt correlation is client-local only, with nothing added to
+  the wire and no replay guarantee. A definitive current login response supplies the authoritative stage directly;
+  `authenticated` then passes the capability/scope gate, while restricted stages remain isolated. Discovery serves
+  entry, reload, and permitted reconciliation, not a redundant mandatory check after definitive login success.
+  Existing CSRF rotation, transition serialization, response fencing, and approved logout ordering still apply.
+  The operation-level login internal-error response correction was rechecked at `mia/api-doc/paths/auth.yaml:30`, so
+  this slice may proceed. The approval preserves the Story 1-2 exception and leaves unrelated gaps and release evidence
+  open.
 
 ## Non-goals
 
@@ -138,4 +148,6 @@ activates a course without a manual, and a student completes a second tutoring s
   (authoritative status in `BACKEND-CONTRACT-GAPS.md`); work needing them is blocked, not assumed.
 - BCG-001 and BCG-003 remain open after the owner-approved Story 1-2 entry slice; the exact partial exception is recorded
   under Constraints and in `BACKEND-CONTRACT-GAPS.md` and must not be generalized to their deferred obligations.
+- Story 1-3's request-ID interpretation, direct-success stage dispatch, and login internal-error response are resolved.
+  The broader BCG-001 obligations remain open and are not part of that narrow approval.
 - The exact Tailwind Plus component-to-blueprint binding is pending — a pre-implementation gate before UI stories.

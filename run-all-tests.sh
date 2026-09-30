@@ -50,6 +50,13 @@ else
   else
     skip "npm run test:e2e (script not defined)"
   fi
+
+  if has_script "check:secret-hygiene"; then
+    echo "Running npm run check:secret-hygiene ..."
+    npm run check:secret-hygiene
+  else
+    skip "npm run check:secret-hygiene (script not defined)"
+  fi
 fi
 
 # ---------------------------------------------------------------------------

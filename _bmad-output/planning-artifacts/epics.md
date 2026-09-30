@@ -434,9 +434,15 @@ So that I can reach my authorized workspace.
 
 **Given** the login surface
 **When** I submit credentials
-**Then** the request flows through the client core (CSRF header from `__Host-mia_csrf` read fresh, request-ID bound, `initiator:'user'`; AD-2, AD-7) and the session stage renders from backend truth only
+**Then** the request flows through the client core (current CSRF cookie read immediately before dispatch using the OpenAPI-defined deployment name, `initiator:'user'`; AD-2, AD-7), with exactly the documented login request and no server-side request-ID or idempotency requirement
+**And** any internal attempt correlation stays client-local, adds nothing to the wire, and provides no replay guarantee
 **And** password managers, autofill, paste, and correct autocomplete purposes work; the reveal control has an accessible name and state (FFR-106, FFR-107)
 **And** the whole flow completes keyboard-only (FFR-110).
+
+**Given** a definitive successful login response in the current security epoch, outside a retained logout flow
+**When** its documented session representation validates
+**Then** its returned stage is authoritative directly, without an inherently required second session-discovery request
+**And** `authenticated` proceeds to non-refreshing current-account capability/scope discovery before Home may mount; restricted stages dispatch only their isolated entry flow.
 
 **Given** any restricted stage (`mfa`, `password-change`)
 **When** it renders
@@ -446,6 +452,16 @@ So that I can reach my authorized workspace.
 **When** it renders
 **Then** throttled is a first-class state with any wait derived only from `Retry-After`, never counted down locally, never disclosing which limit was hit (FFR-104, FFR-105)
 **And** backend failures render through `error-disclosure` — localized explanation plus collapsed verbatim escaped body (NFR-8, UX-DR20).
+
+**Given** reload, an ambiguous login outcome, or a stale/late transition requiring reconciliation
+**When** the permitted session-discovery check is performed
+**Then** only its current authoritative stage may guide recovery, no unsafe request is replayed automatically, and discovery does not prove cancellation or the outcome of the earlier attempt
+**And** retained logout flows keep the phase ordering, shielding, and explicit reconciliation required by `SECURITY-PRIVACY-ACCEPTANCE.md` §Logout and Privacy Screen.
+
+Owner-approved alignment, 2026-09-30: follow `mia/docs/api-authentication-and-user-invitation.md` §Password sign-in and
+restricted-stage isolation, with product requirements and OpenAPI retaining authority. The BCG-001 Story 1-3 decision
+records the exact partial scope; the login error-response correction was rechecked at `mia/api-doc/paths/auth.yaml:30`.
+Approval does not close broader gaps or authorize the MFA/password-replacement forms in Stories 1.4/1.5.
 
 ### Story 1.4: MFA challenge and recovery-code sign-in
 

@@ -51,11 +51,15 @@ export function useSessionActions(): {
   readonly beginRestrictedLogout: () => void;
   readonly retryRestrictedLogout: () => void;
   readonly refreshLogoutStatus: () => void;
+  readonly login: (username: string, password: string) => Promise<void>;
+  readonly recheckLogin: () => Promise<void>;
 } {
   const controller = useSessionController();
   return {
     beginRestrictedLogout: () => controller.beginRestrictedLogout(),
     retryRestrictedLogout: () => controller.retryRestrictedLogout(),
     refreshLogoutStatus: () => controller.refreshLogoutStatus(),
+    login: (username, password) => controller.login(username, password),
+    recheckLogin: () => controller.recheckLogin(),
   };
 }
