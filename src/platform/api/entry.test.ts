@@ -1,3 +1,4 @@
+import { randomBytes } from "node:crypto";
 import { http, HttpResponse } from "msw";
 import { describe, expect, it } from "vitest";
 import { server } from "../../../test/server";
@@ -9,9 +10,11 @@ import {
 } from "./client";
 import {
   discoverSession,
+  consumeMfaRecoveryCode,
   getCurrentAccountCapabilities,
   logoutCurrentBrowser,
   loginWithPassword,
+  verifyMfaChallenge,
 } from "./entry";
 
 function jsonApiResponse(body: unknown): HttpResponse {
@@ -21,7 +24,120 @@ function jsonApiResponse(body: unknown): HttpResponse {
   });
 }
 
+async function authoritativeChallenge() {
+  server.use(
+    http.get("/api/v1/auth/session", () =>
+      jsonApiResponse({
+        data: {
+          type: "auth-sessions",
+          id: "account-id",
+          attributes: {
+            stage: "mfa",
+            mfa_challenge_id: "challenge-id",
+            idle_expires_at: "2026-09-30T10:30:00.000000Z",
+            absolute_expires_at: "2026-09-30T10:30:00.000000Z",
+          },
+        },
+      }),
+    ),
+  );
+  const session = await discoverSession();
+  if (session.kind !== "mfa") throw new Error("Expected MFA fixture stage.");
+  return session.challengeId;
+}
+
+function verificationFixture(): string {
+  return String(randomBytes(4).readUInt32BE() % 1_000_000).padStart(6, "0");
+}
+
+function recoveryFixture(): string {
+  const alphabet = "0123456789ABCDEFGHJKMNPQRSTVWXYZ";
+  return Array.from(
+    randomBytes(16),
+    (byte) => alphabet[byte % alphabet.length],
+  ).join("");
+}
+
 describe("entry API boundary", () => {
+  it.each(["verification", "recovery"] as const)(
+    "sends one exact MFA %s document with current CSRF and no correlation",
+    async (operation) => {
+      const challenge = await authoritativeChallenge();
+      const code =
+        operation === "verification"
+          ? verificationFixture()
+          : recoveryFixture();
+      const csrf = crypto.randomUUID();
+      let exactWire = false;
+      let posts = 0;
+      const path =
+        operation === "verification"
+          ? "/api/v1/auth/mfa-challenges/challenge-id/verifications"
+          : "/api/v1/auth/mfa-challenges/challenge-id/recovery-code-consumptions";
+      server.use(
+        http.post(path, async ({ request }) => {
+          posts++;
+          exactWire =
+            request.headers.get("X-CSRF-Token") === csrf &&
+            !request.headers.has("X-Request-ID") &&
+            (await request.text()) ===
+              JSON.stringify({
+                data: {
+                  type:
+                    operation === "verification"
+                      ? "mfa-verifications"
+                      : "mfa-recovery-code-consumptions",
+                  attributes: { code },
+                },
+              });
+          return jsonApiResponse({
+            data: {
+              type: "auth-sessions",
+              id: "account-id",
+              attributes: {
+                stage: "password-change",
+                idle_expires_at: "2026-09-30T10:30:00.000000Z",
+                absolute_expires_at: "2026-09-30T10:30:00.000000Z",
+              },
+            },
+          });
+        }),
+      );
+      const result =
+        operation === "verification"
+          ? await verifyMfaChallenge(challenge, code, csrf)
+          : await consumeMfaRecoveryCode(challenge, code, csrf);
+      expect({ exactWire, posts, stage: result.kind }).toEqual({
+        exactWire: true,
+        posts: 1,
+        stage: "password-change",
+      });
+    },
+  );
+
+  it.each([400, 401, 403, 406, 413, 415, 422, 429, 500])(
+    "retains exact MFA HTTP %s disclosure and never replays",
+    async (status) => {
+      const challenge = await authoritativeChallenge();
+      let posts = 0;
+      server.use(
+        http.post(
+          "/api/v1/auth/mfa-challenges/challenge-id/verifications",
+          () => {
+            posts++;
+            return new HttpResponse("controlled error", { status });
+          },
+        ),
+      );
+      const error = await verifyMfaChallenge(
+        challenge,
+        verificationFixture(),
+        crypto.randomUUID(),
+      ).catch((reason: unknown) => reason);
+      expect(error instanceof ApiHttpError).toBe(true);
+      expect(posts).toBe(1);
+    },
+  );
   it.each([400, 401, 403, 406, 413, 415, 422, 429, 500])(
     "retains exact login HTTP %s disclosure and never replays",
     async (status) => {

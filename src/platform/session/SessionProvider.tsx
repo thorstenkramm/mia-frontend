@@ -9,6 +9,7 @@ import {
 import {
   SessionController,
   type AuthenticationBootstrapState,
+  type MfaRoute,
 } from "./sessionController";
 
 const SessionContext = createContext<SessionController | null>(null);
@@ -53,6 +54,9 @@ export function useSessionActions(): {
   readonly refreshLogoutStatus: () => void;
   readonly login: (username: string, password: string) => Promise<void>;
   readonly recheckLogin: () => Promise<void>;
+  readonly selectMfaRoute: (route: MfaRoute) => void;
+  readonly submitMfa: (route: MfaRoute, code: string) => Promise<void>;
+  readonly recheckMfa: () => Promise<void>;
 } {
   const controller = useSessionController();
   return {
@@ -61,5 +65,8 @@ export function useSessionActions(): {
     refreshLogoutStatus: () => controller.refreshLogoutStatus(),
     login: (username, password) => controller.login(username, password),
     recheckLogin: () => controller.recheckLogin(),
+    selectMfaRoute: (route) => controller.selectMfaRoute(route),
+    submitMfa: (route, code) => controller.submitMfa(route, code),
+    recheckMfa: () => controller.recheckMfa(),
   };
 }

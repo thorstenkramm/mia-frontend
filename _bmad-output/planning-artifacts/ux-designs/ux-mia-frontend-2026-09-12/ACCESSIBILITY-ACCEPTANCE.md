@@ -476,11 +476,11 @@ privacy shield is installed before BFCache eligibility and remains present throu
 Copying a TOTP secret or provisioning value requires a visible warning that MIA cannot clear the OS clipboard or its
 history. The explicit action copies only the named visible value and uses the general copy-feedback contract.
 
-TOTP, SMS, and recovery-code submission MUST:
+Six-digit MFA and recovery-code submission MUST:
 
 - preserve leading zeroes and accept paste;
 - retain focus and safe input after a correctable failure;
-- expose expiry, resend cooldown, invalidation, and unavailable delivery as text;
+- expose applicable authoritative expiry, invalidation, and unavailable delivery as text;
 - never reveal remaining hidden attempts unless the API explicitly provides that value; and
 - retain a lost-factor or recovery-code route when active SMS delivery is unavailable.
 
@@ -500,10 +500,8 @@ essential rationale, visible expiry result, safe value-retention rule, and keybo
 | Browser absolute | 12 hours; never extends | Sign in again; no false exact countdown |
 | Restricted login stage | 30 minutes; non-refreshing | Explain expiry; restart login |
 | Password-reset link | 30 minutes; single use | Uniform invalid link; request recovery again |
-| Login MFA challenge | 30 minutes; non-refreshing | Explain expiry; restart login |
+| Login MFA challenge | 30 minutes; non-refreshing; method-neutral | Explain expiry or invalidation; restart login |
 | Pending MFA enrollment | 30 minutes | Explain expiry; start a new enrollment |
-| SMS MFA code | 30 minutes; single use | Explain expiry; restart the owning flow |
-| SMS resend cooldown | 60 seconds | Visible availability; no rapid activation needed |
 | Mobile verification code | 30 minutes after each issuance | Explain expiry; restart mobile change |
 | Mobile resend cooldown | 60 seconds | Visible availability; no rapid activation needed |
 | MFA-management proof | 5 minutes; single use | Reverify current factor and password |

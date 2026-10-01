@@ -8,7 +8,12 @@ export type EntryRouteProps = {
 };
 type EntryRoute = {
   readonly path:
-    "/" | "/login" | "/auth/mfa" | "/auth/password-change" | "/auth/logout";
+    | "/"
+    | "/login"
+    | "/auth/mfa"
+    | "/auth/mfa/recovery"
+    | "/auth/password-change"
+    | "/auth/logout";
   readonly gate:
     | "Public"
     | "Restricted(mfa)"
@@ -33,6 +38,13 @@ export const entryRoutes = {
     gate: "Restricted(mfa)",
     titleMessage: messages.mfaPageTitle,
     headingMessage: messages.mfaHeading,
+    component: lazy(() => import("../../features/auth/MfaEntryRoute")),
+  },
+  mfaRecovery: {
+    path: "/auth/mfa/recovery",
+    gate: "Restricted(mfa)",
+    titleMessage: messages.mfaRecoveryPageTitle,
+    headingMessage: messages.mfaRecoveryHeading,
     component: lazy(() => import("../../features/auth/MfaEntryRoute")),
   },
   passwordChange: {

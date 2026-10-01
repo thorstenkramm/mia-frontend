@@ -55,7 +55,7 @@ class TestBroadcastChannel extends EventTarget {
   }
 }
 
-function restrictedSession() {
+function restrictedSession(challengeId = "challenge-id") {
   return HttpResponse.json(
     {
       data: {
@@ -63,7 +63,7 @@ function restrictedSession() {
         id: "account-id",
         attributes: {
           stage: "mfa",
-          mfa_challenge_id: "challenge-id",
+          mfa_challenge_id: challengeId,
           idle_expires_at: "2026-09-27T10:30:00.000000Z",
           absolute_expires_at: "2026-09-27T22:00:00.000000Z",
         },
@@ -71,6 +71,10 @@ function restrictedSession() {
     },
     { headers: { "Content-Type": mediaType } },
   );
+}
+
+function mfaCodeFixture(): string {
+  return String(Math.floor(Math.random() * 1_000_000)).padStart(6, "0");
 }
 
 afterEach(() => {
@@ -82,6 +86,359 @@ afterEach(() => {
 });
 
 describe("SessionController logout coordination", () => {
+  it.each([
+    ["challenge", 403, "auth_mfa_step_used", "step-used"],
+    ["challenge", 422, "auth_invalid_mfa_code", "invalid-code"],
+    ["challenge", 422, "auth_mfa_challenge_expired", "expired"],
+    ["challenge", 429, "rate_limited", "throttled"],
+    ["challenge", 422, "auth_invalid_request", "failed"],
+    ["recovery", 422, "auth_invalid_recovery_code", "invalid-code"],
+    ["recovery", 422, "auth_mfa_challenge_expired", "expired"],
+    ["recovery", 429, "rate_limited", "throttled"],
+  ] as const)(
+    "renders definitive MFA %s error code %s without replay",
+    async (route, status, code, outcome) => {
+      const controller = new SessionController();
+      let posts = 0;
+      server.use(
+        http.get("/api/v1/auth/session", () => restrictedSession()),
+        http.post(
+          /\/api\/v1\/auth\/mfa-challenges\/challenge-id\/(?:verifications|recovery-code-consumptions)$/u,
+          () => {
+            posts++;
+            return HttpResponse.json(
+              { errors: [{ status: String(status), code }] },
+              {
+                status,
+                headers: { "Content-Type": mediaType, "Retry-After": "31" },
+              },
+            );
+          },
+        ),
+      );
+      document.cookie = `mia_csrf=${crypto.randomUUID()}; Path=/`;
+      controller.start();
+      await waitFor(() =>
+        expect(controller.getSnapshot().kind).toBe("MFA required"),
+      );
+      if (route === "recovery") controller.selectMfaRoute("recovery");
+
+      await controller.submitMfa(route, crypto.randomUUID());
+
+      expect(controller.getSnapshot()).toMatchObject({
+        kind: "MFA required",
+        route,
+        outcome: { kind: outcome },
+      });
+      expect(posts).toBe(1);
+      controller.stop();
+    },
+  );
+
+  it.each([
+    [403, "csrf_invalid", "mfa", "MFA required"],
+    [
+      403,
+      "auth_password_change_required",
+      "password-change",
+      "Password change",
+    ],
+    [401, "auth_unauthenticated", "anonymous", "Signed out"],
+  ] as const)(
+    "reconciles MFA HTTP %s code %s through authoritative discovery",
+    async (status, code, recoveredStage, expectedState) => {
+      const controller = new SessionController();
+      let reads = 0;
+      let posts = 0;
+      server.use(
+        http.get("/api/v1/auth/session", () => {
+          reads++;
+          if (reads === 1 || recoveredStage === "mfa")
+            return restrictedSession();
+          if (recoveredStage === "anonymous")
+            return HttpResponse.json(
+              { data: null, meta: { stage: "anonymous" } },
+              { headers: { "Content-Type": mediaType } },
+            );
+          return HttpResponse.json(
+            {
+              data: {
+                type: "auth-sessions",
+                id: "account-id",
+                attributes: {
+                  stage: "password-change",
+                  idle_expires_at: "2026-10-01T10:30:00.000000Z",
+                  absolute_expires_at: "2026-10-01T10:30:00.000000Z",
+                },
+              },
+            },
+            { headers: { "Content-Type": mediaType } },
+          );
+        }),
+        http.post(
+          "/api/v1/auth/mfa-challenges/challenge-id/verifications",
+          () => {
+            posts++;
+            return HttpResponse.json(
+              { errors: [{ status: String(status), code }] },
+              { status, headers: { "Content-Type": mediaType } },
+            );
+          },
+        ),
+      );
+      document.cookie = `mia_csrf=${crypto.randomUUID()}; Path=/`;
+      controller.start();
+      await waitFor(() =>
+        expect(controller.getSnapshot().kind).toBe("MFA required"),
+      );
+
+      await controller.submitMfa("challenge", mfaCodeFixture());
+
+      expect(controller.getSnapshot().kind).toBe(expectedState);
+      expect({ posts, reads }).toEqual({ posts: 1, reads: 2 });
+      controller.stop();
+    },
+  );
+
+  it("chains definitive MFA completion directly to password change", async () => {
+    const controller = new SessionController();
+    let reads = 0;
+    let posts = 0;
+    server.use(
+      http.get("/api/v1/auth/session", () => {
+        reads++;
+        return restrictedSession();
+      }),
+      http.post(
+        "/api/v1/auth/mfa-challenges/challenge-id/verifications",
+        () => {
+          posts++;
+          return HttpResponse.json(
+            {
+              data: {
+                type: "auth-sessions",
+                id: "account-id",
+                attributes: {
+                  stage: "password-change",
+                  idle_expires_at: "2026-09-30T10:30:00.000000Z",
+                  absolute_expires_at: "2026-09-30T10:30:00.000000Z",
+                },
+              },
+            },
+            { headers: { "Content-Type": mediaType } },
+          );
+        },
+      ),
+    );
+    document.cookie = `mia_csrf=${crypto.randomUUID()}; Path=/`;
+    controller.start();
+    await waitFor(() =>
+      expect(controller.getSnapshot().kind).toBe("MFA required"),
+    );
+
+    await controller.submitMfa("challenge", mfaCodeFixture());
+
+    expect(controller.getSnapshot().kind).toBe("Password change");
+    expect({ posts, reads }).toEqual({ posts: 1, reads: 1 });
+    controller.stop();
+  });
+
+  it("reconciles an ambiguous MFA result without replay and permits an explicit safe recheck", async () => {
+    const controller = new SessionController();
+    let reads = 0;
+    let posts = 0;
+    server.use(
+      http.get("/api/v1/auth/session", () => {
+        reads++;
+        return reads === 2 ? HttpResponse.error() : restrictedSession();
+      }),
+      http.post(
+        "/api/v1/auth/mfa-challenges/challenge-id/verifications",
+        () => {
+          posts++;
+          return HttpResponse.error();
+        },
+      ),
+    );
+    document.cookie = `mia_csrf=${crypto.randomUUID()}; Path=/`;
+    controller.start();
+    await waitFor(() =>
+      expect(controller.getSnapshot().kind).toBe("MFA required"),
+    );
+
+    await controller.submitMfa("challenge", mfaCodeFixture());
+
+    expect(controller.getSnapshot()).toMatchObject({
+      kind: "Rotating",
+      origin: "mfa",
+      phase: "reconciliation failed",
+    });
+    expect({ posts, reads }).toEqual({ posts: 1, reads: 2 });
+    await controller.recheckMfa();
+    expect(controller.getSnapshot()).toMatchObject({
+      kind: "MFA required",
+      route: "challenge",
+    });
+    expect({ posts, reads }).toEqual({ posts: 1, reads: 3 });
+    controller.stop();
+  });
+
+  it("replaces an invalidated challenge binding only from authoritative discovery", async () => {
+    const controller = new SessionController();
+    let reads = 0;
+    let posts = 0;
+    server.use(
+      http.get("/api/v1/auth/session", () => {
+        reads++;
+        return restrictedSession(
+          reads === 1 ? "challenge-id" : "challenge-new",
+        );
+      }),
+      http.post(
+        "/api/v1/auth/mfa-challenges/challenge-id/verifications",
+        () => {
+          posts++;
+          return HttpResponse.error();
+        },
+      ),
+    );
+    document.cookie = `mia_csrf=${crypto.randomUUID()}; Path=/`;
+    controller.start();
+    await waitFor(() =>
+      expect(controller.getSnapshot().kind).toBe("MFA required"),
+    );
+
+    await controller.submitMfa("challenge", mfaCodeFixture());
+
+    expect(controller.getSnapshot()).toMatchObject({
+      kind: "MFA required",
+      challengeId: "challenge-new",
+    });
+    expect({ posts, reads }).toEqual({ posts: 1, reads: 2 });
+    controller.stop();
+  });
+
+  it("quiesces an admitted MFA transition before restricted logout and fences its late result", async () => {
+    const controller = new SessionController();
+    let release = () => {};
+    const pending = new Promise<void>((resolve) => {
+      release = resolve;
+    });
+    let mfaPosts = 0;
+    let logoutPosts = 0;
+    server.use(
+      http.get("/api/v1/auth/session", () => restrictedSession()),
+      http.post(
+        "/api/v1/auth/mfa-challenges/challenge-id/verifications",
+        async () => {
+          mfaPosts++;
+          await pending;
+          return HttpResponse.json(
+            {
+              data: {
+                type: "auth-sessions",
+                id: "account-id",
+                attributes: {
+                  stage: "password-change",
+                  idle_expires_at: "2026-10-01T10:30:00.000000Z",
+                  absolute_expires_at: "2026-10-01T10:30:00.000000Z",
+                },
+              },
+            },
+            { headers: { "Content-Type": mediaType } },
+          );
+        },
+      ),
+      http.post("/api/v1/auth/logout", () => {
+        logoutPosts++;
+        return new HttpResponse(null, { status: 204 });
+      }),
+    );
+    document.cookie = `mia_csrf=${crypto.randomUUID()}; Path=/`;
+    controller.start();
+    await waitFor(() =>
+      expect(controller.getSnapshot().kind).toBe("MFA required"),
+    );
+    const transition = controller.submitMfa("challenge", mfaCodeFixture());
+    await waitFor(() => expect(mfaPosts).toBe(1));
+
+    controller.beginRestrictedLogout();
+    expect(controller.getSnapshot().kind).toBe("Logout quiescing");
+    expect(logoutPosts).toBe(0);
+    release();
+    await transition;
+    await waitFor(() => expect(logoutPosts).toBe(1));
+    await waitFor(() =>
+      expect(controller.getSnapshot().kind).toBe(
+        "Logout reconciliation needed",
+      ),
+    );
+    expect(mfaPosts).toBe(1);
+    controller.stop();
+  });
+
+  it("serializes two tabs and never sends queued MFA work for a superseded challenge", async () => {
+    const first = new SessionController();
+    const second = new SessionController();
+    let release = () => {};
+    const pending = new Promise<void>((resolve) => {
+      release = resolve;
+    });
+    let transitioned = false;
+    let posts = 0;
+    const passwordChange = () =>
+      HttpResponse.json(
+        {
+          data: {
+            type: "auth-sessions",
+            id: "account-id",
+            attributes: {
+              stage: "password-change",
+              idle_expires_at: "2026-10-01T10:30:00.000000Z",
+              absolute_expires_at: "2026-10-01T10:30:00.000000Z",
+            },
+          },
+        },
+        { headers: { "Content-Type": mediaType } },
+      );
+    server.use(
+      http.get("/api/v1/auth/session", () =>
+        transitioned ? passwordChange() : restrictedSession(),
+      ),
+      http.post(
+        "/api/v1/auth/mfa-challenges/challenge-id/verifications",
+        async () => {
+          posts++;
+          await pending;
+          transitioned = true;
+          return passwordChange();
+        },
+      ),
+    );
+    document.cookie = `mia_csrf=${crypto.randomUUID()}; Path=/`;
+    first.start();
+    second.start();
+    await waitFor(() =>
+      expect([first.getSnapshot().kind, second.getSnapshot().kind]).toEqual([
+        "MFA required",
+        "MFA required",
+      ]),
+    );
+    const firstWork = first.submitMfa("challenge", mfaCodeFixture());
+    await waitFor(() => expect(posts).toBe(1));
+    const queuedWork = second.submitMfa("challenge", mfaCodeFixture());
+    release();
+    await Promise.all([firstWork, queuedWork]);
+
+    expect(posts).toBe(1);
+    expect([first.getSnapshot().kind, second.getSnapshot().kind]).toEqual([
+      "Password change",
+      "Password change",
+    ]);
+    first.stop();
+    second.stop();
+  });
+
   it("fails closed without origin locks and never dispatches concurrent login", async () => {
     const restore = installTestOriginLocks();
     const first = new SessionController();

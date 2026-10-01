@@ -3,8 +3,12 @@ import {
   getCurrentAccountCapabilities,
   logoutCurrentBrowser,
   loginWithPassword,
+  consumeMfaRecoveryCode,
+  verifyMfaChallenge,
   type EntryApiFailure,
   type EntrySession,
+  type AccountId,
+  type MfaChallengeId,
 } from "../api/entry";
 import { ApiProtocolError } from "../api/client";
 
@@ -17,7 +21,13 @@ export type AuthenticationBootstrapState =
       readonly error: EntryApiFailure;
     }
   | { readonly kind: "Signed out"; readonly outcome?: LoginOutcome }
-  | { readonly kind: "MFA required" }
+  | {
+      readonly kind: "MFA required";
+      readonly accountId: AccountId;
+      readonly challengeId: MfaChallengeId;
+      readonly route: MfaRoute;
+      readonly outcome?: MfaOutcome;
+    }
   | { readonly kind: "Password change" }
   | { readonly kind: "Access checking"; readonly phase: "loading" }
   | {
@@ -28,7 +38,18 @@ export type AuthenticationBootstrapState =
   | { readonly kind: "Authenticated" }
   | {
       readonly kind: "Rotating";
+      readonly origin: "login";
       readonly phase: "submitting" | "reconciling" | "reconciliation failed";
+      readonly error?: EntryApiFailure;
+      readonly reconciliationError?: EntryApiFailure;
+    }
+  | {
+      readonly kind: "Rotating";
+      readonly origin: "mfa";
+      readonly phase: "submitting" | "reconciling" | "reconciliation failed";
+      readonly route: MfaRoute;
+      readonly accountId: AccountId;
+      readonly challengeId: MfaChallengeId;
       readonly error?: EntryApiFailure;
       readonly reconciliationError?: EntryApiFailure;
     }
@@ -45,6 +66,17 @@ export type AuthenticationBootstrapState =
   | { readonly kind: "Logout reconciliation needed" };
 
 type Listener = () => void;
+export type MfaRoute = "challenge" | "recovery";
+type MfaOutcome = {
+  readonly kind:
+    | "step-used"
+    | "invalid-code"
+    | "throttled"
+    | "failed"
+    | "unconfirmed"
+    | "expired";
+  readonly error: EntryApiFailure;
+};
 type LoginRecoveryOrigin = "none" | "local ambiguity" | "passive revalidation";
 type LoginOutcome = {
   readonly kind:
@@ -87,8 +119,17 @@ function readCurrentCsrfCookie(): string | null {
 function isRestrictedState(
   state: AuthenticationBootstrapState,
 ): state is
-  { readonly kind: "MFA required" } | { readonly kind: "Password change" } {
-  return state.kind === "MFA required" || state.kind === "Password change";
+  | { readonly kind: "MFA required" }
+  | { readonly kind: "Password change" }
+  | Extract<
+      AuthenticationBootstrapState,
+      { readonly kind: "Rotating"; readonly origin: "mfa" }
+    > {
+  return (
+    state.kind === "MFA required" ||
+    state.kind === "Password change" ||
+    (state.kind === "Rotating" && state.origin === "mfa")
+  );
 }
 
 export class SessionController {
@@ -190,8 +231,63 @@ export class SessionController {
     this.reconciliationNeeded = false;
     this.loginRecoveryOrigin = "none";
     const sequence = ++this.sequence;
-    this.setState({ kind: "Rotating", phase: "submitting" });
+    this.setState({ kind: "Rotating", origin: "login", phase: "submitting" });
     const work = this.runLogin(username, password, sequence);
+    this.trackSettlement(work);
+    return work;
+  }
+
+  selectMfaRoute(route: MfaRoute): void {
+    if (
+      this.state.kind !== "MFA required" ||
+      this.state.outcome?.kind === "expired"
+    )
+      return;
+    this.setState({
+      kind: "MFA required",
+      accountId: this.state.accountId,
+      challengeId: this.state.challengeId,
+      route,
+    });
+  }
+
+  submitMfa(route: MfaRoute, code: string): Promise<void> {
+    if (
+      this.state.kind !== "MFA required" ||
+      this.state.route !== route ||
+      this.state.outcome?.kind === "expired"
+    )
+      return Promise.resolve();
+    const sequence = ++this.sequence;
+    const accountId = this.state.accountId;
+    const challengeId = this.state.challengeId;
+    this.setState({
+      kind: "Rotating",
+      origin: "mfa",
+      phase: "submitting",
+      route,
+      accountId,
+      challengeId,
+    });
+    const work = this.runMfa(route, code, accountId, challengeId, sequence);
+    this.trackSettlement(work);
+    return work;
+  }
+
+  recheckMfa(): Promise<void> {
+    if (
+      this.state.kind !== "Rotating" ||
+      this.state.origin !== "mfa" ||
+      this.state.phase !== "reconciliation failed"
+    )
+      return Promise.resolve();
+    const work = this.reconcileMfa(
+      ++this.sequence,
+      this.state.route,
+      this.state.accountId,
+      this.state.challengeId,
+      this.state.error,
+    );
     this.trackSettlement(work);
     return work;
   }
@@ -200,6 +296,7 @@ export class SessionController {
     if (
       this.state.kind !== "Restricted expired" &&
       (this.state.kind !== "Rotating" ||
+        this.state.origin !== "login" ||
         this.state.phase !== "reconciliation failed")
     ) {
       return;
@@ -257,24 +354,11 @@ export class SessionController {
           if (sequence !== this.sequence) this.observeLateLogin();
           throw error;
         }
-        if (sequence !== this.sequence) {
-          this.observeLateLogin();
-          return;
-        }
-        const controller = new AbortController();
-        this.activeRead = controller;
-        const applied = this.applySession(session, sequence, controller.signal);
         this.loginRecoveryOrigin = "none";
-        this.broadcast("security-epoch");
-        await applied;
-        if (this.activeRead === controller) this.activeRead = null;
+        await this.applyTransitionSession(session, sequence);
       });
     } catch (error) {
-      if (sequence !== this.sequence) {
-        if (this.state.kind.startsWith("Logout"))
-          this.markLogoutReconciliationNeeded();
-        return;
-      }
+      if (this.isSupersededTransition(sequence)) return;
       const failure = toEntryFailure(error);
       if (
         mutationDispatched &&
@@ -304,6 +388,7 @@ export class SessionController {
           this.loginRecoveryOrigin = "passive revalidation";
           this.setState({
             kind: "Rotating",
+            origin: "login",
             phase: "reconciliation failed",
             reconciliationError: failure,
           });
@@ -328,6 +413,7 @@ export class SessionController {
     this.loginRecoveryOrigin = recovery.origin;
     this.setState({
       kind: "Rotating",
+      origin: "login",
       phase: "reconciling",
       ...(recovery.error ? { error: recovery.error } : {}),
     });
@@ -362,6 +448,7 @@ export class SessionController {
       if (sequence === this.sequence) {
         this.setState({
           kind: "Rotating",
+          origin: "login",
           phase: "reconciliation failed",
           ...(recovery.error ? { error: recovery.error } : {}),
           reconciliationError: toEntryFailure(failure),
@@ -372,10 +459,168 @@ export class SessionController {
     }
   }
 
+  private async runMfa(
+    route: MfaRoute,
+    code: string,
+    accountId: AccountId,
+    challengeId: MfaChallengeId,
+    sequence: number,
+  ): Promise<void> {
+    let ambiguity: EntryApiFailure | undefined;
+    let mutationDispatched = false;
+    try {
+      await withLoginCoordinatorLock(async (queued) => {
+        if (sequence !== this.sequence) return;
+        if (queued) {
+          const current = await discoverSession();
+          if (sequence !== this.sequence) return;
+          if (current.kind !== "mfa" || current.challengeId !== challengeId) {
+            await this.applySession(
+              current,
+              sequence,
+              new AbortController().signal,
+            );
+            return;
+          }
+          if (current.accountId !== accountId) {
+            await this.applySession(
+              current,
+              sequence,
+              new AbortController().signal,
+            );
+            return;
+          }
+        }
+        const csrf = readCurrentCsrfCookie();
+        if (csrf === null) throw new ApiProtocolError();
+        mutationDispatched = true;
+        const session =
+          route === "challenge"
+            ? await verifyMfaChallenge(challengeId, code, csrf)
+            : await consumeMfaRecoveryCode(challengeId, code, csrf);
+        await this.applyTransitionSession(session, sequence);
+      });
+    } catch (error) {
+      if (this.isSupersededTransition(sequence)) return;
+      const failure = toEntryFailure(error);
+      if (mutationDispatched && isDefinitiveMfaFailure(failure)) {
+        this.setState({
+          kind: "MFA required",
+          accountId,
+          challengeId,
+          route,
+          outcome: { kind: mfaOutcomeKind(failure), error: failure },
+        });
+      } else if (mutationDispatched) ambiguity = failure;
+      else {
+        this.setState({
+          kind: "Rotating",
+          origin: "mfa",
+          phase: "reconciliation failed",
+          route,
+          accountId,
+          challengeId,
+          reconciliationError: failure,
+        });
+      }
+    }
+    if (ambiguity !== undefined && sequence === this.sequence)
+      await this.reconcileMfa(
+        sequence,
+        route,
+        accountId,
+        challengeId,
+        ambiguity,
+      );
+  }
+
+  private async reconcileMfa(
+    sequence: number,
+    route: MfaRoute,
+    accountId: AccountId,
+    challengeId: MfaChallengeId,
+    error?: EntryApiFailure,
+  ): Promise<void> {
+    this.setState({
+      kind: "Rotating",
+      origin: "mfa",
+      phase: "reconciling",
+      route,
+      accountId,
+      challengeId,
+      ...(error ? { error } : {}),
+    });
+    try {
+      await withCoordinatorLock("shared", async () => {
+        if (sequence !== this.sequence) return;
+        const session = await discoverSession();
+        if (sequence !== this.sequence) return;
+        if (
+          session.kind === "mfa" &&
+          session.accountId === accountId &&
+          session.challengeId === challengeId
+        ) {
+          this.setState({
+            kind: "MFA required",
+            accountId,
+            challengeId,
+            route,
+            ...(error
+              ? { outcome: { kind: "unconfirmed", error } satisfies MfaOutcome }
+              : {}),
+          });
+          return;
+        }
+        const applied = this.applySession(
+          session,
+          sequence,
+          new AbortController().signal,
+        );
+        if (session.kind !== "anonymous") this.broadcast("security-epoch");
+        await applied;
+      });
+    } catch (failure) {
+      if (sequence === this.sequence)
+        this.setState({
+          kind: "Rotating",
+          origin: "mfa",
+          phase: "reconciliation failed",
+          route,
+          accountId,
+          challengeId,
+          ...(error ? { error } : {}),
+          reconciliationError: toEntryFailure(failure),
+        });
+    }
+  }
+
   private observeLateLogin(): void {
     if (this.state.kind.startsWith("Logout"))
       this.markLogoutReconciliationNeeded();
     this.broadcast("security-epoch");
+  }
+
+  private async applyTransitionSession(
+    session: EntrySession,
+    sequence: number,
+  ): Promise<void> {
+    if (sequence !== this.sequence) {
+      this.observeLateLogin();
+      return;
+    }
+    const controller = new AbortController();
+    this.activeRead = controller;
+    const applied = this.applySession(session, sequence, controller.signal);
+    this.broadcast("security-epoch");
+    await applied;
+    if (this.activeRead === controller) this.activeRead = null;
+  }
+
+  private isSupersededTransition(sequence: number): boolean {
+    if (sequence === this.sequence) return false;
+    if (this.state.kind.startsWith("Logout"))
+      this.markLogoutReconciliationNeeded();
+    return true;
   }
 
   private async bootstrap(): Promise<void> {
@@ -416,7 +661,19 @@ export class SessionController {
         this.setState({ kind: "Signed out" });
         return;
       case "mfa":
-        this.setState({ kind: "MFA required" });
+        this.setState({
+          kind: "MFA required",
+          accountId: session.accountId,
+          challengeId: session.challengeId,
+          route:
+            (this.state.kind === "MFA required" ||
+              (this.state.kind === "Rotating" &&
+                this.state.origin === "mfa")) &&
+            this.state.accountId === session.accountId &&
+            this.state.challengeId === session.challengeId
+              ? this.state.route
+              : "challenge",
+        });
         return;
       case "password-change":
         this.setState({ kind: "Password change" });
@@ -807,6 +1064,32 @@ function isSecurityMessageKind(
     value === "logout-confirmed" ||
     value === "logout-unconfirmed"
   );
+}
+
+function isDefinitiveMfaFailure(
+  failure: EntryApiFailure,
+): failure is Extract<EntryApiFailure, { readonly kind: "http" }> {
+  return (
+    failure.kind === "http" &&
+    failure.disclosure.status < 500 &&
+    failure.disclosure.status !== 401 &&
+    failure.code !== "csrf_invalid" &&
+    failure.code !== "auth_password_change_required"
+  );
+}
+
+function mfaOutcomeKind(
+  failure: Extract<EntryApiFailure, { readonly kind: "http" }>,
+): MfaOutcome["kind"] {
+  if (failure.code === "auth_mfa_challenge_expired") return "expired";
+  if (failure.code === "auth_mfa_step_used") return "step-used";
+  if (
+    failure.code === "auth_invalid_mfa_code" ||
+    failure.code === "auth_invalid_recovery_code"
+  )
+    return "invalid-code";
+  if (failure.disclosure.status === 429) return "throttled";
+  return "failed";
 }
 
 function toEntryFailure(error: unknown): EntryApiFailure {

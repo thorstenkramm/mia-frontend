@@ -181,10 +181,17 @@ neither proves acceptance, token consumption, authentication, or session creatio
 
 | Surface | Profiles | Domain states | Exit | Companion |
 | --- | --- | --- | --- | --- |
-| MFA challenge | `G,F,T,P` | TOTP/SMS; cooldown; five-failure invalid; expired | next stage or logout | `AUTH` |
-| MFA recovery code | `G,F,T` | unused; consumed; invalid; challenge expired | next stage or logout | `AUTH` |
+| MFA challenge | `G,F,T,P` | method-neutral code entry; TOTP step used; invalid code; throttled; challenge expired or invalidated | next stage or logout | `AUTH` |
+| MFA recovery code | `G,F,T` | unused; consumed; invalid; throttled; challenge expired or invalidated | next stage or logout | `AUTH` |
 | Required password replacement | `G,F,T` | required; policy error; complete | Home or logout | `AUTH,INPUT` |
 | Restricted logout | `G,T,P` | quiescing; submitting; confirming; confirmed observation; unconfirmed; late-transition reconciliation needed | Login/privacy screen; explicit reconciliation per security companion | `AUTH` |
+
+The login MFA challenge does not distinguish TOTP from SMS because the restricted `AuthSession` exposes no method.
+`403 auth_mfa_step_used` is a correctable used-step result; `422 auth_invalid_mfa_code` is an invalid-code result;
+`422 auth_mfa_challenge_expired` is one terminal presentation covering both 30-minute expiry and five-failure
+invalidation and requires fresh sign-in. `429` uses a valid static `Retry-After` value when present and never resubmits
+automatically. Resend is deferred pending a backend contract decision that exposes the method and safe resend
+observability; no resend cooldown is rendered on this surface.
 
 ### Home
 

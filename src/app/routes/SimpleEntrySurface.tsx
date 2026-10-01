@@ -34,7 +34,7 @@ export function SimpleEntrySurface({
       <main id="main-content" className="min-h-screen bg-gray-50" tabIndex={-1}>
         {/* Tailwind Plus: Application UI > Forms > Sign-in and Registration > Simple card */}
         {/* Library version: 2026-09-13-083323. MIA removes remote branding and credentials. */}
-        <div className="flex min-h-screen flex-col justify-center px-4 py-12 sm:px-6 lg:px-8">
+        <div className="flex min-h-screen flex-col justify-center break-words px-4 py-12 sm:px-6 lg:px-8">
           <div className="sm:mx-auto sm:w-full sm:max-w-md">
             <h1
               ref={headingRef}

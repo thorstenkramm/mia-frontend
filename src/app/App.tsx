@@ -40,7 +40,10 @@ export function App({ initialTextSize, queryClient }: AppProps) {
   );
 }
 
-function routeKey(state: AuthenticationBootstrapState): EntryRouteKey | null {
+function routeKey(
+  state: AuthenticationBootstrapState,
+  pathname: string,
+): EntryRouteKey | null {
   switch (state.kind) {
     case "Cold":
     case "Checking":
@@ -49,7 +52,13 @@ function routeKey(state: AuthenticationBootstrapState): EntryRouteKey | null {
     case "Signed out":
       return "signedOut";
     case "MFA required":
-      return "mfa";
+      return pathname === "/auth/mfa/recovery"
+        ? "mfaRecovery"
+        : pathname === "/auth/mfa"
+          ? "mfa"
+          : state.route === "recovery"
+            ? "mfaRecovery"
+            : "mfa";
     case "Password change":
       return "passwordChange";
     case "Authenticated":
@@ -57,7 +66,11 @@ function routeKey(state: AuthenticationBootstrapState): EntryRouteKey | null {
     case "Restricted expired":
       return "signedOut";
     case "Rotating":
-      return "signedOut";
+      return state.origin === "login"
+        ? "signedOut"
+        : state.route === "challenge"
+          ? "mfa"
+          : "mfaRecovery";
     case "Logout confirmed":
       return "signedOut";
     case "Logout start":
@@ -75,7 +88,7 @@ function routeKey(state: AuthenticationBootstrapState): EntryRouteKey | null {
 function CanonicalEntry({ initialTextSize }: AppProps) {
   const state = useAuthenticationBootstrapState();
   const location = useLocation();
-  const key = routeKey(state);
+  const key = routeKey(state, location.pathname);
 
   if (key === null) {
     return <EntryStateSurface state={state} />;
@@ -87,15 +100,21 @@ function CanonicalEntry({ initialTextSize }: AppProps) {
   }
 
   const RouteContent = route.component;
+  const mfaExpired =
+    state.kind === "MFA required" && state.outcome?.kind === "expired";
   return (
     <SimpleEntrySurface
-      titleMessage={route.titleMessage}
+      titleMessage={
+        mfaExpired ? messages.mfaRestartPageTitle : route.titleMessage
+      }
       headingMessage={
-        key === "restrictedLogout" &&
-        (state.kind === "Logout unconfirmed" ||
-          state.kind === "Logout reconciliation needed")
-          ? messages.logoutUnconfirmedHeading
-          : route.headingMessage
+        mfaExpired
+          ? messages.mfaRestartHeading
+          : key === "restrictedLogout" &&
+              (state.kind === "Logout unconfirmed" ||
+                state.kind === "Logout reconciliation needed")
+            ? messages.logoutUnconfirmedHeading
+            : route.headingMessage
       }
     >
       <Suspense fallback={null}>

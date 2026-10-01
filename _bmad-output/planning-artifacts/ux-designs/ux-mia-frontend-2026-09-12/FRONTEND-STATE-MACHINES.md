@@ -58,6 +58,13 @@ session check alone never authorizes a route: capability/scope, route resource, 
 | Logout unconfirmed | Phase fails | Privacy screen | `Retry logout` or close browser | New barrier cycle |
 | Logout reconciliation needed | Late transition or security epoch in retained logout flow; active phase ended | Privacy screen; withdraw confirmation | Serialized explicit Refresh; Retry only after read ends; no unsafe replay | Current session discovery |
 
+For Story 1-4, `MFA required` is method-neutral and carries only the current authoritative challenge identity. Its named
+actions are six-digit verification, recovery-code consumption, switching between those two focused routes, and logout.
+There is no login-challenge Resend transition. `auth_mfa_step_used` and invalid-code results return to `MFA required`;
+`auth_mfa_challenge_expired` is one terminal presentation for expiry or five-failure invalidation and permits only fresh
+sign-in through logout. `429` never schedules submission. Ambiguous mutation outcomes enter `Rotating` and reconcile by
+session discovery without automatic replay.
+
 The session-discovery operation, anonymous CSRF issuance, stages, expiries, and safe logout recovery are `BLOCKED` on
 `BCG-001: Anonymous CSRF and authentication-session discovery`. Protected responses also depend on
 `BCG-005: Shared-device no-store response policy`.

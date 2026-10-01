@@ -32,7 +32,7 @@ illustrative vocabulary in this handoff.
 
 ### BCG-001: Anonymous CSRF and authentication-session discovery
 
-Status: **OPEN — cold-entry and Story 1-3 login slices approved; broader obligations remain.**
+Status: **OPEN — cold-entry, Story 1-3 login, and Story 1-4 MFA slices approved; broader obligations remain.**
 
 Reconciled on 2026-09-27 against backend revision `b83102114802b981a022c237c0746023c0aa6b79`, whose entry correction
 followed baseline `0626b751558c8baa7e4645708ef588b309446ed8`. Backend paths and line references in this BCG-001 assessment
@@ -41,12 +41,14 @@ the frontend did not rerun backend checks. Other BCG entries have not been broad
 
 #### BCG-001 frontend capability blocked
 
-The complete authentication journey remains blocked for credentials, continuation forms, invitation and recovery work,
-lifecycle/BFCache handling, and safe logout recovery. The owner-approved 2026-09-27 partial exception permits only cold
+The complete authentication journey remains blocked outside the approved entry, login, and MFA slices for continuation
+forms, invitation and recovery work, lifecycle/BFCache handling, and safe logout recovery. The owner-approved 2026-09-27 partial exception permits only cold
 `GET /api/v1/auth/session`, authenticated-only `GET /api/v1/users/me/capabilities`, and canonical dispatch among
 `/login`, `/`, `/auth/mfa`, and `/auth/password-change`. It does not close this composite blocker.
 The separate 2026-09-30 Story 1-3 decision below resolves credential-slice authorization and sequencing after the
 login error-response correction was rechecked; it does not expand the earlier Story 1-2 decision.
+The separate 2026-10-01 Story 1-4 decision resolves only MFA challenge verification and recovery-code consumption;
+it does not authorize resend, password replacement, or any broader authentication lifecycle.
 
 #### BCG-001 authoritative product requirement
 
@@ -229,6 +231,32 @@ frontend browser acceptance; direct-success dispatch, no redundant read, restric
 logout ordering still need implementation evidence. This decision preserves Story 1-2 and its approved restricted
 logout. It does not authorize MFA/password-replacement forms, recovery/invitations, Home features, broader lifecycle,
 SSE or BFCache work, or close BCG-001, BCG-003, or other gaps. Their remaining evidence obligations are unchanged.
+
+#### BCG-001 Story 1-4 MFA-slice decision
+
+Owner decision, 2026-10-01: Story 1-4 may implement only
+`POST /api/v1/auth/mfa-challenges/{id}/verifications` and
+`POST /api/v1/auth/mfa-challenges/{id}/recovery-code-consumptions` on `/auth/mfa` and `/auth/mfa/recovery` under
+`Restricted(mfa)`, plus the already approved restricted-stage logout. A definitive response chains to its returned
+stage: `password-change` continues to the existing Story 1-2 restricted placeholder/flow, while `authenticated`
+continues through the existing capability/scope gate. The sequencing guidance is
+`mia/docs/api-authentication-and-user-invitation.md` §Complete an MFA login challenge, §MFA recovery codes, §Error
+handling and ambiguous outcomes, and §Known integration gaps and disagreements; OpenAPI remains transport authority.
+
+The challenge UI is method-neutral because `AuthSession` exposes neither factor method nor destination. It provides one
+six-digit code field and a recovery-code path. Story 1-4 does not call the resend operation. Method disclosure and safe
+login-challenge resend observability remain unresolved; the frontend must not infer the method from an ID, probe resend,
+or show method-specific instructions. An SMS user whose message is lost must restart sign-in in release one.
+
+Recovery-code entry accepts display hyphens, whitespace, and ASCII lowercase. Immediately before dispatch the frontend
+removes hyphens and whitespace and applies ASCII uppercase, then sends only a value matching the OpenAPI pattern
+`^[0-9A-HJKMNP-TV-Z]{16}$`. Invalid local input sends no request. It performs no Crockford alias mapping. This resolves
+the frontend normalization question recorded in the backend guide's §Recovery-code normalization (lines 667-672)
+without changing the wire contract.
+
+This decision does not authorize password-replacement forms, resend, password recovery, invitations, broader logout or
+lifecycle/SSE/BFCache behavior, and does not close BCG-001 or BCG-003. Existing fresh-CSRF, transition serialization,
+response fencing, no-replay, ambiguity discovery, restricted isolation, and logout ordering requirements still apply.
 
 #### BCG-001 required observable contract
 

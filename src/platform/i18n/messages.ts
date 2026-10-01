@@ -129,6 +129,126 @@ export const messages = defineMessages({
     defaultMessage:
       "Additional verification is required before MIA can continue.",
   },
+  mfaCodeLabel: {
+    id: "entry.mfa.code.label",
+    defaultMessage: "Six-digit code (required)",
+  },
+  mfaCodeHelp: {
+    id: "entry.mfa.code.help",
+    defaultMessage:
+      "Enter the current six-digit code from your authenticator app or text message.",
+  },
+  mfaSubmit: { id: "entry.mfa.submit", defaultMessage: "Verify code" },
+  mfaUseRecovery: {
+    id: "entry.mfa.useRecovery",
+    defaultMessage: "Use a recovery code instead",
+  },
+  mfaUseVerification: {
+    id: "entry.mfa.useVerification",
+    defaultMessage: "Use a six-digit code instead",
+  },
+  mfaRecoveryPageTitle: {
+    id: "entry.mfa.recovery.pageTitle",
+    defaultMessage: "Use a recovery code | MIA",
+  },
+  mfaRecoveryHeading: {
+    id: "entry.mfa.recovery.heading",
+    defaultMessage: "Use a recovery code",
+  },
+  mfaRecoveryIntroduction: {
+    id: "entry.mfa.recovery.introduction",
+    defaultMessage: "Enter one unused recovery code to continue sign-in.",
+  },
+  mfaRecoveryCodeLabel: {
+    id: "entry.mfa.recovery.code.label",
+    defaultMessage: "Recovery code (required)",
+  },
+  mfaRecoveryCodeHelp: {
+    id: "entry.mfa.recovery.code.help",
+    defaultMessage:
+      "You may enter the code with or without spaces or hyphens. Letter case does not matter.",
+  },
+  mfaRecoverySubmit: {
+    id: "entry.mfa.recovery.submit",
+    defaultMessage: "Use recovery code",
+  },
+  mfaSubmitting: {
+    id: "entry.mfa.submitting",
+    defaultMessage: "Verifying sign-in…",
+  },
+  mfaReconciling: {
+    id: "entry.mfa.reconciling",
+    defaultMessage:
+      "The verification outcome is uncertain. Checking current sign-in status…",
+  },
+  mfaRecheckNeeded: {
+    id: "entry.mfa.recheckNeeded",
+    defaultMessage:
+      "The verification outcome is uncertain and status could not be checked.",
+  },
+  mfaRecheck: {
+    id: "entry.mfa.recheck",
+    defaultMessage: "Check sign-in status",
+  },
+  mfaLocalInvalid: {
+    id: "entry.mfa.localInvalid",
+    defaultMessage: "Enter exactly six digits.",
+  },
+  mfaRecoveryLocalInvalid: {
+    id: "entry.mfa.recovery.localInvalid",
+    defaultMessage: "Enter a valid 16-character recovery code.",
+  },
+  mfaStepUsed: {
+    id: "entry.mfa.stepUsed",
+    defaultMessage:
+      "That authenticator code was already used. Enter a new code.",
+  },
+  mfaInvalidCode: {
+    id: "entry.mfa.invalidCode",
+    defaultMessage:
+      "That six-digit code was not accepted. Check it and try again.",
+  },
+  mfaInvalidRecoveryCode: {
+    id: "entry.mfa.invalidRecoveryCode",
+    defaultMessage:
+      "That recovery code was not accepted. Check it and try again.",
+  },
+  mfaExpired: {
+    id: "entry.mfa.expired",
+    defaultMessage:
+      "This verification challenge is no longer valid. Sign out, then start sign-in again.",
+  },
+  mfaRestartPageTitle: {
+    id: "entry.mfa.restart.pageTitle",
+    defaultMessage: "Start sign-in again | MIA",
+  },
+  mfaRestartHeading: {
+    id: "entry.mfa.restart.heading",
+    defaultMessage: "Start sign-in again",
+  },
+  mfaRestartIntroduction: {
+    id: "entry.mfa.restart.introduction",
+    defaultMessage: "Sign out below, then start a fresh sign-in.",
+  },
+  mfaThrottled: {
+    id: "entry.mfa.throttled",
+    defaultMessage:
+      "Verification is temporarily limited. Wait before trying again.",
+  },
+  mfaWait: {
+    id: "entry.mfa.wait",
+    defaultMessage:
+      "Wait at least {seconds, number} seconds before trying again.",
+  },
+  mfaFailed: {
+    id: "entry.mfa.failed",
+    defaultMessage: "MIA could not verify sign-in. Try again later.",
+  },
+  mfaUnconfirmed: {
+    id: "entry.mfa.unconfirmed",
+    defaultMessage:
+      "The verification result was not confirmed. This browser still requires verification.",
+  },
   passwordChangePageTitle: {
     id: "entry.passwordChange.pageTitle",
     defaultMessage: "Choose a new password | MIA",

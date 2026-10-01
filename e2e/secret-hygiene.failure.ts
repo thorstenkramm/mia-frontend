@@ -8,10 +8,14 @@ test("controlled secret-bearing failure", async ({ page, context }) => {
   const username = process.env.MIA_SECRET_HYGIENE_USERNAME;
   const password = process.env.MIA_SECRET_HYGIENE_PASSWORD;
   const rawError = process.env.MIA_SECRET_HYGIENE_RAW_ERROR;
+  const mfaCode = process.env.MIA_SECRET_HYGIENE_MFA_CODE;
+  const recoveryCode = process.env.MIA_SECRET_HYGIENE_RECOVERY_CODE;
   if (
     username === undefined ||
     password === undefined ||
-    rawError === undefined
+    rawError === undefined ||
+    mfaCode === undefined ||
+    recoveryCode === undefined
   )
     throw new Error("Controlled fixture markers are required.");
 
@@ -30,13 +34,39 @@ test("controlled secret-bearing failure", async ({ page, context }) => {
     }),
   );
   await page.route("**/api/v1/auth/login", async (route) =>
-    route.fulfill({ status: 401, contentType: mediaType, body: rawError }),
+    route.fulfill({
+      status: 200,
+      contentType: mediaType,
+      body: JSON.stringify({
+        data: {
+          type: "auth-sessions",
+          id: "account-id",
+          attributes: {
+            stage: "mfa",
+            mfa_challenge_id: "challenge-id",
+            idle_expires_at: "2026-10-01T10:30:00.000000Z",
+            absolute_expires_at: "2026-10-01T10:30:00.000000Z",
+          },
+        },
+      }),
+    }),
+  );
+  await page.route(
+    "**/api/v1/auth/mfa-challenges/challenge-id/recovery-code-consumptions",
+    async (route) =>
+      route.fulfill({ status: 422, contentType: mediaType, body: rawError }),
   );
   await page.goto("/");
   await page.locator("#username").fill(username);
   await page.locator("#password").fill(password);
   await page.getByRole("button", { name: "Show password" }).click();
   await page.getByRole("button", { name: "Sign in", exact: true }).click();
+  await page.getByLabel("Six-digit code (required)").fill(mfaCode);
+  await page
+    .getByRole("button", { name: "Use a recovery code instead" })
+    .click();
+  await page.getByLabel("Recovery code (required)").fill(recoveryCode);
+  await page.getByRole("button", { name: "Use recovery code" }).click();
   await page.getByRole("button", { name: "Technical details" }).click();
   await page.locator("pre").waitFor({ state: "visible" });
   await page.close();

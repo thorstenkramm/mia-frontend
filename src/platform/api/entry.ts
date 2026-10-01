@@ -128,7 +128,11 @@ export type MfaChallengeId = string & {
 
 export type EntrySession =
   | { readonly kind: "anonymous" }
-  | { readonly kind: "mfa"; readonly challengeId: MfaChallengeId }
+  | {
+      readonly kind: "mfa";
+      readonly accountId: AccountId;
+      readonly challengeId: MfaChallengeId;
+    }
   | { readonly kind: "password-change" }
   | { readonly kind: "authenticated"; readonly accountId: AccountId };
 
@@ -151,6 +155,7 @@ function toEntrySession(document: SessionDocument): EntrySession {
     case "mfa":
       return {
         kind: "mfa",
+        accountId: toAccountId(document.data.id),
         challengeId: toMfaChallengeId(
           document.data.attributes.mfa_challenge_id,
         ),
@@ -195,6 +200,50 @@ export async function loginWithPassword(
     throw new ApiProtocolError();
   }
   return toEntrySession(session);
+}
+
+async function completeMfaChallenge(
+  challengeId: MfaChallengeId,
+  csrfToken: string,
+  operation: "verification" | "recovery",
+  code: string,
+): Promise<EntrySession> {
+  const path = `/api/v1/auth/mfa-challenges/${encodeURIComponent(challengeId)}/${operation === "verification" ? "verifications" : "recovery-code-consumptions"}`;
+  const body =
+    operation === "verification"
+      ? ({
+          data: { type: "mfa-verifications", attributes: { code } },
+        } satisfies operations["verifyMFAChallenge"]["requestBody"]["content"][typeof jsonApiMediaType])
+      : ({
+          data: {
+            type: "mfa-recovery-code-consumptions",
+            attributes: { code },
+          },
+        } satisfies operations["consumeMFARecoveryCode"]["requestBody"]["content"][typeof jsonApiMediaType]);
+  const response = await sendUnsafeRequest({
+    path,
+    csrfToken,
+    body: JSON.stringify(body),
+  });
+  const session = await parseJsonApiResponse(response, sessionDocumentSchema);
+  if (session.data === null) throw new ApiProtocolError();
+  return toEntrySession(session);
+}
+
+export function verifyMfaChallenge(
+  challengeId: MfaChallengeId,
+  code: string,
+  csrfToken: string,
+): Promise<EntrySession> {
+  return completeMfaChallenge(challengeId, csrfToken, "verification", code);
+}
+
+export function consumeMfaRecoveryCode(
+  challengeId: MfaChallengeId,
+  code: string,
+  csrfToken: string,
+): Promise<EntrySession> {
+  return completeMfaChallenge(challengeId, csrfToken, "recovery", code);
 }
 
 export async function getCurrentAccountCapabilities(

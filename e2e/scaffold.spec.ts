@@ -26,12 +26,49 @@ const headings = {
   "es-ES": "Iniciar sesión en MIA",
   "es-AR": "Iniciar sesión en MIA",
 } satisfies Record<(typeof locales)[number], string>;
+const mfaLabels = {
+  "en-US": ["Six-digit code (required)", "Recovery code (required)"],
+  "de-DE": [
+    "Sechsstelliger Code (erforderlich)",
+    "Wiederherstellungscode (erforderlich)",
+  ],
+  "fr-FR": [
+    "Code à six chiffres (obligatoire)",
+    "Code de récupération (obligatoire)",
+  ],
+  "pt-PT": [
+    "Código de seis dígitos (obrigatório)",
+    "Código de recuperação (obrigatório)",
+  ],
+  "pt-BR": [
+    "Código de seis dígitos (obrigatório)",
+    "Código de recuperação (obrigatório)",
+  ],
+  "es-ES": [
+    "Código de seis dígitos (obligatorio)",
+    "Código de recuperación (obligatorio)",
+  ],
+  "es-AR": [
+    "Código de seis dígitos (obligatorio)",
+    "Código de recuperación (obligatorio)",
+  ],
+} satisfies Record<(typeof locales)[number], readonly [string, string]>;
 
 const appUrl = "http://127.0.0.1:4173/";
 const mediaType = "application/vnd.api+json";
 
 function fingerprint(value: string): string {
   return createHash("sha256").update(value).digest("hex");
+}
+
+function mfaCodeFixture(): string {
+  return `0${String(Math.floor(Math.random() * 100_000)).padStart(5, "0")}`;
+}
+
+function recoveryCodeFixture(): string {
+  const alphabet = "0123456789ABCDEFGHJKMNPQRSTVWXYZ";
+  const bytes = crypto.getRandomValues(new Uint8Array(16));
+  return Array.from(bytes, (byte) => alphabet[byte % alphabet.length]).join("");
 }
 
 test.use({ trace: "off", screenshot: "off", video: "off" });
@@ -363,6 +400,336 @@ test.describe("password sign-in", () => {
     await peer.close();
   });
 });
+
+test.describe("MFA sign-in", () => {
+  test("submits one method-neutral six-digit challenge and isolates password change", async ({
+    page,
+    context,
+  }) => {
+    await mockSession(page, "mfa");
+    await context.grantPermissions(["clipboard-read", "clipboard-write"]);
+    const csrf = crypto.randomUUID();
+    const code = mfaCodeFixture();
+    await context.addCookies([{ name: "mia_csrf", value: csrf, url: appUrl }]);
+    let posts = 0;
+    let exactWire = false;
+    let protectedRequests = 0;
+    page.on("request", (request) => {
+      const path = new URL(request.url()).pathname;
+      if (path.startsWith("/api/") && !path.startsWith("/api/v1/auth/"))
+        protectedRequests++;
+    });
+    await page.route(
+      "**/api/v1/auth/mfa-challenges/challenge-id/verifications",
+      async (route) => {
+        posts++;
+        exactWire =
+          route.request().headers()["x-csrf-token"] === csrf &&
+          fingerprint(route.request().postData() ?? "") ===
+            fingerprint(
+              JSON.stringify({
+                data: {
+                  type: "mfa-verifications",
+                  attributes: { code },
+                },
+              }),
+            );
+        await route.fulfill({
+          status: 200,
+          contentType: mediaType,
+          body: JSON.stringify({
+            data: {
+              type: "auth-sessions",
+              id: "account-id",
+              attributes: {
+                stage: "password-change",
+                idle_expires_at: "2026-10-01T10:30:00.000000Z",
+                absolute_expires_at: "2026-10-01T10:30:00.000000Z",
+              },
+            },
+          }),
+        });
+      },
+    );
+    await page.goto("/auth/mfa");
+    await expect(
+      page.getByRole("heading", { name: "Verify sign-in" }),
+    ).toBeFocused();
+    await expect(page.getByText(/resend/iu)).toHaveCount(0);
+    await expect(page.getByRole("navigation")).toHaveCount(0);
+    const input = page.getByLabel("Six-digit code (required)");
+    await expect(input).toHaveAttribute("autocomplete", "one-time-code");
+    await pasteInto(page, input, code);
+    await input.press("Enter");
+    await expect(page).toHaveURL(/\/auth\/password-change$/u);
+    expect({ exactWire, posts, protectedRequests }).toEqual({
+      exactWire: true,
+      posts: 1,
+      protectedRequests: 0,
+    });
+  });
+
+  test("normalizes one recovery code and enters the authenticated capability gate", async ({
+    page,
+    context,
+  }) => {
+    await mockSession(page, "mfa");
+    await context.grantPermissions(["clipboard-read", "clipboard-write"]);
+    await mockCapabilities(page, 100);
+    await context.addCookies([
+      { name: "mia_csrf", value: crypto.randomUUID(), url: appUrl },
+    ]);
+    const wire = recoveryCodeFixture();
+    const displayed = wire.toLowerCase().replace(/(.{4})(?=.)/gu, "$1- ");
+    let posts = 0;
+    let normalized = false;
+    await page.route(
+      "**/api/v1/auth/mfa-challenges/challenge-id/recovery-code-consumptions",
+      async (route) => {
+        posts++;
+        normalized =
+          fingerprint(route.request().postData() ?? "") ===
+          fingerprint(
+            JSON.stringify({
+              data: {
+                type: "mfa-recovery-code-consumptions",
+                attributes: { code: wire },
+              },
+            }),
+          );
+        await route.fulfill({
+          status: 200,
+          contentType: mediaType,
+          body: JSON.stringify({
+            data: {
+              type: "auth-sessions",
+              id: "account-id",
+              attributes: {
+                stage: "authenticated",
+                idle_expires_at: "2026-10-01T10:30:00.000000Z",
+                absolute_expires_at: "2026-10-01T22:00:00.000000Z",
+              },
+            },
+          }),
+        });
+      },
+    );
+    await page.goto("/auth/mfa/recovery");
+    await pasteInto(
+      page,
+      page.getByLabel("Recovery code (required)"),
+      displayed,
+    );
+    expect(
+      await page.evaluate(async () => {
+        const secrets = Array.from(
+          document.querySelectorAll<HTMLInputElement>("input[name=code]"),
+          (input) => input.value,
+        ).filter(Boolean);
+        const persisted = JSON.stringify({
+          href: location.href,
+          history: history.state,
+          local: Object.entries(localStorage),
+          session: Object.entries(sessionStorage),
+          caches: "caches" in window ? await caches.keys() : [],
+        });
+        return secrets.every((secret) => !persisted.includes(secret));
+      }),
+    ).toBe(true);
+    await page.getByLabel("Recovery code (required)").press("Enter");
+    await expect(
+      page.getByRole("heading", { name: "Checking access" }),
+    ).toBeVisible();
+    await expect(page.getByRole("heading", { name: "Home" })).toBeFocused();
+    expect({ normalized, posts }).toEqual({ normalized: true, posts: 1 });
+  });
+
+  test("reconciles response loss without replay and remains usable at 320 CSS pixels", async ({
+    page,
+    context,
+  }) => {
+    let reads = 0;
+    await page.route("**/api/v1/auth/session", async (route) => {
+      reads++;
+      await route.fulfill({
+        status: 200,
+        contentType: mediaType,
+        body: JSON.stringify({
+          data: {
+            type: "auth-sessions",
+            id: "account-id",
+            attributes: {
+              stage: "mfa",
+              mfa_challenge_id: "challenge-id",
+              idle_expires_at: "2026-10-01T10:30:00.000000Z",
+              absolute_expires_at: "2026-10-01T10:30:00.000000Z",
+            },
+          },
+        }),
+      });
+    });
+    await context.addCookies([
+      { name: "mia_csrf", value: crypto.randomUUID(), url: appUrl },
+    ]);
+    let posts = 0;
+    await page.route(
+      "**/api/v1/auth/mfa-challenges/challenge-id/verifications",
+      async (route) => {
+        posts++;
+        await route.abort("connectionfailed");
+      },
+    );
+    await page.setViewportSize({ width: 320, height: 900 });
+    await page.goto("/auth/mfa");
+    await page.getByLabel("Six-digit code (required)").fill(mfaCodeFixture());
+    await page.getByRole("button", { name: "Verify code" }).click();
+    await expect(page.getByText(/still requires verification/iu)).toBeVisible();
+    expect({ posts, reads }).toEqual({ posts: 1, reads: 2 });
+    await applyWcagTextSpacing(page);
+    for (const textSize of textSizes) {
+      await page.evaluate((nextTextSize) => {
+        document.documentElement.classList.remove(
+          "text-base",
+          "text-lg",
+          "text-xl",
+        );
+        document.documentElement.classList.add(
+          nextTextSize === "standard"
+            ? "text-base"
+            : nextTextSize === "large"
+              ? "text-lg"
+              : "text-xl",
+        );
+      }, textSize);
+      const input = page.getByLabel("Six-digit code (required)");
+      await expectMinimumPointerTarget(input);
+      await expectMinimumPointerTarget(
+        page.getByRole("button", { name: "Verify code" }),
+      );
+      await expectFocusedAndUnobscured(page, input);
+      await expectNoPageOverflow(page);
+    }
+    const results = await new AxeBuilder({ page })
+      .withTags(["wcag2a", "wcag2aa", "wcag21a", "wcag21aa", "wcag22aa"])
+      .analyze();
+    expect(results.violations.map(({ id }) => id)).toEqual([]);
+  });
+
+  test("both localized MFA routes reflow in every text mode at 320 CSS pixels", async ({
+    page,
+  }) => {
+    test.slow();
+    await page.setViewportSize({ width: 320, height: 900 });
+    await mockSession(page, "mfa");
+    await page.goto("/auth/mfa");
+
+    for (const [routeIndex, path] of [
+      [0, "/auth/mfa"],
+      [1, "/auth/mfa/recovery"],
+    ] as const) {
+      for (const locale of locales) {
+        for (const textSize of textSizes) {
+          await page.evaluate(
+            ([nextLocale, nextTextSize]) => {
+              localStorage.setItem("mia.interface.locale", nextLocale);
+              localStorage.setItem("mia.interface.text-size", nextTextSize);
+            },
+            [locale, textSize] as const,
+          );
+          await page.goto(path);
+          await applyWcagTextSpacing(page);
+          await expect(page.locator("html")).toHaveAttribute("lang", locale);
+          const input = page.getByLabel(mfaLabels[locale][routeIndex]);
+          await expect(input).toBeVisible();
+          await input.focus();
+          await expectFocusedAndUnobscured(page, input);
+          for (const control of [
+            input,
+            page.locator("button[type=submit]"),
+            page.locator("button[type=button]").first(),
+            page.locator("button[type=button]").last(),
+          ])
+            await expectMinimumPointerTarget(control);
+          await expectNoPageOverflow(page);
+        }
+      }
+    }
+    await expectNoWcagViolations(page);
+  });
+
+  test("clears an expired-flow announcement on copy feedback and anonymous logout", async ({
+    context,
+    page,
+  }) => {
+    let signedOut = false;
+    await context.grantPermissions(["clipboard-read", "clipboard-write"]);
+    await context.addCookies([
+      { name: "mia_csrf", value: crypto.randomUUID(), url: appUrl },
+    ]);
+    await page.route("**/api/v1/auth/session", async (route) => {
+      await route.fulfill({
+        status: 200,
+        contentType: mediaType,
+        body: JSON.stringify(
+          signedOut
+            ? { data: null, meta: { stage: "anonymous" } }
+            : {
+                data: {
+                  type: "auth-sessions",
+                  id: "account-id",
+                  attributes: {
+                    stage: "mfa",
+                    mfa_challenge_id: "challenge-id",
+                    idle_expires_at: "2026-10-01T10:30:00.000000Z",
+                    absolute_expires_at: "2026-10-01T22:00:00.000000Z",
+                  },
+                },
+              },
+        ),
+      });
+    });
+    await page.route(
+      "**/api/v1/auth/mfa-challenges/challenge-id/verifications",
+      async (route) => {
+        await route.fulfill({
+          status: 422,
+          contentType: mediaType,
+          body: JSON.stringify({
+            errors: [{ status: "422", code: "auth_mfa_challenge_expired" }],
+          }),
+        });
+      },
+    );
+    await page.route("**/api/v1/auth/logout", async (route) => {
+      signedOut = true;
+      await route.fulfill({ status: 204 });
+    });
+    const politeRegion = page.locator("[aria-live]").first();
+    const assertiveRegion = page.locator("[aria-live]").last();
+    await page.goto("/auth/mfa");
+
+    await page.locator("#mfa-code").fill(mfaCodeFixture());
+    await page.locator("#mfa-code").press("Enter");
+    await expect(assertiveRegion).toContainText("no longer valid");
+    await page.getByRole("button", { name: "Technical details" }).click();
+    await page.getByRole("button", { name: "Copy technical details" }).click();
+    await expect(politeRegion).toContainText("Technical details copied.");
+    await expect(assertiveRegion).toBeEmpty();
+
+    await page.reload();
+    await page.locator("#mfa-code").fill(mfaCodeFixture());
+    await page.locator("#mfa-code").press("Enter");
+    await expect(assertiveRegion).toContainText("no longer valid");
+    await page.getByRole("button", { name: "Sign out" }).click();
+    await expect(page).toHaveURL(/\/login$/u);
+    await expect(assertiveRegion).toBeEmpty();
+    await page.locator("#interface-language").selectOption("de-DE");
+    await expect(politeRegion).toContainText(
+      "Die Oberflächensprache wurde geändert.",
+    );
+    await expect(assertiveRegion).toBeEmpty();
+  });
+});
 const browserZoomExtension = fileURLToPath(
   new URL("./fixtures/browser-zoom-extension", import.meta.url),
 );
@@ -398,7 +765,7 @@ async function mockSession(
   });
 }
 
-async function mockCapabilities(page: Page): Promise<void> {
+async function mockCapabilities(page: Page, delayMs = 0): Promise<void> {
   const actions = [
     "profile.view",
     "profile.edit",
@@ -416,6 +783,8 @@ async function mockCapabilities(page: Page): Promise<void> {
     "mentoring.fulfill",
   ];
   await page.route("**/api/v1/users/me/capabilities", async (route) => {
+    if (delayMs > 0)
+      await new Promise((resolve) => setTimeout(resolve, delayMs));
     await route.fulfill({
       body: JSON.stringify({
         data: {
@@ -792,6 +1161,143 @@ for (const zoomFactor of [2, 4] as const) {
         );
         await expectFocusedAndUnobscured(page, radio);
       }
+    } finally {
+      await context.close();
+      await rm(userDataDirectory, { force: true, recursive: true });
+    }
+  });
+}
+
+for (const zoomFactor of [2, 4] as const) {
+  test(`both MFA routes and recovery states reflow at actual ${zoomFactor * 100}% browser zoom`, async () => {
+    const { context, userDataDirectory } = await launchBrowserZoomContext();
+    try {
+      const page = await context.newPage();
+      let outcome: "none" | "expired" | "reconciliation-failed" = "none";
+      let failDiscovery = false;
+      await context.addCookies([
+        { name: "mia_csrf", value: crypto.randomUUID(), url: appUrl },
+      ]);
+      await page.route("**/api/v1/auth/session", async (route) => {
+        if (failDiscovery) {
+          await route.abort("connectionfailed");
+          return;
+        }
+        await route.fulfill({
+          status: 200,
+          contentType: mediaType,
+          body: JSON.stringify({
+            data: {
+              type: "auth-sessions",
+              id: "account-id",
+              attributes: {
+                stage: "mfa",
+                mfa_challenge_id: "challenge-id",
+                idle_expires_at: "2026-10-01T10:30:00.000000Z",
+                absolute_expires_at: "2026-10-01T22:00:00.000000Z",
+              },
+            },
+          }),
+        });
+      });
+      await page.route("**/api/v1/auth/mfa-challenges/**", async (route) => {
+        if (outcome === "expired") {
+          await route.fulfill({
+            status: 422,
+            contentType: mediaType,
+            body: JSON.stringify({
+              errors: [{ status: "422", code: "auth_mfa_challenge_expired" }],
+            }),
+          });
+          return;
+        }
+        if (outcome === "reconciliation-failed") {
+          failDiscovery = true;
+          await route.abort("connectionfailed");
+          return;
+        }
+        await route.abort("blockedbyclient");
+      });
+      await page.goto(appUrl);
+      await setActualBrowserZoom(page, zoomFactor);
+      const metrics = await page.evaluate(() => ({
+        cssZoom: getComputedStyle(document.documentElement).zoom,
+        devicePixelRatio: window.devicePixelRatio,
+        innerWidth: window.innerWidth,
+      }));
+      expect(metrics.cssZoom).toBe("1");
+      expect(metrics.devicePixelRatio).toBeCloseTo(zoomFactor, 2);
+      expect(metrics.innerWidth).toBe(1280 / zoomFactor);
+
+      for (const path of ["/auth/mfa", "/auth/mfa/recovery"] as const) {
+        for (const textSize of textSizes) {
+          await page.evaluate((nextTextSize) => {
+            localStorage.setItem("mia.interface.locale", "en-US");
+            localStorage.setItem("mia.interface.text-size", nextTextSize);
+          }, textSize);
+          await page.goto(path);
+          await applyWcagTextSpacing(page);
+          const input = page.locator("#mfa-code");
+          await input.focus();
+          await expectFocusedAndUnobscured(page, input);
+          for (const control of [
+            input,
+            page.locator("button[type=submit]"),
+            page.locator("button[type=button]").first(),
+            page.locator("button[type=button]").last(),
+          ])
+            await expectMinimumPointerTarget(control);
+          await expectNoPageOverflow(page);
+        }
+      }
+
+      if (zoomFactor === 2) {
+        outcome = "expired";
+        for (const path of ["/auth/mfa", "/auth/mfa/recovery"] as const) {
+          await page.goto(path);
+          const input = page.locator("#mfa-code");
+          await pasteInto(
+            page,
+            input,
+            path.endsWith("recovery")
+              ? recoveryCodeFixture()
+              : mfaCodeFixture(),
+          );
+          await input.press("Enter");
+          const heading = page.getByRole("heading", {
+            level: 1,
+            name: "Start sign-in again",
+          });
+          await expect(heading).toBeFocused();
+          const assertiveRegion = page
+            .locator("[aria-live]")
+            .filter({ hasText: "no longer valid" });
+          await expect(assertiveRegion).toHaveAttribute(
+            "aria-live",
+            "assertive",
+          );
+          await expect(page.locator("#mfa-code")).toHaveCount(0);
+          await expectFocusedAndUnobscured(page, heading);
+          await expectMinimumPointerTarget(
+            page.getByRole("button", { name: "Sign out" }),
+          );
+          await expectNoPageOverflow(page);
+        }
+      } else {
+        outcome = "reconciliation-failed";
+        await page.goto("/auth/mfa");
+        const input = page.locator("#mfa-code");
+        await pasteInto(page, input, mfaCodeFixture());
+        await input.press("Enter");
+        const recheck = page.getByRole("button", {
+          name: "Check sign-in status",
+        });
+        await expect(recheck).toBeFocused();
+        await expectMinimumPointerTarget(recheck);
+        await expectFocusedAndUnobscured(page, recheck);
+        await expectNoPageOverflow(page);
+      }
+      await expectNoWcagViolations(page);
     } finally {
       await context.close();
       await rm(userDataDirectory, { force: true, recursive: true });

@@ -5,9 +5,17 @@ import { join } from "node:path";
 import { spawnSync } from "node:child_process";
 
 const outputDir = await mkdtemp(join(tmpdir(), "mia-secret-hygiene-"));
-const markers = ["username", "password", "raw-error"].map(
-  (label) => `${label}-${randomBytes(24).toString("hex")}`,
-);
+const recoveryAlphabet = "0123456789ABCDEFGHJKMNPQRSTVWXYZ";
+const markers = [
+  `username-${randomBytes(24).toString("hex")}`,
+  `password-${randomBytes(24).toString("hex")}`,
+  `raw-error-${randomBytes(24).toString("hex")}`,
+  String(randomBytes(4).readUInt32BE() % 1_000_000).padStart(6, "0"),
+  Array.from(
+    randomBytes(16),
+    (byte) => recoveryAlphabet[byte % recoveryAlphabet.length],
+  ).join(""),
+];
 
 async function leakingArtifacts(directory) {
   const leaks = [];
@@ -37,6 +45,8 @@ try {
         MIA_SECRET_HYGIENE_USERNAME: markers[0],
         MIA_SECRET_HYGIENE_PASSWORD: markers[1],
         MIA_SECRET_HYGIENE_RAW_ERROR: markers[2],
+        MIA_SECRET_HYGIENE_MFA_CODE: markers[3],
+        MIA_SECRET_HYGIENE_RECOVERY_CODE: markers[4],
       },
       maxBuffer: 16 * 1024 * 1024,
     },

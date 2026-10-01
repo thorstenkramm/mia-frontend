@@ -120,6 +120,13 @@ confirms it. The planning package is complete; this spec binds it to the archite
   The operation-level login internal-error response correction was rechecked at `mia/api-doc/paths/auth.yaml:30`, so
   this slice may proceed. The approval preserves the Story 1-2 exception and leaves unrelated gaps and release evidence
   open.
+- Owner-approved MFA alignment, 2026-10-01: Story 1-4 may implement only the two documented login-challenge completion
+  mutations and `/auth/mfa` plus `/auth/mfa/recovery` under `Restricted(mfa)`, as recorded in
+  `BACKEND-CONTRACT-GAPS.md` §BCG-001 Story 1-4 MFA-slice decision. The challenge is method-neutral and has no Resend;
+  recovery input is normalized to the exact wire pattern before dispatch. Returned `password-change` and
+  `authenticated` stages continue through the existing restricted placeholder or capability gate respectively. This
+  approval does not authorize password replacement, recovery, invitations, broader lifecycle work, or close BCG-001 or
+  BCG-003.
 
 ## Non-goals
 
@@ -148,6 +155,7 @@ activates a course without a manual, and a student completes a second tutoring s
   (authoritative status in `BACKEND-CONTRACT-GAPS.md`); work needing them is blocked, not assumed.
 - BCG-001 and BCG-003 remain open after the owner-approved Story 1-2 entry slice; the exact partial exception is recorded
   under Constraints and in `BACKEND-CONTRACT-GAPS.md` and must not be generalized to their deferred obligations.
-- Story 1-3's request-ID interpretation, direct-success stage dispatch, and login internal-error response are resolved.
-  The broader BCG-001 obligations remain open and are not part of that narrow approval.
+- Story 1-3's request-ID interpretation, direct-success stage dispatch, and login internal-error response are resolved;
+  Story 1-4's method-neutral challenge, no-Resend decision, and recovery normalization are resolved. The broader
+  BCG-001 obligations remain open and are not part of either narrow approval.
 - The exact Tailwind Plus component-to-blueprint binding is pending — a pre-implementation gate before UI stories.

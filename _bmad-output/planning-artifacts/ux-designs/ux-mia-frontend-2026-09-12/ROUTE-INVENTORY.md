@@ -109,6 +109,7 @@ unknown mutation outcome remains on its owning route without success copy until 
 - Title: `Verify sign-in`
 - H1 purpose: complete the authoritative MFA challenge.
 - Gate: `Restricted(mfa)`.
+- Method-neutral: one six-digit code field plus the recovery-code path; no factor inference or Resend control.
 - Fallback: `/login` on expiry or logout; the next stage is selected authoritatively.
 
 ### MFA Recovery Code
@@ -118,6 +119,7 @@ unknown mutation outcome remains on its owning route without success copy until 
 - Title: `Use a recovery code`
 - H1 purpose: verify sign-in with one unused recovery code.
 - Gate: `Restricted(mfa)`.
+- Entry normalization: remove hyphens and whitespace and apply ASCII uppercase before local wire-pattern validation.
 - Fallback: `/auth/mfa` for a correctable result, otherwise `/login` on expiry or logout.
 
 ### Required Password Replacement

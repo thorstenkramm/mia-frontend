@@ -1,5 +1,5 @@
-import { createHash } from "node:crypto";
-import { render, screen, waitFor } from "@testing-library/react";
+import { createHash, randomBytes } from "node:crypto";
+import { act, render, screen, waitFor } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
 import { delay, http, HttpResponse } from "msw";
 import { afterEach, describe, expect, it, vi } from "vitest";
@@ -27,6 +27,19 @@ function fingerprint(value: string): string {
   return createHash("sha256").update(value).digest("hex");
 }
 
+const recoveryAlphabet = "0123456789ABCDEFGHJKMNPQRSTVWXYZ";
+
+function recoveryFixture(): string {
+  return Array.from(
+    randomBytes(16),
+    (byte) => recoveryAlphabet[byte % recoveryAlphabet.length],
+  ).join("");
+}
+
+function mfaCodeFixture(): string {
+  return String(randomBytes(4).readUInt32BE() % 1_000_000).padStart(6, "0");
+}
+
 function anonymousHandler() {
   return http.get("/api/v1/auth/session", () =>
     HttpResponse.json(
@@ -39,6 +52,10 @@ function anonymousHandler() {
 function sessionHandler(
   stage: "authenticated" | "mfa" | "password-change",
   onRequest?: () => void,
+  identity: { readonly accountId: string; readonly challengeId: string } = {
+    accountId: "account-id",
+    challengeId: "challenge-id",
+  },
 ) {
   return http.get("/api/v1/auth/session", () => {
     onRequest?.();
@@ -46,10 +63,12 @@ function sessionHandler(
       {
         data: {
           type: "auth-sessions",
-          id: "account-id",
+          id: identity.accountId,
           attributes: {
             stage,
-            ...(stage === "mfa" ? { mfa_challenge_id: "challenge-id" } : {}),
+            ...(stage === "mfa"
+              ? { mfa_challenge_id: identity.challengeId }
+              : {}),
             idle_expires_at: "2026-09-27T10:30:00.000000Z",
             absolute_expires_at: "2026-09-27T22:00:00.000000Z",
           },
@@ -126,6 +145,38 @@ function renderEntryWithQueryClient(
       </MiaIntlProvider>
     </AnnouncementProvider>,
   );
+}
+
+function announcementRegion(priority: "polite" | "assertive"): HTMLElement {
+  const region = Array.from(
+    document.querySelectorAll<HTMLElement>("[aria-live]"),
+  ).find((candidate) => candidate.getAttribute("aria-live") === priority);
+  if (region === undefined) throw new Error(`Missing ${priority} live region.`);
+  return region;
+}
+
+function deferredVoid() {
+  const callbacks: {
+    resolve?: () => void;
+    reject?: (reason: unknown) => void;
+  } = {};
+  const promise = new Promise<void>((resolve, reject) => {
+    callbacks.resolve = resolve;
+    callbacks.reject = reject;
+  });
+  return {
+    promise,
+    resolve(): void {
+      if (callbacks.resolve === undefined)
+        throw new Error("Deferred resolve callback was not initialized.");
+      callbacks.resolve();
+    },
+    reject(reason: unknown): void {
+      if (callbacks.reject === undefined)
+        throw new Error("Deferred reject callback was not initialized.");
+      callbacks.reject(reason);
+    },
+  };
 }
 
 afterEach(() => {
@@ -551,14 +602,380 @@ describe("localized anonymous entry", () => {
       window.history.replaceState(null, "", "/login");
       renderEntry(sessionHandler(stage));
 
-      expect(
-        await screen.findByRole("heading", { name: heading }),
-      ).toHaveFocus();
+      const routeHeading = await screen.findByRole("heading", {
+        name: heading,
+      });
+      await waitFor(() => expect(routeHeading).toHaveFocus());
       expect(window.location.pathname).toBe(path);
       expect(screen.queryByRole("navigation")).not.toBeInTheDocument();
       expect(screen.queryByText("Home")).not.toBeInTheDocument();
     },
   );
+
+  it("normalizes recovery-code display input before one dispatch and chains to password change", async () => {
+    const user = userEvent.setup();
+    const wireCode = recoveryFixture();
+    const displayed = wireCode.toLowerCase().replace(/(.{4})(?=.)/gu, "$1- ");
+    let posts = 0;
+    let exactWire = false;
+    renderEntry(
+      sessionHandler("mfa"),
+      http.post(
+        "/api/v1/auth/mfa-challenges/challenge-id/recovery-code-consumptions",
+        async ({ request }) => {
+          posts++;
+          exactWire =
+            fingerprint(await request.text()) ===
+            fingerprint(
+              JSON.stringify({
+                data: {
+                  type: "mfa-recovery-code-consumptions",
+                  attributes: { code: wireCode },
+                },
+              }),
+            );
+          return HttpResponse.json(
+            {
+              data: {
+                type: "auth-sessions",
+                id: "account-id",
+                attributes: {
+                  stage: "password-change",
+                  idle_expires_at: "2026-09-30T10:30:00.000000Z",
+                  absolute_expires_at: "2026-09-30T10:30:00.000000Z",
+                },
+              },
+            },
+            { headers: { "Content-Type": mediaType } },
+          );
+        },
+      ),
+    );
+    document.cookie = `mia_csrf=${crypto.randomUUID()}; Path=/`;
+    await user.click(
+      await screen.findByRole("button", {
+        name: "Use a recovery code instead",
+      }),
+    );
+    expect(window.location.pathname).toBe("/auth/mfa/recovery");
+    const input = screen.getByLabelText("Recovery code (required)");
+    await user.click(input);
+    await user.paste(displayed);
+    await user.click(screen.getByRole("button", { name: "Use recovery code" }));
+
+    expect(
+      await screen.findByRole("heading", { name: "Choose a new password" }),
+    ).toBeInTheDocument();
+    expect({ exactWire, posts }).toEqual({ exactWire: true, posts: 1 });
+  });
+
+  it("rejects malformed recovery input locally without dispatch or alias mapping", async () => {
+    const user = userEvent.setup();
+    let posts = 0;
+    renderEntry(
+      sessionHandler("mfa"),
+      http.post(
+        "/api/v1/auth/mfa-challenges/challenge-id/recovery-code-consumptions",
+        () => {
+          posts++;
+          return HttpResponse.error();
+        },
+      ),
+    );
+    await user.click(
+      await screen.findByRole("button", {
+        name: "Use a recovery code instead",
+      }),
+    );
+    const invalid = `I${recoveryFixture().slice(1)}`;
+    const input = screen.getByLabelText<HTMLInputElement>(
+      "Recovery code (required)",
+    );
+    await user.type(input, invalid);
+    await user.click(screen.getByRole("button", { name: "Use recovery code" }));
+
+    expect(await screen.findByRole("alert")).toHaveTextContent(
+      "Enter a valid 16-character recovery code.",
+    );
+    expect(posts).toBe(0);
+    expect(fingerprint(input.value)).toBe(fingerprint(invalid));
+    expect(input).toHaveFocus();
+  });
+
+  it.each([
+    [403, "auth_mfa_step_used", "already used", false],
+    [422, "auth_invalid_mfa_code", "was not accepted", false],
+    [429, "rate_limited", "temporarily limited", false],
+  ] as const)(
+    "renders MFA error code %s without replay and applies safe input retention",
+    async (status, code, copy) => {
+      const user = userEvent.setup();
+      const entered = mfaCodeFixture();
+      let posts = 0;
+      renderEntry(
+        sessionHandler("mfa"),
+        http.post(
+          "/api/v1/auth/mfa-challenges/challenge-id/verifications",
+          () => {
+            posts++;
+            return HttpResponse.json(
+              { errors: [{ status: String(status), code }] },
+              {
+                status,
+                headers: { "Content-Type": mediaType, "Retry-After": "29" },
+              },
+            );
+          },
+        ),
+      );
+      document.cookie = `mia_csrf=${crypto.randomUUID()}; Path=/`;
+      const input = await screen.findByLabelText<HTMLInputElement>(
+        "Six-digit code (required)",
+      );
+      await user.type(input, entered);
+      await user.click(screen.getByRole("button", { name: "Verify code" }));
+
+      expect(await screen.findByRole("alert")).toHaveTextContent(copy);
+      expect(posts).toBe(1);
+      expect(fingerprint(input.value)).toBe(fingerprint(entered));
+      expect(input).toHaveFocus();
+      expect(
+        screen.getByRole("button", { name: "Technical details" }),
+      ).toHaveAttribute("aria-expanded", "false");
+      if (status === 429)
+        expect(screen.getByRole("alert")).toHaveTextContent("29 seconds");
+    },
+  );
+
+  it.each([
+    [
+      "challenge",
+      "/auth/mfa",
+      "Six-digit code (required)",
+      "Verify code",
+      "/api/v1/auth/mfa-challenges/challenge-id/verifications",
+      () => mfaCodeFixture(),
+    ],
+    [
+      "recovery",
+      "/auth/mfa/recovery",
+      "Recovery code (required)",
+      "Use recovery code",
+      "/api/v1/auth/mfa-challenges/challenge-id/recovery-code-consumptions",
+      () => recoveryFixture(),
+    ],
+  ] as const)(
+    "moves focus to a terminal restart presentation when the %s challenge expires",
+    async (_route, path, label, submit, endpoint, fixture) => {
+      const user = userEvent.setup();
+      vi.spyOn(navigator.clipboard, "writeText").mockResolvedValue();
+      let posts = 0;
+      window.history.replaceState(null, "", path);
+      renderEntry(
+        sessionHandler("mfa"),
+        http.post(endpoint, () => {
+          posts++;
+          return HttpResponse.json(
+            {
+              errors: [{ status: "422", code: "auth_mfa_challenge_expired" }],
+            },
+            { status: 422, headers: { "Content-Type": mediaType } },
+          );
+        }),
+      );
+      document.cookie = `mia_csrf=${crypto.randomUUID()}; Path=/`;
+      const input = await screen.findByLabelText<HTMLInputElement>(label);
+      await user.type(input, fixture());
+      await user.click(screen.getByRole("button", { name: submit }));
+
+      const heading = await screen.findByRole("heading", {
+        name: "Start sign-in again",
+      });
+      await waitFor(() => expect(heading).toHaveFocus());
+      expect(document.title).toBe("Start sign-in again | MIA");
+      expect(
+        screen.getByText(/no longer valid/u, { selector: "p" }),
+      ).toBeVisible();
+      expect(announcementRegion("assertive")).toHaveTextContent(
+        "no longer valid",
+      );
+      expect(input).not.toBeInTheDocument();
+      expect(screen.queryByRole("button", { name: submit })).toBeNull();
+      expect(posts).toBe(1);
+
+      await user.tab();
+      expect(
+        screen.getByRole("button", { name: "Technical details" }),
+      ).toHaveFocus();
+      await user.tab();
+      expect(screen.getByRole("button", { name: "Sign out" })).toHaveFocus();
+
+      await user.click(
+        screen.getByRole("button", { name: "Technical details" }),
+      );
+      await user.click(
+        screen.getByRole("button", { name: "Copy technical details" }),
+      );
+      await waitFor(() =>
+        expect(announcementRegion("polite")).toHaveTextContent(
+          "Technical details copied.",
+        ),
+      );
+      expect(announcementRegion("assertive")).toBeEmptyDOMElement();
+    },
+  );
+
+  it("tears down an entered secret when reconciliation discovers a replacement security context", async () => {
+    const user = userEvent.setup();
+    const firstCode = mfaCodeFixture();
+    const replacementCode = mfaCodeFixture();
+    let replacement = false;
+    let posts = 0;
+    let replacementWire = false;
+    renderEntry(
+      http.get("/api/v1/auth/session", () => {
+        const identity = replacement
+          ? { accountId: "account-b", challengeId: "challenge-b" }
+          : { accountId: "account-a", challengeId: "challenge-a" };
+        return HttpResponse.json(
+          {
+            data: {
+              type: "auth-sessions",
+              id: identity.accountId,
+              attributes: {
+                stage: "mfa",
+                mfa_challenge_id: identity.challengeId,
+                idle_expires_at: "2026-09-27T10:30:00.000000Z",
+                absolute_expires_at: "2026-09-27T22:00:00.000000Z",
+              },
+            },
+          },
+          { headers: { "Content-Type": mediaType } },
+        );
+      }),
+      http.post("/api/v1/auth/mfa-challenges/challenge-a/verifications", () => {
+        posts++;
+        replacement = true;
+        return HttpResponse.error();
+      }),
+      http.post(
+        "/api/v1/auth/mfa-challenges/challenge-b/verifications",
+        async ({ request }) => {
+          posts++;
+          replacementWire =
+            fingerprint(await request.text()) ===
+            fingerprint(
+              JSON.stringify({
+                data: {
+                  type: "mfa-verifications",
+                  attributes: { code: replacementCode },
+                },
+              }),
+            );
+          return HttpResponse.json(
+            {
+              errors: [{ status: "422", code: "auth_invalid_mfa_code" }],
+            },
+            { status: 422, headers: { "Content-Type": mediaType } },
+          );
+        },
+      ),
+    );
+    document.cookie = `mia_csrf=${crypto.randomUUID()}; Path=/`;
+    const firstInput = await screen.findByLabelText<HTMLInputElement>(
+      "Six-digit code (required)",
+    );
+    await user.type(firstInput, firstCode);
+    await user.click(screen.getByRole("button", { name: "Verify code" }));
+
+    await waitFor(() => expect(firstInput).not.toBeInTheDocument());
+    const replacementInput = screen.getByLabelText<HTMLInputElement>(
+      "Six-digit code (required)",
+    );
+    expect(replacementInput).toHaveValue("");
+    await user.click(screen.getByRole("button", { name: "Verify code" }));
+    expect(posts).toBe(1);
+
+    await user.type(replacementInput, replacementCode);
+    await user.keyboard("{Enter}");
+    await screen.findByText(/That six-digit code was not accepted\./u);
+    expect({ posts, replacementWire }).toEqual({
+      posts: 2,
+      replacementWire: true,
+    });
+  });
+
+  it("chains MFA completion through the authenticated capability gate", async () => {
+    const user = userEvent.setup();
+    let capabilities = 0;
+    let posts = 0;
+    renderEntry(
+      sessionHandler("mfa"),
+      http.post(
+        "/api/v1/auth/mfa-challenges/challenge-id/verifications",
+        () => {
+          posts++;
+          return HttpResponse.json(
+            {
+              data: {
+                type: "auth-sessions",
+                id: "account-id",
+                attributes: {
+                  stage: "authenticated",
+                  idle_expires_at: "2026-09-30T10:30:00.000000Z",
+                  absolute_expires_at: "2026-09-30T22:00:00.000000Z",
+                },
+              },
+            },
+            { headers: { "Content-Type": mediaType } },
+          );
+        },
+      ),
+      http.get("/api/v1/users/me/capabilities", async () => {
+        capabilities++;
+        await delay(20);
+        return HttpResponse.json(capabilityDocument(), {
+          headers: { "Content-Type": mediaType },
+        });
+      }),
+    );
+    document.cookie = `mia_csrf=${crypto.randomUUID()}; Path=/`;
+    await user.type(
+      await screen.findByLabelText("Six-digit code (required)"),
+      mfaCodeFixture(),
+    );
+    await user.click(screen.getByRole("button", { name: "Verify code" }));
+
+    expect(
+      await screen.findByRole("heading", { name: "Checking access" }),
+    ).toBeInTheDocument();
+    expect(screen.queryByRole("heading", { name: "Home" })).toBeNull();
+    expect(
+      await screen.findByRole("heading", { name: "Home" }),
+    ).toBeInTheDocument();
+    expect({ capabilities, posts }).toEqual({ capabilities: 1, posts: 1 });
+  });
+
+  it("keeps the MFA surface method-neutral, isolated, and free of Resend", async () => {
+    const user = userEvent.setup();
+    renderEntry(sessionHandler("mfa"));
+    const challengeInput = await screen.findByLabelText<HTMLInputElement>(
+      "Six-digit code (required)",
+    );
+    expect(challengeInput).toHaveAttribute("autocomplete", "one-time-code");
+    await user.type(challengeInput, mfaCodeFixture());
+    await user.click(
+      screen.getByRole("button", { name: "Use a recovery code instead" }),
+    );
+    expect(
+      screen.getByLabelText<HTMLInputElement>("Recovery code (required)").value,
+    ).toBe("");
+    expect(challengeInput).not.toBeInTheDocument();
+    expect(screen.queryByText(/resend/iu)).toBeNull();
+    expect(screen.queryByRole("navigation")).toBeNull();
+    expect(screen.queryByText("Home")).toBeNull();
+    expect(screen.getAllByRole("textbox")).toHaveLength(1);
+  });
 
   it.each([
     ["anonymous", anonymousHandler(), "Sign in to MIA"],
@@ -624,6 +1041,25 @@ describe("localized anonymous entry", () => {
         expect(request.headers.get("X-CSRF-Token") === csrfToken).toBe(true);
         return delay(30).then(() => new HttpResponse(null, { status: 204 }));
       }),
+      http.post("/api/v1/auth/mfa-challenges/challenge-id/verifications", () =>
+        HttpResponse.json(
+          {
+            errors: [{ status: "422", code: "auth_mfa_challenge_expired" }],
+          },
+          { status: 422, headers: { "Content-Type": mediaType } },
+        ),
+      ),
+    );
+
+    await user.type(
+      await screen.findByLabelText("Six-digit code (required)"),
+      mfaCodeFixture(),
+    );
+    await user.click(screen.getByRole("button", { name: "Verify code" }));
+    await waitFor(() =>
+      expect(announcementRegion("assertive")).toHaveTextContent(
+        "no longer valid",
+      ),
     );
 
     const logout = await screen.findByRole("button", { name: "Sign out" });
@@ -643,9 +1079,103 @@ describe("localized anonymous entry", () => {
       screen.queryByText("Additional verification is required"),
     ).toBeNull();
     expect(window.location.pathname).toBe("/login");
+    expect(announcementRegion("assertive")).toBeEmptyDOMElement();
+    await user.selectOptions(screen.getByLabelText("Language"), "de-DE");
+    await waitFor(() =>
+      expect(announcementRegion("polite")).toHaveTextContent(
+        "Die Oberflächensprache wurde geändert.",
+      ),
+    );
+    expect(announcementRegion("assertive")).toBeEmptyDOMElement();
     expect(logoutCount).toBe(1);
     expect(discoveryCount).toBe(2);
   });
+
+  it.each(["success", "failure"] as const)(
+    "ignores deferred clipboard %s feedback after MFA teardown",
+    async (outcome) => {
+      const user = userEvent.setup();
+      const clipboard = deferredVoid();
+      vi.spyOn(navigator.clipboard, "writeText").mockReturnValue(
+        clipboard.promise,
+      );
+      let signedOut = false;
+      document.cookie = `mia_csrf=${crypto.randomUUID()}; Path=/`;
+      renderEntry(
+        http.get("/api/v1/auth/session", () =>
+          signedOut
+            ? HttpResponse.json(
+                { data: null, meta: { stage: "anonymous" } },
+                { headers: { "Content-Type": mediaType } },
+              )
+            : HttpResponse.json(
+                {
+                  data: {
+                    type: "auth-sessions",
+                    id: "account-id",
+                    attributes: {
+                      stage: "mfa",
+                      mfa_challenge_id: "challenge-id",
+                      idle_expires_at: "2026-09-27T10:30:00.000000Z",
+                      absolute_expires_at: "2026-09-27T22:00:00.000000Z",
+                    },
+                  },
+                },
+                { headers: { "Content-Type": mediaType } },
+              ),
+        ),
+        http.post(
+          "/api/v1/auth/mfa-challenges/challenge-id/verifications",
+          () =>
+            HttpResponse.json(
+              {
+                errors: [{ status: "422", code: "auth_mfa_challenge_expired" }],
+              },
+              { status: 422, headers: { "Content-Type": mediaType } },
+            ),
+        ),
+        http.post("/api/v1/auth/logout", () => {
+          signedOut = true;
+          return new HttpResponse(null, { status: 204 });
+        }),
+      );
+      await user.type(
+        await screen.findByLabelText("Six-digit code (required)"),
+        mfaCodeFixture(),
+      );
+      await user.click(screen.getByRole("button", { name: "Verify code" }));
+      await user.click(
+        await screen.findByRole("button", { name: "Technical details" }),
+      );
+      await user.click(
+        screen.getByRole("button", { name: "Copy technical details" }),
+      );
+
+      await user.click(screen.getByRole("button", { name: "Sign out" }));
+      await screen.findByRole("heading", { name: "Sign in to MIA" });
+      await user.selectOptions(screen.getByLabelText("Language"), "de-DE");
+      await waitFor(() =>
+        expect(announcementRegion("polite")).toHaveTextContent(
+          "Die Oberflächensprache wurde geändert.",
+        ),
+      );
+
+      await act(async () => {
+        if (outcome === "success") clipboard.resolve();
+        else clipboard.reject(new Error("Clipboard access denied."));
+        await clipboard.promise.catch(() => undefined);
+      });
+
+      expect(announcementRegion("polite")).toHaveTextContent(
+        "Die Oberflächensprache wurde geändert.",
+      );
+      expect(announcementRegion("assertive")).toBeEmptyDOMElement();
+      expect(document.body).not.toHaveTextContent("Technical details copied.");
+      expect(document.body).not.toHaveTextContent(
+        "Technical details could not be copied.",
+      );
+    },
+  );
 
   it("does not replay a failed logout and offers an explicit retry", async () => {
     const user = userEvent.setup();
