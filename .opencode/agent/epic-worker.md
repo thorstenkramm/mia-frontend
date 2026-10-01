@@ -3,7 +3,8 @@ description: >-
   Implements exactly one MIA frontend story via bmad-build on GPT-5.6 Sol.
   Supports implement, fix, and commit modes. Dispatched by epic-solver only.
 mode: subagent
-model: openai/gpt-5.6-sol
+#model: openai/gpt-5.6-sol
+model: anthropic/claude-opus-5-5
 ---
 
 # Epic Worker
