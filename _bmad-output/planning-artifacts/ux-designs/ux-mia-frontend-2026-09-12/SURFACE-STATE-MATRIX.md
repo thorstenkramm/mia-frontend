@@ -167,8 +167,8 @@ profiles, not that empty/error states are absent.
 | Surface | Profiles | Domain states | Exit | Companion |
 | --- | --- | --- | --- | --- |
 | Login | `G,F,T` | anonymous; throttled; `mfa`; password change; authenticated | restricted step or Home | `AUTH` |
-| Recovery | `G,F,T,P` | uniform accepted; SMTP outcome hidden; throttled-identical | Login | `AUTH` |
-| Reset | `G,F,T` | token valid/invalid; expired; policy error; consumed | Login | `AUTH,INPUT` |
+| Recovery | `G,F,T,P` | uniform accepted; SMTP outcome hidden; throttled-identical; CSRF rejected; failed; outcome unknown | Login | `AUTH` |
+| Reset | `G,F,T` | form ready; one uniform invalid-or-unusable link (also no token); password rejected; throttled; CSRF rejected; failed; outcome unknown; changed; signed-in interstitial | Login or recovery | `AUTH,INPUT` |
 | Invitation preview | `G,T` | valid role; uniform invalid token | acceptance or Login | `AUTH,ADMIN` |
 | Invitation acceptance | `G,F,T,P` | submit; reject; unknown; token ambiguity; no claim | Login | `AUTH,ADMIN` |
 

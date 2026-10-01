@@ -1,6 +1,7 @@
 // Tailwind Plus: Application UI > Forms > Sign-in and Registration > Simple card
 // Library version: 2026-09-13-083323, v4 React light. MIA uses username, adds reveal
-// and outcome disclosure, and omits social login, registration, and remember-me.
+// and outcome disclosure, keeps the "Forgot password?" link for staff recovery, and
+// omits social login, registration, and remember-me.
 import {
   useActionState,
   useLayoutEffect,
@@ -9,6 +10,7 @@ import {
   type RefObject,
 } from "react";
 import { useIntl } from "react-intl";
+import { Link } from "react-router";
 import {
   useAuthenticationBootstrapState,
   useSessionActions,
@@ -246,6 +248,16 @@ function PasswordSignInFields({
           {intl.formatMessage(messages.loginRecheck)}
         </button>
       ) : null}
+      {/* The card's "Forgot password?" link, placed after submission so the
+          credential, reveal, and submit focus order stays unchanged. */}
+      <p className="text-sm/6">
+        <Link
+          to="/login/recovery"
+          className="inline-block min-h-6 font-semibold text-indigo-600 hover:text-indigo-500 focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-indigo-600"
+        >
+          {intl.formatMessage(messages.loginForgotPassword)}
+        </Link>
+      </p>
     </form>
   );
 }

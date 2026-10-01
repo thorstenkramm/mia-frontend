@@ -15,7 +15,10 @@ import {
   getCurrentAccountCapabilities,
   logoutCurrentBrowser,
   loginWithPassword,
+  requestPasswordRecovery,
+  resetPassword,
   verifyMfaChallenge,
+  type PasswordResetToken,
 } from "./entry";
 
 function jsonApiResponse(body: unknown): HttpResponse {
@@ -303,6 +306,96 @@ describe("entry API boundary", () => {
     },
   );
 
+  it("sends one exact recovery request with current CSRF and accepts only 204", async () => {
+    const username = ` Example.${crypto.randomUUID()} `;
+    const csrf = crypto.randomUUID();
+    let exactWire = false;
+    let posts = 0;
+    server.use(
+      http.post(
+        "/api/v1/auth/password-recovery-requests",
+        async ({ request }) => {
+          posts++;
+          exactWire =
+            (await request.text()) ===
+              JSON.stringify({
+                data: {
+                  type: "password-recovery-requests",
+                  attributes: { username },
+                },
+              }) &&
+            request.headers.get("X-CSRF-Token") === csrf &&
+            request.headers.get("Content-Type") === jsonApiMediaType &&
+            request.headers.get("Accept") === jsonApiMediaType;
+          return new HttpResponse(null, { status: 204 });
+        },
+      ),
+    );
+    await requestPasswordRecovery(username, csrf);
+    expect({ exactWire, posts }).toEqual({ exactWire: true, posts: 1 });
+  });
+
+  it("sends one exact reset document and treats a non-204 success as malformed", async () => {
+    const token = crypto.randomUUID() as PasswordResetToken;
+    const password = ` ${crypto.randomUUID()} e\u0301 `;
+    const csrf = crypto.randomUUID();
+    let exactWire = false;
+    let posts = 0;
+    let status = 204;
+    server.use(
+      http.post("/api/v1/auth/password-resets", async ({ request }) => {
+        posts++;
+        exactWire =
+          (await request.text()) ===
+            JSON.stringify({
+              data: {
+                type: "password-resets",
+                attributes: {
+                  token,
+                  password,
+                  password_confirmation: password,
+                },
+              },
+            }) && request.headers.get("X-CSRF-Token") === csrf;
+        return new HttpResponse(null, { status });
+      }),
+    );
+    await resetPassword(token, password, password, csrf);
+    expect({ exactWire, posts }).toEqual({ exactWire: true, posts: 1 });
+
+    status = 200;
+    await expect(
+      resetPassword(token, password, password, csrf),
+    ).rejects.toBeInstanceOf(ApiProtocolError);
+    expect(posts).toBe(2);
+  });
+
+  it("keeps an exact reset 429 disclosure and its integer Retry-After", async () => {
+    const raw = `controlled ${crypto.randomUUID()}`;
+    server.use(
+      http.post(
+        "/api/v1/auth/password-resets",
+        () =>
+          new HttpResponse(raw, {
+            status: 429,
+            headers: { "Retry-After": "42" },
+          }),
+      ),
+    );
+    const password = crypto.randomUUID();
+    const result = await resetPassword(
+      crypto.randomUUID() as PasswordResetToken,
+      password,
+      password,
+      crypto.randomUUID(),
+    ).catch((error: unknown) => error);
+    expect(
+      result instanceof ApiHttpError &&
+        result.disclosure.body === raw &&
+        result.retryAfterSeconds === 42,
+    ).toBe(true);
+  });
+
   it("rejects anonymous password-change success as ambiguous", async () => {
     server.use(
       http.post("/api/v1/auth/password-changes", () =>
@@ -319,7 +412,7 @@ describe("entry API boundary", () => {
     null,
     "-1",
     "1.5",
-    "Wed, 30 Sep 2026 12:00:00 GMT",
+    "not an HTTP date",
     "9007199254740992",
     "60",
     "0",
@@ -351,6 +444,30 @@ describe("entry API boundary", () => {
       );
     },
   );
+
+  it("accepts an HTTP-date Retry-After value", async () => {
+    const retryAt = new Date(Date.now() + 60_000).toUTCString();
+    server.use(
+      http.post(
+        "/api/v1/auth/login",
+        () =>
+          new HttpResponse("", {
+            status: 429,
+            headers: { "Retry-After": retryAt },
+          }),
+      ),
+    );
+    const error = await loginWithPassword(
+      "example",
+      crypto.randomUUID(),
+      crypto.randomUUID(),
+    ).catch((reason: unknown) => reason);
+    if (!(error instanceof ApiHttpError))
+      throw new Error("Expected HTTP failure");
+    expect(
+      error.retryAfterSeconds === 59 || error.retryAfterSeconds === 60,
+    ).toBe(true);
+  });
 
   it("rejects anonymous login success as ambiguous", async () => {
     server.use(

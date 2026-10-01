@@ -115,7 +115,13 @@ After capture, tokens never enter the live address, application-controlled curre
 caches, global state, browser storage, titles, referrers, errors, logs, clipboard helpers, or test reports. Departure,
 cancel, first-byte dispatch, timeout after dispatch, and auth change drop the sole application-reachable reference. A
 definitive pre-dispatch failure retains it only in the active route so the user may explicitly retry an acceptance that
-made no server attempt. An unsafe request is never automatically replayed with the token. The bootstrap minimizes
+made no server attempt. An unsafe request is never automatically replayed with the token. For password reset at
+`/password-reset`, the 2026-10-01 Story 1-6 decision in `BACKEND-CONTRACT-GAPS.md` §BCG-001 also retains the token
+after definitive `422 auth_invalid_password`, `429`, and `csrf_invalid` results so the user may deliberately resubmit.
+It drops the token on success, `auth_invalid_reset_token`, a generic definitive `400`, `406`, `413`, or `415` rejection
+(Decision 7, 2026-10-01), outcome unknown, departure, and auth change. Departure also ends any attempt still waiting
+to dispatch, so it is never sent. A link opened
+while signed in keeps the token in memory only through the explicit sign-out interstitial. The bootstrap minimizes
 exposure but cannot erase pre-script browser history, sync, screenshots, crash metadata, or other browser-owned
 artifacts that may already have observed the initial URL.
 

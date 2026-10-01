@@ -16,10 +16,17 @@ export function SimpleEntrySurface({
 }) {
   const intl = useIntl();
   const headingRef = useRef<HTMLHeadingElement>(null);
+  const mainRef = useRef<HTMLElement>(null);
   const location = useLocation();
 
   useEffect(() => {
-    headingRef.current?.focus({ preventScroll: true });
+    const heading = headingRef.current;
+    if (heading === null) return;
+    heading.focus({ preventScroll: true });
+    // A heading that changes in place (a result replacing a form) may sit above
+    // the scrolled viewport; reveal it so focus is never off-screen.
+    if (heading.getBoundingClientRect().bottom < 0)
+      heading.scrollIntoView({ block: "nearest" });
   }, [location.pathname, headingMessage.id]);
 
   return (
@@ -28,10 +35,21 @@ export function SimpleEntrySurface({
       <a
         className="sr-only focus:absolute focus:top-4 focus:left-4 focus:z-10 focus:rounded-md focus:bg-white focus:px-3 focus:py-2 focus:text-sm focus:font-semibold focus:text-gray-900 focus:shadow-xs focus:outline-2 focus:outline-offset-2 focus:outline-indigo-600"
         href="#main-content"
+        onClick={(event) => {
+          // Move focus without a fragment: no history entry, and a reset page
+          // never mistakes the bypass for a newly pasted link.
+          event.preventDefault();
+          mainRef.current?.focus();
+        }}
       >
         {intl.formatMessage(messages.skipLink)}
       </a>
-      <main id="main-content" className="min-h-screen bg-gray-50" tabIndex={-1}>
+      <main
+        ref={mainRef}
+        id="main-content"
+        className="min-h-screen bg-gray-50"
+        tabIndex={-1}
+      >
         {/* Tailwind Plus: Application UI > Forms > Sign-in and Registration > Simple card */}
         {/* Library version: 2026-09-13-083323. MIA removes remote branding and credentials. */}
         <div className="flex min-h-screen flex-col justify-center break-words px-4 py-12 sm:px-6 lg:px-8">

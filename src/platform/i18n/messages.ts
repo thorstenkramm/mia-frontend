@@ -465,6 +465,151 @@ export const messages = defineMessages({
     defaultMessage:
       "Copying is unavailable. Select and copy the response text manually.",
   },
+  loginForgotPassword: {
+    id: "login.forgotPassword",
+    defaultMessage: "Forgot your password?",
+  },
+  recoveryPageTitle: {
+    id: "entry.recovery.pageTitle",
+    defaultMessage: "Recover access | MIA",
+  },
+  recoveryHeading: {
+    id: "entry.recovery.heading",
+    defaultMessage: "Recover access",
+  },
+  recoveryIntroduction: {
+    id: "entry.recovery.introduction",
+    defaultMessage:
+      "Staff accounts: enter your username, and MIA emails a password-reset link to the verified address of an eligible account. Students: ask your supervisor to set a temporary password.",
+  },
+  recoverySubmit: {
+    id: "entry.recovery.submit",
+    defaultMessage: "Send reset link",
+  },
+  recoverySendAgain: {
+    id: "entry.recovery.sendAgain",
+    defaultMessage: "Send again",
+  },
+  recoverySubmitting: {
+    id: "entry.recovery.submitting",
+    defaultMessage: "Sending your request…",
+  },
+  recoveryAcceptedHeading: {
+    id: "entry.recovery.accepted.heading",
+    defaultMessage: "Check your email",
+  },
+  recoveryAccepted: {
+    id: "entry.recovery.accepted",
+    defaultMessage:
+      "If an eligible account exists, we've sent an email with a password-reset link. Any link expires 30 minutes after it is sent.",
+  },
+  recoveryCsrfRejected: {
+    id: "entry.recovery.csrfRejected",
+    defaultMessage:
+      "The security check for this page expired. Send the request again.",
+  },
+  recoveryUnknown: {
+    id: "entry.recovery.unknown",
+    defaultMessage:
+      "We couldn't confirm your request. An email may still arrive, so check your email before sending again.",
+  },
+  authRequestFailed: {
+    id: "entry.authRequest.failed",
+    defaultMessage: "Your request couldn't be processed. Try again later.",
+  },
+  backToSignIn: {
+    id: "entry.backToSignIn",
+    defaultMessage: "Back to sign-in",
+  },
+  resetPageTitle: {
+    id: "entry.reset.pageTitle",
+    defaultMessage: "Reset password | MIA",
+  },
+  resetHeading: {
+    id: "entry.reset.heading",
+    defaultMessage: "Reset password",
+  },
+  resetIntroduction: {
+    id: "entry.reset.introduction",
+    defaultMessage: "Choose a new password for your account.",
+  },
+  resetSubmit: {
+    id: "entry.reset.submit",
+    defaultMessage: "Change password",
+  },
+  resetSubmitting: {
+    id: "entry.reset.submitting",
+    defaultMessage: "Changing your password…",
+  },
+  resetThrottled: {
+    id: "entry.reset.throttled",
+    defaultMessage: "Too many attempts. Try again later.",
+  },
+  resetCsrfRejected: {
+    id: "entry.reset.csrfRejected",
+    defaultMessage:
+      "The security check for this page expired. Enter your new password again and submit it.",
+  },
+  resetLinkUnusableHeading: {
+    id: "entry.reset.linkUnusable.heading",
+    defaultMessage: "This link is invalid or no longer usable",
+  },
+  resetLinkUnusable: {
+    id: "entry.reset.linkUnusable",
+    defaultMessage: "Request a new password-reset link, or go back to sign-in.",
+  },
+  resetRequestNewLink: {
+    id: "entry.reset.requestNewLink",
+    defaultMessage: "Request a new link",
+  },
+  resetUnknownHeading: {
+    id: "entry.reset.unknown.heading",
+    defaultMessage: "Password change not confirmed",
+  },
+  resetUnknown: {
+    id: "entry.reset.unknown",
+    defaultMessage:
+      "We couldn't confirm whether your password was changed. Try signing in with your new password. If that doesn't work, request a new link.",
+  },
+  resetTrySignIn: {
+    id: "entry.reset.trySignIn",
+    defaultMessage: "Try signing in with your new password",
+  },
+  resetChangedHeading: {
+    id: "entry.reset.changed.heading",
+    defaultMessage: "Your password has been changed.",
+  },
+  resetChangedMfa: {
+    id: "entry.reset.changed.mfa",
+    defaultMessage:
+      "If you use multi-factor authentication, it remains enabled.",
+  },
+  resetChangedOtherBrowsers: {
+    id: "entry.reset.changed.otherBrowsers",
+    defaultMessage:
+      "Other browsers where you are signed in are not signed out automatically. Those sign-ins expire on their own.",
+  },
+  resetSignedInIntroduction: {
+    id: "entry.reset.signedIn.introduction",
+    defaultMessage:
+      "You're currently signed in. To reset a password with this link, sign out first.",
+  },
+  resetSignOutAndContinue: {
+    id: "entry.reset.signOutAndContinue",
+    defaultMessage: "Sign out and continue",
+  },
+  resetGoBack: {
+    id: "entry.reset.goBack",
+    defaultMessage: "Go back",
+  },
+  resetSignedOut: {
+    id: "entry.reset.signedOut",
+    defaultMessage: "Signed out. You can now choose a new password.",
+  },
+  resetRejectedHeading: {
+    id: "entry.reset.rejected.heading",
+    defaultMessage: "Password not changed",
+  },
 });
 
 export type MessageId = (typeof messages)[keyof typeof messages]["id"];

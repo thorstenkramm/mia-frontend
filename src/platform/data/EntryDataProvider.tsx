@@ -27,18 +27,21 @@ type EntryDataProviderProps = {
   children: ReactNode;
   queryClient?: QueryClient;
   sessionController?: SessionController;
+  deferCapabilityGate?: boolean;
 };
 
 export function EntryDataProvider({
   children,
   queryClient: suppliedQueryClient,
   sessionController,
+  deferCapabilityGate = false,
 }: EntryDataProviderProps) {
   const [ownedQueryClient] = useState(createEntryQueryClient);
   const queryClient = suppliedQueryClient ?? ownedQueryClient;
   return (
     <QueryClientProvider client={queryClient}>
       <SessionProvider
+        deferCapabilityGate={deferCapabilityGate}
         {...(sessionController ? { controller: sessionController } : {})}
       >
         {children}

@@ -24,11 +24,7 @@ export class ApiHttpError extends Error {
     super(`MIA API request failed with HTTP status ${disclosure.status}.`);
     this.name = "ApiHttpError";
     this.disclosure = disclosure;
-    const seconds =
-      retryAfter !== null && /^\d+$/u.test(retryAfter)
-        ? Number(retryAfter)
-        : NaN;
-    this.retryAfterSeconds = Number.isSafeInteger(seconds) ? seconds : null;
+    this.retryAfterSeconds = parseRetryAfter(retryAfter);
 
     let parsedBody: unknown;
     try {
@@ -39,6 +35,23 @@ export class ApiHttpError extends Error {
     const parsedError = errorCodeSchema.safeParse(parsedBody);
     this.code = parsedError.success ? parsedError.data.errors[0].code : null;
   }
+}
+
+function parseRetryAfter(value: string | null): number | null {
+  if (value === null) return null;
+  if (/^\d+$/u.test(value)) {
+    const seconds = Number(value);
+    return Number.isSafeInteger(seconds) ? seconds : null;
+  }
+  if (
+    !/^[A-Z][a-z]{2}, \d{2} [A-Z][a-z]{2} \d{4} \d{2}:\d{2}:\d{2} GMT$/u.test(
+      value,
+    )
+  )
+    return null;
+  const date = Date.parse(value);
+  if (Number.isNaN(date)) return null;
+  return Math.max(0, Math.ceil((date - Date.now()) / 1000));
 }
 
 export class ApiProtocolError extends Error {

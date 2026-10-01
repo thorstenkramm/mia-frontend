@@ -75,12 +75,16 @@ unknown mutation outcome remains on its owning route without success copy until 
 
 ### Reset
 
-- Path: `/reset#token=<token>` on entry, synchronously normalized to `/reset`.
+- Path: `/password-reset#token=<token>` on entry, synchronously normalized to `/password-reset`. This is the path the
+  backend emails (Story 1-6 decision, `BACKEND-CONTRACT-GAPS.md` §BCG-001).
 - Parent: `/login`
 - Title: `Reset password`
 - H1 purpose: replace a password using the captured reset token.
-- Gate: `Public + Token(reset)`.
-- Fallback: `/login` after success, consumed token, invalid token, expiry, or route-local token loss.
+- Gate: `Public + Token(reset)`. A link opened in stage `mfa`, `password-change`, or `authenticated` shows only the
+  focused sign-out-first interstitial on this path; Go back drops the token and dispatches to the current stage.
+- Fallback: no automatic redirect. Success stays on `/password-reset` with an explicit Sign in action to `/login`. The
+  one uniform invalid-or-unusable result, shared by every unusable token and by a missing or lost token, offers
+  `/login/recovery` and `/login`. Outcome unknown offers `/login` and `/login/recovery`.
 
 ### Invitation Preview
 

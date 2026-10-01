@@ -483,7 +483,8 @@ change and cannot enter release one as an implementation convenience.
 
 Before application rendering or optional script loading, synchronous bootstrap reads an invitation or reset fragment at
 most once and removes every known, unknown, malformed, or duplicate fragment with `history.replaceState`. A canonical
-valid token survives only in one ephemeral flow object. Passwords, temporary passwords, MFA values, TOTP provisioning
+valid token survives only in one ephemeral flow object. Reset links use the backend's emailed
+`/password-reset#token=<uuid>` path, normalized to `/password-reset`. Passwords, temporary passwords, MFA values, TOTP provisioning
 URIs, recovery codes, and MFA-management proofs stay outside URLs, normalized caches, global state, form restoration,
 instrumentation, and diagnostics. TOTP data follows the correctable-failure retention rule in Accessibility; all
 teardown detail belongs to `SECURITY-PRIVACY-ACCEPTANCE.md`.

@@ -13,6 +13,19 @@ import {
   readTextSize,
   type TextSize,
 } from "./platform/prefs/preferences";
+import {
+  capturePasswordResetLink,
+  reloadOnLateResetFragment,
+} from "./platform/session/passwordResetLink";
+
+// The first application instruction: capture and strip a reset-link fragment
+// before any render, router start, request, or diagnostic can observe it.
+const passwordResetLink = capturePasswordResetLink(
+  window.location,
+  window.history,
+);
+// Lives as long as the document; it never reads or retains a fragment itself.
+reloadOnLateResetFragment(window);
 
 const rootElement = document.getElementById("root");
 
@@ -29,7 +42,10 @@ createRoot(rootElement).render(
   <StrictMode>
     <AnnouncementProvider>
       <MiaIntlProvider initialLocale={initialLocale}>
-        <App initialTextSize={initialTextSize} />
+        <App
+          initialTextSize={initialTextSize}
+          passwordResetLink={passwordResetLink}
+        />
       </MiaIntlProvider>
     </AnnouncementProvider>
   </StrictMode>,

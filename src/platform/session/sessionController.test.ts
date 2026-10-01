@@ -3,6 +3,7 @@ import { http, HttpResponse } from "msw";
 import { afterEach, describe, expect, it, vi } from "vitest";
 import { installTestOriginLocks } from "../../../test/originLocks";
 import { server } from "../../../test/server";
+import { capturePasswordResetLink } from "./passwordResetLink";
 import { SessionController } from "./sessionController";
 
 const mediaType = "application/vnd.api+json";
@@ -1714,6 +1715,290 @@ describe("SessionController required password replacement", () => {
       origin: "password-change",
       phase: "reconciliation failed",
     });
+    controller.stop();
+  });
+});
+
+describe("SessionController public recovery and reset", () => {
+  async function startAnonymous(controller: SessionController) {
+    controller.start();
+    await waitFor(() =>
+      expect(controller.getSnapshot().kind).toBe("Signed out"),
+    );
+  }
+
+  it("discovers anonymous CSRF when none is readable, then dispatches recovery once", async () => {
+    const controller = new SessionController();
+    const csrf = crypto.randomUUID();
+    let reads = 0;
+    let posts = 0;
+    let csrfAtDispatch: string | null = null;
+    server.use(
+      http.get("/api/v1/auth/session", () => {
+        reads++;
+        if (reads === 2) document.cookie = `mia_csrf=${csrf}; Path=/`;
+        return anonymousSession();
+      }),
+      http.post("/api/v1/auth/password-recovery-requests", ({ request }) => {
+        posts++;
+        csrfAtDispatch = request.headers.get("X-CSRF-Token");
+        return new HttpResponse(null, { status: 204 });
+      }),
+    );
+    await startAnonymous(controller);
+
+    expect(
+      await controller.requestPasswordRecovery("example.user", () => true),
+    ).toEqual({
+      kind: "completed",
+    });
+    expect({ reads, posts, csrfAtDispatch }).toEqual({
+      reads: 2,
+      posts: 1,
+      csrfAtDispatch: csrf,
+    });
+    controller.stop();
+  });
+
+  it("rediscovers CSRF after csrf_invalid and never replays the request", async () => {
+    const controller = new SessionController();
+    let reads = 0;
+    let posts = 0;
+    server.use(
+      http.get("/api/v1/auth/session", () => {
+        reads++;
+        return anonymousSession();
+      }),
+      http.post("/api/v1/auth/password-resets", () => {
+        posts++;
+        return errorDocument(403, "csrf_invalid");
+      }),
+    );
+    document.cookie = `mia_csrf=${crypto.randomUUID()}; Path=/`;
+    await startAnonymous(controller);
+    const password = crypto.randomUUID();
+
+    const result = await controller.resetPassword(
+      crypto.randomUUID() as Parameters<SessionController["resetPassword"]>[0],
+      password,
+      password,
+      () => true,
+    );
+
+    expect(result.kind).toBe("csrf-rejected");
+    expect({ reads, posts }).toEqual({ reads: 2, posts: 1 });
+    expect(controller.getSnapshot().kind).toBe("Signed out");
+    controller.stop();
+  });
+
+  it.each([
+    [500, "unknown"],
+    [422, "rejected"],
+    [429, "rejected"],
+  ] as const)(
+    "classifies HTTP %s as %s after exactly one dispatch",
+    async (status, kind) => {
+      const controller = new SessionController();
+      let posts = 0;
+      server.use(
+        http.get("/api/v1/auth/session", () => anonymousSession()),
+        http.post("/api/v1/auth/password-recovery-requests", () => {
+          posts++;
+          return errorDocument(status, "controlled");
+        }),
+      );
+      document.cookie = `mia_csrf=${crypto.randomUUID()}; Path=/`;
+      await startAnonymous(controller);
+
+      expect(
+        (await controller.requestPasswordRecovery("example", () => true)).kind,
+      ).toBe(kind);
+      expect(posts).toBe(1);
+      controller.stop();
+    },
+  );
+
+  it("treats transport loss after dispatch as unknown without replay", async () => {
+    const controller = new SessionController();
+    let posts = 0;
+    server.use(
+      http.get("/api/v1/auth/session", () => anonymousSession()),
+      http.post("/api/v1/auth/password-recovery-requests", () => {
+        posts++;
+        return HttpResponse.error();
+      }),
+    );
+    document.cookie = `mia_csrf=${crypto.randomUUID()}; Path=/`;
+    await startAnonymous(controller);
+
+    expect(
+      (await controller.requestPasswordRecovery("example", () => true)).kind,
+    ).toBe("unknown");
+    expect(posts).toBe(1);
+    controller.stop();
+  });
+
+  it("sends nothing outside an anonymous stage and follows a peer's new stage", async () => {
+    const controller = new SessionController();
+    let posts = 0;
+    let stage: "anonymous" | "authenticated" = "authenticated";
+    server.use(
+      http.get("/api/v1/auth/session", () =>
+        stage === "anonymous"
+          ? anonymousSession()
+          : stageSession("authenticated"),
+      ),
+      http.get("/api/v1/users/me/capabilities", () => capabilitiesFor()),
+      http.post("/api/v1/auth/password-recovery-requests", () => {
+        posts++;
+        return new HttpResponse(null, { status: 204 });
+      }),
+    );
+    controller.start();
+    await waitFor(() =>
+      expect(controller.getSnapshot().kind).toBe("Authenticated"),
+    );
+    expect(
+      (await controller.requestPasswordRecovery("example", () => true)).kind,
+    ).toBe("superseded");
+
+    controller.stop();
+    stage = "anonymous";
+    await startAnonymous(controller);
+    // No readable CSRF cookie: discovery now reports a peer's sign-in.
+    stage = "authenticated";
+    expect(
+      (await controller.requestPasswordRecovery("example", () => true)).kind,
+    ).toBe("superseded");
+    await waitFor(() =>
+      expect(controller.getSnapshot().kind).toBe("Authenticated"),
+    );
+    expect(posts).toBe(0);
+    controller.stop();
+  });
+
+  it("signs out an authenticated stage for a reset link through the logout phases", async () => {
+    const controller = new SessionController();
+    let stage: "anonymous" | "authenticated" = "authenticated";
+    let logouts = 0;
+    let csrfAtLogout: string | null = null;
+    const csrf = crypto.randomUUID();
+    server.use(
+      http.get("/api/v1/auth/session", () => {
+        if (stage === "authenticated")
+          document.cookie = `mia_csrf=${csrf}; Path=/`;
+        return stage === "anonymous"
+          ? anonymousSession()
+          : stageSession("authenticated");
+      }),
+      http.get("/api/v1/users/me/capabilities", () => capabilitiesFor()),
+      http.post("/api/v1/auth/logout", ({ request }) => {
+        logouts++;
+        csrfAtLogout = request.headers.get("X-CSRF-Token");
+        stage = "anonymous";
+        return new HttpResponse(null, { status: 204 });
+      }),
+    );
+    controller.start();
+    await waitFor(() =>
+      expect(controller.getSnapshot().kind).toBe("Authenticated"),
+    );
+    // Recovering CSRF first must accept the authenticated stage.
+    document.cookie = "mia_csrf=; Max-Age=0; Path=/";
+
+    expect(controller.beginResetLinkLogout()).toBe(true);
+    expect(controller.beginResetLinkLogout()).toBe(false);
+    await waitFor(() =>
+      expect(controller.getSnapshot().kind).toBe("Logout confirmed"),
+    );
+    expect({ logouts, csrfAtLogout }).toEqual({
+      logouts: 1,
+      csrfAtLogout: csrf,
+    });
+    controller.stop();
+  });
+
+  it("keeps restricted logout unable to recover CSRF from an authenticated stage", async () => {
+    const controller = new SessionController();
+    let reads = 0;
+    let logouts = 0;
+    server.use(
+      http.get("/api/v1/auth/session", () => {
+        reads++;
+        return reads === 1
+          ? stageSession("password-change")
+          : stageSession("authenticated");
+      }),
+      http.post("/api/v1/auth/logout", () => {
+        logouts++;
+        return new HttpResponse(null, { status: 204 });
+      }),
+    );
+    controller.start();
+    await waitFor(() =>
+      expect(controller.getSnapshot().kind).toBe("Password change"),
+    );
+
+    controller.beginRestrictedLogout();
+    await waitFor(() =>
+      expect(controller.getSnapshot().kind).toBe("Logout unconfirmed"),
+    );
+    expect(logouts).toBe(0);
+    controller.stop();
+  });
+});
+
+describe("SessionController reset attempt lifetime", () => {
+  it("never sends a reset that waited for the coordinator after its route was left", async () => {
+    const controller = new SessionController();
+    let posts = 0;
+    server.use(
+      http.get("/api/v1/auth/session", () => anonymousSession()),
+      http.post("/api/v1/auth/password-resets", () => {
+        posts++;
+        return new HttpResponse(null, { status: 204 });
+      }),
+    );
+    document.cookie = `mia_csrf=${crypto.randomUUID()}; Path=/`;
+    controller.start();
+    await waitFor(() =>
+      expect(controller.getSnapshot().kind).toBe("Signed out"),
+    );
+    window.history.replaceState(
+      null,
+      "",
+      `/password-reset#token=${crypto.randomUUID()}`,
+    );
+    const link = capturePasswordResetLink(window.location, window.history);
+    link.observeSession(controller.getSnapshot());
+    let release: () => void = () => undefined;
+    let held: () => void = () => undefined;
+    const lockHeld = new Promise<void>((resolve) => {
+      held = resolve;
+    });
+    const blocker = navigator.locks.request(
+      "mia-authenticated-requests-v1",
+      { mode: "exclusive" },
+      () =>
+        new Promise<void>((resolve) => {
+          release = resolve;
+          held();
+        }),
+    );
+    await lockHeld;
+    const password = crypto.randomUUID();
+
+    const pending = link.submit(password, password, (...args) =>
+      controller.resetPassword(...args),
+    );
+    expect(link.getSnapshot().kind).toBe("Submitting");
+    link.depart();
+    release();
+    await Promise.all([blocker, pending]);
+
+    expect(posts).toBe(0);
+    expect(link.getSnapshot().kind).toBe("Link unusable");
+    window.history.replaceState(null, "", "/");
     controller.stop();
   });
 });

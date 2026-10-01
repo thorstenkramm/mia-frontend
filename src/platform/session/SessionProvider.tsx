@@ -10,18 +10,24 @@ import {
   SessionController,
   type AuthenticationBootstrapState,
   type MfaRoute,
+  type PublicMutationResult,
 } from "./sessionController";
+import type { PasswordResetToken } from "../api/entry";
 
 const SessionContext = createContext<SessionController | null>(null);
 
 export function SessionProvider({
   children,
   controller: suppliedController,
+  deferCapabilityGate = false,
 }: {
   readonly children: ReactNode;
   readonly controller?: SessionController;
+  readonly deferCapabilityGate?: boolean;
 }) {
-  const [ownedController] = useState(() => new SessionController());
+  const [ownedController] = useState(
+    () => new SessionController({ deferCapabilityGate }),
+  );
   const controller = suppliedController ?? ownedController;
   useEffect(() => {
     controller.start();
@@ -62,9 +68,34 @@ export function useSessionActions(): {
     passwordConfirmation: string,
   ) => Promise<void>;
   readonly recheckPasswordChange: () => Promise<void>;
+  readonly beginResetLinkLogout: () => boolean;
+  readonly continueDeferredAccess: () => Promise<void>;
+  readonly requestPasswordRecovery: (
+    username: string,
+    isCurrent: () => boolean,
+  ) => Promise<PublicMutationResult>;
+  readonly resetPassword: (
+    token: PasswordResetToken,
+    password: string,
+    passwordConfirmation: string,
+    isCurrent: () => boolean,
+    signal: AbortSignal,
+  ) => Promise<PublicMutationResult>;
 } {
   const controller = useSessionController();
   return {
+    beginResetLinkLogout: () => controller.beginResetLinkLogout(),
+    continueDeferredAccess: () => controller.continueDeferredAccess(),
+    requestPasswordRecovery: (username, isCurrent) =>
+      controller.requestPasswordRecovery(username, isCurrent),
+    resetPassword: (token, password, passwordConfirmation, isCurrent, signal) =>
+      controller.resetPassword(
+        token,
+        password,
+        passwordConfirmation,
+        isCurrent,
+        signal,
+      ),
     beginRestrictedLogout: () => controller.beginRestrictedLogout(),
     retryRestrictedLogout: () => controller.retryRestrictedLogout(),
     refreshLogoutStatus: () => controller.refreshLogoutStatus(),

@@ -999,6 +999,279 @@ test.describe("required password replacement", () => {
   });
 });
 
+test.describe("password recovery and token reset", () => {
+  test("strips the reset fragment before any render or request and resets once", async ({
+    page,
+    context,
+  }) => {
+    const token = crypto.randomUUID();
+    const password = ` ${crypto.randomUUID()} é `;
+    await context.addCookies([
+      { name: "mia_csrf", value: crypto.randomUUID(), url: appUrl },
+    ]);
+    await page.addInitScript(() => {
+      const observed: string[] = [];
+      Object.defineProperty(window, "__miaObservedHashes", { value: observed });
+      const originalFetch = window.fetch.bind(window);
+      window.fetch = (...args) => {
+        observed.push(location.hash);
+        return originalFetch(...args);
+      };
+      new MutationObserver((_, observer) => {
+        if (document.getElementById("root")?.firstChild) {
+          observed.push(location.hash);
+          observer.disconnect();
+        }
+      }).observe(document, { childList: true, subtree: true });
+    });
+    await mockSession(page);
+    let posts = 0;
+    let exactWire = false;
+    await page.route("**/api/v1/auth/password-resets", async (route) => {
+      posts++;
+      exactWire =
+        fingerprint(route.request().postData() ?? "") ===
+        fingerprint(
+          JSON.stringify({
+            data: {
+              type: "password-resets",
+              attributes: {
+                token,
+                password,
+                password_confirmation: password,
+              },
+            },
+          }),
+        );
+      await route.fulfill({ status: 204 });
+    });
+
+    await page.goto(`/password-reset#token=${token}`);
+    const newPassword = page.getByLabel("New password (required)", {
+      exact: true,
+    });
+    await expect(newPassword).toBeVisible();
+    await expect(
+      page.getByRole("heading", { level: 1, name: "Reset password" }),
+    ).toBeFocused();
+    await expect(page).toHaveTitle("Reset password | MIA");
+    await expect(page.getByRole("navigation")).toHaveCount(0);
+    await newPassword.fill(password);
+    const confirm = page.getByLabel("Confirm new password (required)", {
+      exact: true,
+    });
+    await confirm.fill(password);
+    await confirm.press("Enter");
+    await expect(
+      page.getByRole("heading", {
+        level: 2,
+        name: "Your password has been changed.",
+      }),
+    ).toBeFocused();
+    await expect(page).toHaveURL(/\/password-reset$/u);
+    const clean = await page.evaluate((secret) => {
+      const observed = (window as unknown as { __miaObservedHashes: string[] })
+        .__miaObservedHashes;
+      const exposed = JSON.stringify({
+        href: location.href,
+        history: history.state,
+        local: Object.entries(localStorage),
+        session: Object.entries(sessionStorage),
+        title: document.title,
+        body: document.body.innerHTML,
+      });
+      return {
+        observedClean:
+          observed.length > 0 && observed.every((hash) => hash === ""),
+        tokenAbsent: !exposed.includes(secret),
+      };
+    }, token);
+    expect(clean).toEqual({ observedClean: true, tokenAbsent: true });
+    expect({ posts, exactWire }).toEqual({ posts: 1, exactWire: true });
+  });
+
+  test("a fragment added to a running reset page is captured by a fresh bootstrap", async ({
+    page,
+  }) => {
+    await mockSession(page);
+    await page.goto("/password-reset");
+    await expect(
+      page.getByRole("heading", {
+        level: 1,
+        name: "This link is invalid or no longer usable",
+      }),
+    ).toBeVisible();
+    await page.evaluate((token) => {
+      location.hash = `token=${token}`;
+    }, crypto.randomUUID());
+    await expect(
+      page.getByLabel("New password (required)", { exact: true }),
+    ).toBeVisible();
+    expect(await page.evaluate(() => location.hash)).toBe("");
+  });
+
+  test("keyboard recovery shows one uniform accepted result at 320 CSS pixels", async ({
+    page,
+    context,
+  }) => {
+    await page.setViewportSize({ width: 320, height: 900 });
+    await context.addCookies([
+      { name: "mia_csrf", value: crypto.randomUUID(), url: appUrl },
+    ]);
+    await mockSession(page);
+    let posts = 0;
+    await page.route(
+      "**/api/v1/auth/password-recovery-requests",
+      async (route) => {
+        posts++;
+        await route.fulfill({ status: 204 });
+      },
+    );
+    await page.goto("/login");
+    const forgot = page.getByRole("link", { name: "Forgot your password?" });
+    await forgot.focus();
+    await page.keyboard.press("Enter");
+    await expect(
+      page.getByRole("heading", { level: 1, name: "Recover access" }),
+    ).toBeFocused();
+    await page.keyboard.press("Tab");
+    await expect(page.getByLabel("Username (required)")).toBeFocused();
+    await page.keyboard.type("example.staff");
+    await page.keyboard.press("Enter");
+    await expect(
+      page.getByRole("heading", { level: 2, name: "Check your email" }),
+    ).toBeFocused();
+    expect(posts).toBe(1);
+    await expectNoPageOverflow(page);
+    await expectNoWcagViolations(page);
+  });
+
+  for (const locale of locales) {
+    test(`every recovery and reset state reflows at 320 CSS pixels in ${locale}`, async ({
+      page,
+    }) => {
+      test.setTimeout(300_000);
+      await page.setViewportSize({ width: 320, height: 900 });
+      const mock = await installRecoveryResetMocks(page);
+      await page.goto("/login");
+      for (const textSize of textSizes) {
+        await page.evaluate(
+          ([nextLocale, nextTextSize]) => {
+            localStorage.setItem("mia.interface.locale", nextLocale);
+            localStorage.setItem("mia.interface.text-size", nextTextSize);
+          },
+          [locale, textSize] as const,
+        );
+        await walkRecoveryAndResetStates(page, mock, {
+          axe: locale === "en-US" && textSize === "standard",
+          locale,
+        });
+      }
+    });
+  }
+
+  test("a signed-in link signs out first and never replays a lost reset", async ({
+    page,
+    context,
+  }) => {
+    await context.addCookies([
+      { name: "mia_csrf", value: crypto.randomUUID(), url: appUrl },
+    ]);
+    let stage: "authenticated" | "anonymous" = "authenticated";
+    await page.route("**/api/v1/auth/session", async (route) => {
+      await route.fulfill({
+        status: 200,
+        contentType: mediaType,
+        body: JSON.stringify(
+          stage === "anonymous"
+            ? { data: null, meta: { stage } }
+            : {
+                data: {
+                  type: "auth-sessions",
+                  id: "account-id",
+                  attributes: {
+                    stage,
+                    idle_expires_at: "2026-10-01T10:30:00.000000Z",
+                    absolute_expires_at: "2026-10-01T22:00:00.000000Z",
+                  },
+                },
+              },
+        ),
+      });
+    });
+    await mockCapabilities(page);
+    let logouts = 0;
+    await page.route("**/api/v1/auth/logout", async (route) => {
+      logouts++;
+      stage = "anonymous";
+      await route.fulfill({ status: 204 });
+    });
+    let resets = 0;
+    await page.route("**/api/v1/auth/password-resets", async (route) => {
+      resets++;
+      await route.abort("connectionfailed");
+    });
+    await page.goto(`/password-reset#token=${crypto.randomUUID()}`);
+    await expect(
+      page.getByText(
+        "You're currently signed in. To reset a password with this link, sign out first.",
+      ),
+    ).toBeVisible();
+    await expect(page.getByRole("heading", { name: "Home" })).toHaveCount(0);
+    await page.getByRole("button", { name: "Sign out and continue" }).click();
+    const newPassword = page.getByLabel("New password (required)", {
+      exact: true,
+    });
+    await expect(newPassword).toBeFocused();
+    const password = crypto.randomUUID();
+    await newPassword.fill(password);
+    await page
+      .getByLabel("Confirm new password (required)", { exact: true })
+      .fill(password);
+    await page.getByRole("button", { name: "Change password" }).click();
+    await expect(
+      page.getByRole("heading", {
+        level: 2,
+        name: "Password change not confirmed",
+      }),
+    ).toBeFocused();
+    await expect(
+      page.getByRole("button", { name: "Change password" }),
+    ).toHaveCount(0);
+    await page.waitForTimeout(200);
+    expect({ logouts, resets }).toEqual({ logouts: 1, resets: 1 });
+  });
+});
+
+for (const zoomFactor of [2, 4] as const) {
+  test(`every recovery and reset state reflows at actual ${zoomFactor * 100}% browser zoom`, async () => {
+    test.setTimeout(300_000);
+    const { context, userDataDirectory } = await launchBrowserZoomContext();
+    try {
+      const page = await context.newPage();
+      const mock = await installRecoveryResetMocks(page);
+      await page.goto("/login");
+      await setActualBrowserZoom(page, zoomFactor);
+      expect(await page.evaluate(() => window.innerWidth)).toBe(
+        1280 / zoomFactor,
+      );
+      for (const textSize of textSizes) {
+        await page.evaluate((nextTextSize) => {
+          localStorage.setItem("mia.interface.locale", "en-US");
+          localStorage.setItem("mia.interface.text-size", nextTextSize);
+        }, textSize);
+        await walkRecoveryAndResetStates(page, mock, {
+          axe: textSize === "standard",
+          locale: "en-US",
+        });
+      }
+    } finally {
+      await context.close();
+      await rm(userDataDirectory, { force: true, recursive: true });
+    }
+  });
+}
+
 for (const zoomFactor of [2, 4] as const) {
   test(`password replacement reflows at actual ${zoomFactor * 100}% browser zoom`, async () => {
     const { context, userDataDirectory } = await launchBrowserZoomContext();
@@ -1047,6 +1320,291 @@ for (const zoomFactor of [2, 4] as const) {
 const browserZoomExtension = fileURLToPath(
   new URL("./fixtures/browser-zoom-extension", import.meta.url),
 );
+
+type RecoveryResetMock = {
+  stage: "anonymous" | "authenticated";
+  recovery: "accept" | "csrf" | "fail" | "unknown";
+  reset:
+    | "accept"
+    | "password"
+    | "throttle"
+    | "csrf"
+    | "token"
+    | "generic"
+    | "unknown";
+  posts: number;
+};
+
+// One mutable protocol fake for every recovery and reset state.
+async function installRecoveryResetMocks(
+  page: Page,
+): Promise<RecoveryResetMock> {
+  const mock: RecoveryResetMock = {
+    stage: "anonymous",
+    recovery: "accept",
+    reset: "accept",
+    posts: 0,
+  };
+  await page
+    .context()
+    .addCookies([
+      { name: "mia_csrf", value: crypto.randomUUID(), url: appUrl },
+    ]);
+  const error = (status: number, code: string, retryAfter?: string) => ({
+    status,
+    contentType: mediaType,
+    headers: retryAfter === undefined ? {} : { "Retry-After": retryAfter },
+    body: JSON.stringify({ errors: [{ status: String(status), code }] }),
+  });
+  await page.route("**/api/v1/auth/session", async (route) => {
+    await route.fulfill({
+      status: 200,
+      contentType: mediaType,
+      body: JSON.stringify(
+        mock.stage === "anonymous"
+          ? { data: null, meta: { stage: "anonymous" } }
+          : {
+              data: {
+                type: "auth-sessions",
+                id: "account-id",
+                attributes: {
+                  stage: mock.stage,
+                  idle_expires_at: "2026-10-01T10:30:00.000000Z",
+                  absolute_expires_at: "2026-10-01T22:00:00.000000Z",
+                },
+              },
+            },
+      ),
+    });
+  });
+  await page.route("**/api/v1/auth/logout", async (route) => {
+    mock.stage = "anonymous";
+    await route.fulfill({ status: 204 });
+  });
+  await page.route(
+    "**/api/v1/auth/password-recovery-requests",
+    async (route) => {
+      mock.posts++;
+      switch (mock.recovery) {
+        case "accept":
+          return route.fulfill({ status: 204 });
+        case "csrf":
+          return route.fulfill(error(403, "csrf_invalid"));
+        case "fail":
+          return route.fulfill(error(422, "auth_invalid_request"));
+        case "unknown":
+          return route.fulfill(error(503, "unavailable"));
+      }
+    },
+  );
+  await page.route("**/api/v1/auth/password-resets", async (route) => {
+    mock.posts++;
+    switch (mock.reset) {
+      case "accept":
+        return route.fulfill({ status: 204 });
+      case "password":
+        return route.fulfill(error(422, "auth_invalid_password"));
+      case "throttle":
+        return route.fulfill(error(429, "rate_limited", "0"));
+      case "csrf":
+        return route.fulfill(error(403, "csrf_invalid"));
+      case "token":
+        return route.fulfill(error(422, "auth_invalid_reset_token"));
+      case "generic":
+        return route.fulfill(error(400, "bad_request"));
+      case "unknown":
+        return route.abort("connectionfailed");
+    }
+  });
+  return mock;
+}
+
+// Checks one rendered state: reflow, targets, the bypass link, and a visible,
+// unobscured focus indicator, with every technical disclosure expanded too.
+async function checkRecoveryResetState(
+  page: Page,
+  options: { readonly axe: boolean },
+): Promise<void> {
+  await applyWcagTextSpacing(page);
+  await expectNoPageOverflow(page);
+  await expectActiveElementUnobscured(page);
+  for (const control of await page
+    .locator("main a, main button, main input")
+    .all())
+    await expectMinimumPointerTarget(control);
+  for (const disclosure of await page
+    .locator("main button[aria-expanded=false]")
+    .all())
+    await disclosure.click();
+  if ((await page.locator("main pre").count()) > 0) {
+    await applyWcagTextSpacing(page);
+    await expectNoPageOverflow(page);
+    for (const control of await page.locator("main button").all())
+      await expectMinimumPointerTarget(control);
+  }
+  // Keyboard focus moves to the next control with a visible indicator.
+  await page.keyboard.press("Tab");
+  await expectActiveElementUnobscured(page);
+  expect(
+    await page.evaluate(() => {
+      const active = document.activeElement;
+      if (active === null || active === document.body) return false;
+      const style = getComputedStyle(active);
+      return (
+        style.outlineStyle !== "none" && parseFloat(style.outlineWidth) >= 2
+      );
+    }),
+    "the focused control shows a focus indicator",
+  ).toBe(true);
+  if (options.axe) await expectNoWcagViolations(page);
+}
+
+async function expectActiveElementUnobscured(page: Page): Promise<void> {
+  const geometry = await page.evaluate(() => {
+    const element = document.activeElement;
+    if (element === null || element === document.body) return null;
+    const rect = element.getBoundingClientRect();
+    // Probe inside the visible part of the control, near its start.
+    const left = Math.max(rect.left, 0);
+    const top0 = Math.max(rect.top, 0);
+    const top = document.elementFromPoint(
+      left + Math.min((Math.min(rect.right, window.innerWidth) - left) / 2, 4),
+      top0 +
+        Math.min((Math.min(rect.bottom, window.innerHeight) - top0) / 2, 4),
+    );
+    return {
+      inside:
+        rect.left >= 0 &&
+        rect.right <= window.innerWidth &&
+        rect.bottom > 0 &&
+        rect.top < window.innerHeight,
+      unobscured: top !== null && (top === element || element.contains(top)),
+    };
+  });
+  expect(geometry, "focus remains on a page control").not.toBeNull();
+  expect(geometry).toEqual({ inside: true, unobscured: true });
+}
+
+async function expectBypassKeepsResetForm(page: Page): Promise<void> {
+  const password = crypto.randomUUID();
+  await page.locator("#new-password").fill(password);
+  await page.locator('a[href="#main-content"]').focus();
+  await page.keyboard.press("Enter");
+  await expect(page.locator("main")).toBeFocused();
+  expect(await page.evaluate(() => location.hash)).toBe("");
+  expectRetainedSecret(
+    await page.locator("#new-password").inputValue(),
+    password,
+    "New password field after the bypass link",
+  );
+  await page.locator("#new-password").fill("");
+}
+
+async function openResetLink(page: Page): Promise<void> {
+  // A fresh document runs the bootstrap capture for each new link.
+  await page.goto("about:blank");
+  await page.goto(`/password-reset#token=${crypto.randomUUID()}`);
+}
+
+async function submitAndSettle(
+  page: Page,
+  mock: RecoveryResetMock,
+  status: Locator,
+): Promise<void> {
+  const before = await status.textContent();
+  const posts = mock.posts;
+  await page.locator("button[type=submit]").click();
+  await expect.poll(() => mock.posts).toBe(posts + 1);
+  await expect(status).not.toHaveText(before ?? "");
+  await expect(page.locator("button[type=submit]")).toBeEnabled();
+}
+
+async function fillValidPasswords(page: Page): Promise<void> {
+  const password = crypto.randomUUID();
+  await page.locator("#new-password").fill(password);
+  await page.locator("#password-confirmation").fill(password);
+}
+
+async function walkRecoveryAndResetStates(
+  page: Page,
+  mock: RecoveryResetMock,
+  options: { readonly axe: boolean; readonly locale: string },
+): Promise<void> {
+  const check = () => checkRecoveryResetState(page, options);
+  const expectLocale = () =>
+    expect(page.locator("html")).toHaveAttribute("lang", options.locale);
+
+  // Recovery: form, CSRF rejection, generic failure, unknown, accepted.
+  mock.stage = "anonymous";
+  await page.goto("/login/recovery");
+  await expectLocale();
+  await expect(page.locator("#recovery-username")).toBeVisible();
+  await check();
+  await page.locator("#recovery-username").fill("example.staff");
+  const recoveryStatus = page.locator("#recovery-status");
+  for (const mode of ["csrf", "fail", "unknown"] as const) {
+    mock.recovery = mode;
+    await submitAndSettle(page, mock, recoveryStatus);
+    await check();
+  }
+  mock.recovery = "accept";
+  await page.locator("button[type=submit]").click();
+  await expect(page.locator("main h2[tabindex='-1']")).toBeFocused();
+  await check();
+
+  // Reset form: entry, bypass link, local errors, rejections, then success.
+  await openResetLink(page);
+  await expect(page.locator("#new-password")).toBeVisible();
+  await expectLocale();
+  await check();
+  await expectBypassKeepsResetForm(page);
+  await page.locator("#new-password").fill("short");
+  await page.locator("#password-confirmation").fill("other");
+  await page.locator("button[type=submit]").click();
+  await expect(
+    page.locator("[aria-labelledby=password-change-summary-heading]"),
+  ).toBeFocused();
+  await check();
+  const resetStatus = page.locator("#password-reset-status");
+  for (const mode of ["password", "throttle", "csrf"] as const) {
+    mock.reset = mode;
+    await fillValidPasswords(page);
+    await submitAndSettle(page, mock, resetStatus);
+    await check();
+  }
+  mock.reset = "accept";
+  await fillValidPasswords(page);
+  await page.locator("button[type=submit]").click();
+  await expect(page.locator("main h2[tabindex='-1']")).toBeFocused();
+  await check();
+
+  // Terminal reset results, each from a fresh link.
+  for (const mode of ["token", "generic", "unknown"] as const) {
+    mock.reset = mode;
+    await openResetLink(page);
+    await fillValidPasswords(page);
+    await page.locator("button[type=submit]").click();
+    await expect(page.locator("main a[href='/login/recovery']")).toBeVisible();
+    await expect(page.locator("#new-password")).toHaveCount(0);
+    await check();
+  }
+  // The missing-token entry renders the same uniform result.
+  await page.goto("/password-reset");
+  await expect(page.locator("main a[href='/login/recovery']")).toBeVisible();
+  await expect(page.locator("h1")).toBeFocused();
+  await check();
+
+  // Signed-in interstitial, then the form after the confirmed sign-out.
+  mock.stage = "authenticated";
+  await openResetLink(page);
+  await expect(page.locator("main button")).toHaveCount(2);
+  await expect(page.locator("h1")).toBeFocused();
+  await check();
+  await page.locator("main button").first().click();
+  await expect(page.locator("#new-password")).toBeFocused();
+  await check();
+  mock.reset = "accept";
+}
 
 async function mockSession(
   page: Page,

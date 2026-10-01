@@ -135,6 +135,17 @@ confirms it. The planning package is complete; this spec binds it to the archite
   unclear outcomes reconciled by discovery without resend. The local length, byte, and exact-match checks send nothing
   when they fail, and `422 auth_invalid_password` shows one general rejection. This approval does not authorize voluntary
   password change, recovery, reset, invitations, broader lifecycle work, or close BCG-001 or BCG-003.
+- Owner-approved recovery-and-reset alignment, 2026-10-01: Story 1-6 may implement only
+  `POST /api/v1/auth/password-recovery-requests` on `/login/recovery` and `POST /api/v1/auth/password-resets` on
+  `/password-reset`, as recorded in `BACKEND-CONTRACT-GAPS.md` §BCG-001 Story 1-6 recovery-and-reset-slice decision.
+  The frontend adopts the backend's emailed `/password-reset` path. Bootstrap captures and strips the fragment token
+  before the application runs and keeps it in memory only. Recovery shows one uniform accepted result; reset shows one
+  uniform "link invalid or no longer usable" result for every unusable or missing token, keeps the token for
+  `auth_invalid_password`, `429`, and `csrf_invalid`, and drops it on success, an unknown outcome, or (Decision 7) a
+  generic `400/406/413/415` rejection, which offers only Request a new link and Back to sign-in. A link opened while
+  signed in shows a focused interstitial from stage discovery alone, whose Sign out and continue calls the existing
+  logout; the capability gate runs only after a deliberate Go back. This approval does not
+  authorize invitations, broader lifecycle work, or close BCG-001 or BCG-003.
 
 ## Non-goals
 
@@ -165,6 +176,7 @@ activates a course without a manual, and a student completes a second tutoring s
   under Constraints and in `BACKEND-CONTRACT-GAPS.md` and must not be generalized to their deferred obligations.
 - Story 1-3's request-ID interpretation, direct-success stage dispatch, and login internal-error response are resolved;
   Story 1-4's method-neutral challenge, no-Resend decision, and recovery normalization are resolved; Story 1-5's
-  password-replacement slice, stage-rediscovery, unclear-outcome, and local-validation questions are resolved. The
-  broader BCG-001 obligations remain open and are not part of any of these narrow approvals.
+  password-replacement slice, stage-rediscovery, unclear-outcome, and local-validation questions are resolved; Story
+  1-6's recovery/reset slice, reset path, uniform token states, and signed-in interstitial are resolved. The broader
+  BCG-001 obligations remain open and are not part of any of these narrow approvals.
 - The exact Tailwind Plus component-to-blueprint binding is pending — a pre-implementation gate before UI stories.

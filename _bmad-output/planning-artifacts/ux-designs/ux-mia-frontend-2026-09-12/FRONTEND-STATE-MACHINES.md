@@ -47,6 +47,7 @@ session check alone never authorizes a route: capability/scope, route resource, 
 | MFA required | Stage `mfa` | Focused MFA | Named MFA actions | Challenge ID and fresh CSRF |
 | Password change | Stage says so | Focused replacement | Replace or logout | Fresh CSRF and new stage |
 | Access checking | Authenticated stage | Neutral shell | No protected action | Capability and route checks |
+| Access deferred | Authenticated stage with a captured reset link (Story 1-6) | Reset interstitial only | Sign out and continue; Go back | Go back enters Access checking |
 | Authenticated | All gates pass | Authorized route | Authorized actions | Fresh resource responses |
 | Rotating | Auth transition | Controls disabled | No queued mutation | Reread CSRF cookie |
 | Restricted expired | Auth loss | Neutral login | Sign in | Clear protected memory |
@@ -71,6 +72,43 @@ submission and logout. A failed local length, byte, or confirmation check stays 
 `403 auth_password_change_required`, `csrf_invalid`, `401`, `5xx`, transport loss, and malformed success enter `Rotating`
 and follow the stage returned by session discovery, never replaying the replacement request. A definitive authenticated
 response enters `Access checking` directly.
+
+For Story 1-6, the public recovery and reset flows run only while the session is `Signed out` or `Logout confirmed`.
+Each reads CSRF at dispatch under the origin request coordinator and never replays. Neither creates a session.
+
+| Recovery state | Trigger | UI | Permitted action | Authoritative recovery |
+| --- | --- | --- | --- | --- |
+| Form ready | Route entry | Username form | Send | Current CSRF cookie |
+| Submitting | Deliberate send | Controls unavailable | None | One request |
+| Accepted | `204` | One uniform accepted result | Back to sign-in | None; existence and delivery never claimed |
+| CSRF rejected | `403 csrf_invalid` | Username kept | Deliberate resend | Session discovery refreshes CSRF |
+| Failed | Other definitive `4xx` or pre-dispatch failure | Generic error; username kept | Deliberate resend | None |
+| Outcome unknown | `5xx`, transport loss, malformed success | Email may still arrive | Explicit Send again | None |
+
+| Reset state | Trigger | UI | Permitted action | Authoritative recovery |
+| --- | --- | --- | --- | --- |
+| Awaiting stage | Token captured at bootstrap | Neutral checking shell | None | Session discovery |
+| Signed-in interstitial | Captured token and stage `mfa`, `password-change`, or `authenticated` | Sign out first | Sign out and continue; Go back | Existing logout; Go back runs the capability gate |
+| Signing out | Sign out and continue | Logout in progress | None | `Logout confirmed` shows the form; any other end drops the token |
+| Form ready | Captured token and anonymous stage | Password form | Submit | Current CSRF cookie |
+| Submitting | Deliberate submit | Controls unavailable | None | One request |
+| Password rejected | `422 auth_invalid_password` | Form and values kept | Correct and submit | None |
+| Throttled | `429` | Static wait when valid; passwords cleared | Deliberate submit | None |
+| CSRF rejected | `403 csrf_invalid` | Passwords cleared | Deliberate submit | Session discovery refreshes CSRF |
+| Failed | Definitive pre-dispatch failure (nothing sent) | Generic error; form kept | Deliberate submit | None |
+| Request rejected | `400/406/413/415` or another definitive `4xx` (Decision 7) | Generic error; token and passwords dropped | Request a new link; Back to sign-in | Token dropped |
+| Link unusable | `422 auth_invalid_reset_token`, no or lost token | One uniform invalid-or-unusable result | Request a new link; Back to sign-in | Token dropped |
+| Outcome unknown | `5xx`, transport loss, malformed success | Unknown result; no resubmit | Sign in; Request a new link | Token dropped |
+| Password changed | `204` | Focused success | Sign in (cold `/login`) | Token dropped |
+
+`Link unusable` is one presentation for every cause: invalid, expired, consumed, throttled, malformed fragment, and
+missing or lost token are never distinguished. Its page heading names the result and receives focus, and it is
+announced once whenever it appears, on entry and after a rejected submission alike. Departure from `/password-reset`
+and any session-stage change after the form appeared drop the token and end any attempt still waiting to dispatch.
+
+With a token captured at cold entry, `authenticated` discovery enters `Access deferred` instead of `Access checking`.
+It renders only the reset interstitial and makes no capability or other protected read. Sign out and continue starts
+the existing logout from it; Go back moves it to `Access checking` and the ordinary capability gate.
 
 The session-discovery operation, anonymous CSRF issuance, stages, expiries, and safe logout recovery are `BLOCKED` on
 `BCG-001: Anonymous CSRF and authentication-session discovery`. Protected responses also depend on

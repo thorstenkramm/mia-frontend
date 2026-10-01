@@ -1,4 +1,4 @@
-import { randomBytes } from "node:crypto";
+import { randomBytes, randomUUID } from "node:crypto";
 import { mkdtemp, readdir, readFile, rm } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
@@ -16,6 +16,9 @@ const markers = [
     (byte) => recoveryAlphabet[byte % recoveryAlphabet.length],
   ).join(""),
   `replacement-password-${randomBytes(24).toString("hex")}`,
+  // A reset token must be a canonical lowercase UUID v4 to be captured at all.
+  randomUUID(),
+  `reset-password-${randomBytes(24).toString("hex")}`,
 ];
 
 async function leakingArtifacts(directory) {
@@ -49,15 +52,18 @@ try {
         MIA_SECRET_HYGIENE_MFA_CODE: markers[3],
         MIA_SECRET_HYGIENE_RECOVERY_CODE: markers[4],
         MIA_SECRET_HYGIENE_REPLACEMENT_PASSWORD: markers[5],
+        MIA_SECRET_HYGIENE_RESET_TOKEN: markers[6],
+        MIA_SECRET_HYGIENE_RESET_PASSWORD: markers[7],
       },
       maxBuffer: 16 * 1024 * 1024,
     },
   );
-  // Both controlled tests (form flow and retained-secret assertion) must fail.
+  // Every controlled test (sign-in flow, retained-secret assertion, and reset
+  // token flow) must fail.
   if (
     result.error !== undefined ||
     result.status !== 1 ||
-    !result.stdout.includes(Buffer.from("2 failed"))
+    !result.stdout.includes(Buffer.from("3 failed"))
   ) {
     throw new Error("Controlled failures did not each fail exactly once.");
   }
@@ -70,6 +76,42 @@ try {
   if (processLeak || artifactLeaks.length > 0) {
     throw new Error(
       `Secret-hygiene scan found a controlled fixture marker (${processLeak ? "process" : ""}${processLeak && artifactLeaks.length > 0 ? "+" : ""}${artifactLeaks.length > 0 ? `artifact:${artifactLeaks.join(",")}` : ""}).`,
+    );
+  }
+
+  // The token-bearing Vitest suites use the same shared assertion helpers as
+  // these controlled unit failures; all four must fail without a marker leak.
+  const unit = spawnSync(
+    join(process.cwd(), "node_modules", ".bin", "vitest"),
+    ["run", "--config", "vitest.secret-hygiene.config.ts"],
+    {
+      cwd: process.cwd(),
+      encoding: "buffer",
+      env: {
+        ...process.env,
+        NO_COLOR: "1",
+        MIA_SECRET_HYGIENE_RESET_TOKEN: markers[6],
+        MIA_SECRET_HYGIENE_RESET_PASSWORD: markers[7],
+      },
+      maxBuffer: 16 * 1024 * 1024,
+    },
+  );
+  if (
+    unit.error !== undefined ||
+    unit.status !== 1 ||
+    !/Tests\s+4 failed/u.test(unit.stdout.toString())
+  ) {
+    throw new Error("Controlled unit failures did not each fail exactly once.");
+  }
+  if (
+    markers.some(
+      (marker) =>
+        unit.stdout.includes(Buffer.from(marker)) ||
+        unit.stderr.includes(Buffer.from(marker)),
+    )
+  ) {
+    throw new Error(
+      "Secret-hygiene unit scan found a controlled fixture marker.",
     );
   }
   console.log("Secret-hygiene deliberate-failure scan passed.");

@@ -60,6 +60,7 @@ export default function LogoutEntryRoute() {
     case "Password change":
     case "Access checking":
     case "Authenticated":
+    case "Access deferred":
     case "Rotating":
     case "Restricted expired":
     case "Logout confirmed":

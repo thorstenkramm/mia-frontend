@@ -24,6 +24,10 @@ import {
   readStoredLocale,
   readTextSize,
 } from "../platform/prefs/preferences";
+import {
+  capturePasswordResetLink,
+  PasswordResetLink,
+} from "../platform/session/passwordResetLink";
 
 const mediaType = "application/vnd.api+json";
 
@@ -129,7 +133,10 @@ function renderEntry(...handlers: Parameters<typeof server.use>) {
   return render(
     <AnnouncementProvider>
       <MiaIntlProvider initialLocale="en-US">
-        <App initialTextSize="standard" />
+        <App
+          initialTextSize="standard"
+          passwordResetLink={new PasswordResetLink(null)}
+        />
       </MiaIntlProvider>
     </AnnouncementProvider>,
   );
@@ -145,7 +152,11 @@ function renderEntryWithQueryClient(
   return render(
     <AnnouncementProvider>
       <MiaIntlProvider initialLocale="en-US">
-        <App initialTextSize="standard" queryClient={queryClient} />
+        <App
+          initialTextSize="standard"
+          passwordResetLink={new PasswordResetLink(null)}
+          queryClient={queryClient}
+        />
       </MiaIntlProvider>
     </AnnouncementProvider>,
   );
@@ -584,7 +595,10 @@ describe("localized anonymous entry", () => {
     render(
       <AnnouncementProvider>
         <MiaIntlProvider initialLocale={initialLocale}>
-          <App initialTextSize="standard" />
+          <App
+            initialTextSize="standard"
+            passwordResetLink={new PasswordResetLink(null)}
+          />
         </MiaIntlProvider>
       </AnnouncementProvider>,
     );
@@ -1649,7 +1663,7 @@ describe("required password replacement", () => {
       throw new Error("Missing confirmation summary link.");
     await user.click(confirmationLink);
     expect(confirm).toHaveFocus();
-    expect(window.location.hash).toBe("");
+    expect(window.location.hash === "").toBe(true);
     expect(posts).toBe(0);
 
     const corrected = crypto.randomUUID();
@@ -1977,7 +1991,10 @@ describe("required password replacement", () => {
       <AnnouncementProvider>
         <AuthLossOnSubmit />
         <MiaIntlProvider initialLocale="en-US">
-          <App initialTextSize="standard" />
+          <App
+            initialTextSize="standard"
+            passwordResetLink={new PasswordResetLink(null)}
+          />
         </MiaIntlProvider>
       </AnnouncementProvider>,
     );
@@ -2023,5 +2040,750 @@ describe("required password replacement", () => {
     await user.click(confirmationReveal);
     expect(confirm).toHaveAttribute("type", "text");
     expect(confirmationReveal).toHaveAttribute("aria-pressed", "true");
+  });
+});
+
+describe("password recovery and token reset", () => {
+  function renderAt(
+    path: string,
+    ...handlers: Parameters<typeof server.use>
+  ): ReturnType<typeof render> {
+    window.history.replaceState(null, "", path);
+    // The production bootstrap order: capture before anything renders.
+    const passwordResetLink = capturePasswordResetLink(
+      window.location,
+      window.history,
+    );
+    server.use(...handlers);
+    applyDocumentLocale("en-US");
+    applyTextSize("standard");
+    return render(
+      <AnnouncementProvider>
+        <MiaIntlProvider initialLocale="en-US">
+          <App
+            initialTextSize="standard"
+            passwordResetLink={passwordResetLink}
+          />
+        </MiaIntlProvider>
+      </AnnouncementProvider>,
+    );
+  }
+
+  function noContent() {
+    return new HttpResponse(null, { status: 204 });
+  }
+
+  function errorResponse(status: number, code: string, retryAfter?: string) {
+    return HttpResponse.json(
+      { errors: [{ status: String(status), code }] },
+      {
+        status,
+        headers: {
+          "Content-Type": mediaType,
+          ...(retryAfter === undefined ? {} : { "Retry-After": retryAfter }),
+        },
+      },
+    );
+  }
+
+  async function fillPasswords(
+    user: ReturnType<typeof userEvent.setup>,
+    password: string,
+  ): Promise<void> {
+    await user.type(
+      await screen.findByLabelText("New password (required)"),
+      password,
+    );
+    await user.type(
+      screen.getByLabelText("Confirm new password (required)"),
+      password,
+    );
+  }
+
+  function resetInputs() {
+    return [
+      screen.getByLabelText<HTMLInputElement>("New password (required)"),
+      screen.getByLabelText<HTMLInputElement>(
+        "Confirm new password (required)",
+      ),
+    ];
+  }
+
+  it("links sign-in to recovery and shows only the uniform accepted result", async () => {
+    const user = userEvent.setup();
+    let posts = 0;
+    let exactWire = false;
+    document.cookie = `mia_csrf=${crypto.randomUUID()}; Path=/`;
+    renderAt(
+      "/login",
+      anonymousHandler(),
+      http.post(
+        "/api/v1/auth/password-recovery-requests",
+        async ({ request }) => {
+          posts++;
+          exactWire =
+            (await request.text()) ===
+            JSON.stringify({
+              data: {
+                type: "password-recovery-requests",
+                attributes: { username: "Example.Staff" },
+              },
+            });
+          return noContent();
+        },
+      ),
+    );
+
+    await user.click(
+      await screen.findByRole("link", { name: "Forgot your password?" }),
+    );
+    expect(
+      await screen.findByRole("heading", { level: 1, name: "Recover access" }),
+    ).toHaveFocus();
+    expect(document.title).toBe("Recover access | MIA");
+    expect(window.location.pathname).toBe("/login/recovery");
+    expect(screen.queryByRole("navigation")).toBeNull();
+    await user.type(
+      screen.getByLabelText("Username (required)"),
+      "Example.Staff",
+    );
+    await user.click(screen.getByRole("button", { name: "Send reset link" }));
+
+    expect(
+      await screen.findByRole("heading", {
+        level: 2,
+        name: "Check your email",
+      }),
+    ).toHaveFocus();
+    expect(
+      within(screen.getByRole("main")).getByText(
+        /^If an eligible account exists, we've sent an email/u,
+      ),
+    ).toBeInTheDocument();
+    await waitFor(() =>
+      expect(announcementRegion("polite")).toHaveTextContent(
+        /^If an eligible account exists/u,
+      ),
+    );
+    expect(screen.queryByLabelText("Username (required)")).toBeNull();
+    expect({ posts, exactWire }).toEqual({ posts: 1, exactWire: true });
+    await user.click(screen.getByRole("link", { name: "Back to sign-in" }));
+    expect(
+      await screen.findByRole("heading", { level: 1, name: "Sign in to MIA" }),
+    ).toBeInTheDocument();
+  });
+
+  it.each([
+    [500, "controlled", "We couldn't confirm your request.", "Send again"],
+    [
+      422,
+      "auth_invalid_request",
+      "Your request couldn't be processed.",
+      "Send reset link",
+    ],
+    [
+      400,
+      "malformed_request",
+      "Your request couldn't be processed.",
+      "Send reset link",
+    ],
+    [
+      406,
+      "not_acceptable",
+      "Your request couldn't be processed.",
+      "Send reset link",
+    ],
+    [
+      413,
+      "request_too_large",
+      "Your request couldn't be processed.",
+      "Send reset link",
+    ],
+    [
+      415,
+      "unsupported_media_type",
+      "Your request couldn't be processed.",
+      "Send reset link",
+    ],
+    [
+      403,
+      "csrf_invalid",
+      "The security check for this page expired.",
+      "Send reset link",
+    ],
+  ] as const)(
+    "keeps the username after HTTP %s %s and sends again only on a click",
+    async (status, code, copy, action) => {
+      const user = userEvent.setup();
+      let posts = 0;
+      let reads = 0;
+      document.cookie = `mia_csrf=${crypto.randomUUID()}; Path=/`;
+      renderAt(
+        "/login/recovery",
+        http.get("/api/v1/auth/session", () => {
+          reads++;
+          return HttpResponse.json(
+            { data: null, meta: { stage: "anonymous" } },
+            { headers: { "Content-Type": mediaType } },
+          );
+        }),
+        http.post("/api/v1/auth/password-recovery-requests", () => {
+          posts++;
+          return errorResponse(status, code);
+        }),
+      );
+      const username = await screen.findByLabelText<HTMLInputElement>(
+        "Username (required)",
+      );
+      await user.type(username, "Example.Staff");
+      await user.click(screen.getByRole("button", { name: "Send reset link" }));
+
+      await waitFor(() =>
+        expect(announcementRegion("assertive")).toHaveTextContent(copy),
+      );
+      expect(username.value).toBe("Example.Staff");
+      expect(screen.getByRole("button", { name: action })).toHaveFocus();
+      await delay(50);
+      expect(posts).toBe(1);
+      expect(reads).toBe(code === "csrf_invalid" ? 2 : 1);
+      await user.click(screen.getByRole("button", { name: action }));
+      await waitFor(() => expect(posts).toBe(2));
+    },
+  );
+
+  it("captures the token before render, resets once, and keeps a focused success", async () => {
+    const user = userEvent.setup();
+    const token = crypto.randomUUID();
+    const password = ` ${crypto.randomUUID()} `;
+    let posts = 0;
+    let exactWire = false;
+    document.cookie = `mia_csrf=${crypto.randomUUID()}; Path=/`;
+    renderAt(
+      `/password-reset#token=${token}`,
+      anonymousHandler(),
+      http.post("/api/v1/auth/password-resets", async ({ request }) => {
+        posts++;
+        exactWire =
+          fingerprint(await request.text()) ===
+          fingerprint(
+            JSON.stringify({
+              data: {
+                type: "password-resets",
+                attributes: {
+                  token,
+                  password,
+                  password_confirmation: password,
+                },
+              },
+            }),
+          );
+        return noContent();
+      }),
+    );
+    expect(window.location.hash).toBe("");
+
+    await fillPasswords(user, password);
+    expect(document.title).toBe("Reset password | MIA");
+    await user.click(screen.getByRole("button", { name: "Change password" }));
+
+    expect(
+      await screen.findByRole("heading", {
+        level: 2,
+        name: "Your password has been changed.",
+      }),
+    ).toHaveFocus();
+    expect(
+      screen.getByText(
+        "If you use multi-factor authentication, it remains enabled.",
+      ),
+    ).toBeInTheDocument();
+    expect(document.body).not.toHaveTextContent(/signed out everywhere/iu);
+    await waitFor(() =>
+      expect(announcementRegion("polite")).toHaveTextContent(
+        /^Your password has been changed\./u,
+      ),
+    );
+    expect(screen.getByRole("link", { name: "Sign in" })).toHaveAttribute(
+      "href",
+      "/login",
+    );
+    expect(screen.queryByLabelText("New password (required)")).toBeNull();
+    await delay(50);
+    expect(window.location.pathname).toBe("/password-reset");
+    expect({ posts, exactWire }).toEqual({ posts: 1, exactWire: true });
+    const exposed = JSON.stringify({
+      href: window.location.href,
+      history: window.history.state as unknown,
+      title: document.title,
+      body: new XMLSerializer().serializeToString(document.body),
+    });
+    expect(exposed.includes(token)).toBe(false);
+  });
+
+  it("offers a direct sign-in exit from the usable reset form and drops its token", async () => {
+    const user = userEvent.setup();
+    renderAt(
+      `/password-reset#token=${crypto.randomUUID()}`,
+      anonymousHandler(),
+    );
+
+    await user.click(await screen.findByRole("link", { name: "Go back" }));
+
+    expect(window.location.pathname).toBe("/login");
+    expect(screen.queryByLabelText("New password (required)")).toBeNull();
+  });
+
+  // Every 422 auth_invalid_reset_token cause (invalid, expired, consumed,
+  // throttled) and a missing token share one presentation, focus target,
+  // announcement, and waiting treatment.
+  it("renders every unusable cause exactly like a missing token", async () => {
+    const user = userEvent.setup();
+    const unusableHeading = "This link is invalid or no longer usable";
+    async function observeResult() {
+      const heading = await screen.findByRole("heading", {
+        level: 1,
+        name: unusableHeading,
+      });
+      await waitFor(() => expect(heading).toHaveFocus());
+      await waitFor(() =>
+        expect(announcementRegion("assertive")).toHaveTextContent(
+          `${unusableHeading} Request a new password-reset link, or go back to sign-in.`,
+        ),
+      );
+      return {
+        main: new XMLSerializer().serializeToString(screen.getByRole("main")),
+        title: document.title,
+        path: window.location.pathname,
+        hash: window.location.hash,
+        focused: document.activeElement?.textContent ?? null,
+        polite: announcementRegion("polite").textContent,
+        assertive: announcementRegion("assertive").textContent,
+      };
+    }
+
+    const results = [];
+    for (const detail of ["invalid", "expired", "consumed", "throttled"]) {
+      document.cookie = `mia_csrf=${crypto.randomUUID()}; Path=/`;
+      const waiting: string[] = [];
+      const view = renderAt(
+        `/password-reset#token=${crypto.randomUUID()}`,
+        anonymousHandler(),
+        http.post("/api/v1/auth/password-resets", async () => {
+          await delay(20);
+          return HttpResponse.json(
+            {
+              errors: [
+                { status: "422", code: "auth_invalid_reset_token", detail },
+              ],
+            },
+            { status: 422, headers: { "Content-Type": mediaType } },
+          );
+        }),
+      );
+      await fillPasswords(user, crypto.randomUUID());
+      await user.click(screen.getByRole("button", { name: "Change password" }));
+      waiting.push(
+        document.getElementById("password-reset-status")?.textContent ?? "",
+      );
+      const result = await observeResult();
+      results.push({ ...result, waiting });
+      expect(screen.queryByRole("button", { name: "Technical details" })).toBe(
+        null,
+      );
+      expect(
+        screen.getByRole("link", { name: "Request a new link" }),
+      ).toHaveAttribute("href", "/login/recovery");
+      expect(
+        screen.getByRole("link", { name: "Back to sign-in" }),
+      ).toHaveAttribute("href", "/login");
+      view.unmount();
+    }
+    for (const result of results)
+      expect(result).toEqual({
+        ...results[0],
+        waiting: ["Changing your password…"],
+      });
+
+    renderAt("/password-reset", anonymousHandler());
+    const missing = await observeResult();
+    const { waiting: _waiting, ...rejection } = results[0] ?? {
+      waiting: [],
+    };
+    void _waiting;
+    expect(missing).toEqual(rejection);
+  });
+
+  it("discards the link after a generic rejection and offers no resubmit", async () => {
+    const user = userEvent.setup();
+    let posts = 0;
+    document.cookie = `mia_csrf=${crypto.randomUUID()}; Path=/`;
+    renderAt(
+      `/password-reset#token=${crypto.randomUUID()}`,
+      anonymousHandler(),
+      http.post("/api/v1/auth/password-resets", () => {
+        posts++;
+        return errorResponse(415, "unsupported_media_type");
+      }),
+    );
+    await fillPasswords(user, crypto.randomUUID());
+    await user.click(screen.getByRole("button", { name: "Change password" }));
+
+    expect(
+      await screen.findByRole("heading", {
+        level: 2,
+        name: "Password not changed",
+      }),
+    ).toHaveFocus();
+    expect(
+      within(screen.getByRole("main")).getByText(
+        "Your request couldn't be processed. Try again later.",
+      ),
+    ).toBeInTheDocument();
+    expect(screen.queryByLabelText("New password (required)")).toBeNull();
+    expect(screen.queryByRole("button", { name: "Change password" })).toBe(
+      null,
+    );
+    expect(
+      screen.getByRole("button", { name: "Technical details" }),
+    ).toHaveAttribute("aria-expanded", "false");
+    expect(
+      screen.getByRole("link", { name: "Request a new link" }),
+    ).toHaveAttribute("href", "/login/recovery");
+    expect(
+      screen.getByRole("link", { name: "Back to sign-in" }),
+    ).toHaveAttribute("href", "/login");
+    await delay(50);
+    expect(posts).toBe(1);
+  });
+
+  it("moves focus with the bypass link without a fragment or losing entered values", async () => {
+    const user = userEvent.setup();
+    const token = crypto.randomUUID();
+    const password = crypto.randomUUID();
+    let tokenSent = false;
+    document.cookie = `mia_csrf=${crypto.randomUUID()}; Path=/`;
+    renderAt(
+      `/password-reset#token=${token}`,
+      anonymousHandler(),
+      http.post("/api/v1/auth/password-resets", async ({ request }) => {
+        tokenSent = (await request.text()).includes(token);
+        return noContent();
+      }),
+    );
+    await fillPasswords(user, password);
+    const bypass = screen.getByRole("link", { name: "Skip to main content" });
+    bypass.focus();
+    await user.keyboard("{Enter}");
+
+    expect(screen.getByRole("main")).toHaveFocus();
+    expect(window.location.hash).toBe("");
+    expect(resetInputs().every((input) => input.value === password)).toBe(true);
+    await user.click(screen.getByRole("button", { name: "Change password" }));
+    await screen.findByRole("heading", {
+      level: 2,
+      name: "Your password has been changed.",
+    });
+    expect(tokenSent).toBe(true);
+  });
+
+  it("keeps values for a rejected password and clears them when throttled", async () => {
+    const user = userEvent.setup();
+    const password = crypto.randomUUID();
+    let response: "reject" | "throttle" | "accept" = "reject";
+    const tokens: string[] = [];
+    const token = crypto.randomUUID();
+    document.cookie = `mia_csrf=${crypto.randomUUID()}; Path=/`;
+    renderAt(
+      `/password-reset#token=${token}`,
+      anonymousHandler(),
+      http.post("/api/v1/auth/password-resets", async ({ request }) => {
+        const body: unknown = await request.json();
+        tokens.push(JSON.stringify(body).includes(token) ? "same" : "other");
+        if (response === "reject")
+          return errorResponse(422, "auth_invalid_password");
+        if (response === "throttle")
+          return errorResponse(429, "rate_limited", "30");
+        return noContent();
+      }),
+    );
+    await fillPasswords(user, password);
+    const submit = screen.getByRole("button", { name: "Change password" });
+    await user.click(submit);
+    await waitFor(() =>
+      expect(announcementRegion("assertive")).toHaveTextContent(
+        "That password was not accepted.",
+      ),
+    );
+    const [newPassword, confirmation] = resetInputs();
+    expect(newPassword?.value === password).toBe(true);
+    expect(confirmation?.value === password).toBe(true);
+    expect(newPassword).toHaveAttribute("aria-invalid", "true");
+    expect(submit).toHaveFocus();
+
+    response = "throttle";
+    await user.click(submit);
+    await waitFor(() =>
+      expect(
+        document.getElementById("password-reset-status"),
+      ).toHaveTextContent(
+        "Too many attempts. Try again later. Wait at least 30 seconds before trying again.",
+      ),
+    );
+    expect(resetInputs().map((input) => input.value)).toEqual(["", ""]);
+
+    await fillPasswords(user, password);
+    expect(submit).toHaveAttribute("aria-disabled", "true");
+    expect(tokens).toEqual(["same", "same"]);
+  });
+
+  it("sends nothing for a local rule failure and clears passwords after csrf_invalid", async () => {
+    const user = userEvent.setup();
+    const token = crypto.randomUUID();
+    let reads = 0;
+    const sent: boolean[] = [];
+    let rejectCsrf = true;
+    document.cookie = `mia_csrf=${crypto.randomUUID()}; Path=/`;
+    renderAt(
+      `/password-reset#token=${token}`,
+      http.get("/api/v1/auth/session", () => {
+        reads++;
+        return HttpResponse.json(
+          { data: null, meta: { stage: "anonymous" } },
+          { headers: { "Content-Type": mediaType } },
+        );
+      }),
+      http.post("/api/v1/auth/password-resets", async ({ request }) => {
+        sent.push((await request.text()).includes(token));
+        if (rejectCsrf) {
+          rejectCsrf = false;
+          return errorResponse(403, "csrf_invalid");
+        }
+        return noContent();
+      }),
+    );
+    await user.type(
+      await screen.findByLabelText("New password (required)"),
+      "short",
+    );
+    await user.type(
+      screen.getByLabelText("Confirm new password (required)"),
+      "other",
+    );
+    await user.click(screen.getByRole("button", { name: "Change password" }));
+    expect(
+      screen.getByRole("heading", {
+        level: 2,
+        name: "Correct these problems before saving your new password:",
+      }),
+    ).toBeInTheDocument();
+    expect(sent).toEqual([]);
+
+    const password = crypto.randomUUID();
+    for (const input of resetInputs()) await user.clear(input);
+    await fillPasswords(user, password);
+    await user.click(screen.getByRole("button", { name: "Change password" }));
+    await waitFor(() =>
+      expect(announcementRegion("assertive")).toHaveTextContent(
+        "The security check for this page expired.",
+      ),
+    );
+    expect(resetInputs().map((input) => input.value)).toEqual(["", ""]);
+    expect(reads).toBe(2);
+    await delay(50);
+    expect(sent).toEqual([true]);
+
+    await fillPasswords(user, password);
+    await user.click(screen.getByRole("button", { name: "Change password" }));
+    await screen.findByRole("heading", {
+      level: 2,
+      name: "Your password has been changed.",
+    });
+    expect(sent).toEqual([true, true]);
+  });
+
+  it("drops the token on an unknown outcome and offers no resubmit", async () => {
+    const user = userEvent.setup();
+    let posts = 0;
+    document.cookie = `mia_csrf=${crypto.randomUUID()}; Path=/`;
+    renderAt(
+      `/password-reset#token=${crypto.randomUUID()}`,
+      anonymousHandler(),
+      http.post("/api/v1/auth/password-resets", () => {
+        posts++;
+        return HttpResponse.error();
+      }),
+    );
+    await fillPasswords(user, crypto.randomUUID());
+    await user.click(screen.getByRole("button", { name: "Change password" }));
+
+    expect(
+      await screen.findByRole("heading", {
+        level: 2,
+        name: "Password change not confirmed",
+      }),
+    ).toHaveFocus();
+    expect(screen.queryByRole("button", { name: "Change password" })).toBe(
+      null,
+    );
+    expect(
+      screen.getByRole("link", {
+        name: "Try signing in with your new password",
+      }),
+    ).toHaveAttribute("href", "/login");
+    expect(
+      screen.getByRole("link", { name: "Request a new link" }),
+    ).toHaveAttribute("href", "/login/recovery");
+    await delay(50);
+    expect(posts).toBe(1);
+  });
+
+  function stageHandlers(state: {
+    stage: "authenticated" | "anonymous";
+    capabilities: number;
+    capabilityStatus: 200 | 500;
+  }) {
+    return [
+      http.get("/api/v1/auth/session", () =>
+        HttpResponse.json(
+          state.stage === "anonymous"
+            ? { data: null, meta: { stage: state.stage } }
+            : {
+                data: {
+                  type: "auth-sessions",
+                  id: "account-id",
+                  attributes: {
+                    stage: state.stage,
+                    idle_expires_at: "2026-10-01T10:30:00.000000Z",
+                    absolute_expires_at: "2026-10-01T22:00:00.000000Z",
+                  },
+                },
+              },
+          { headers: { "Content-Type": mediaType } },
+        ),
+      ),
+      http.get("/api/v1/users/me/capabilities", () => {
+        state.capabilities++;
+        return state.capabilityStatus === 200
+          ? HttpResponse.json(capabilityDocument(), {
+              headers: { "Content-Type": mediaType },
+            })
+          : new HttpResponse("controlled", { status: 500 });
+      }),
+    ];
+  }
+
+  it.each([200, 500] as const)(
+    "shows the signed-in interstitial from stage discovery alone (capabilities %s) and resets after sign-out",
+    async (capabilityStatus) => {
+      const user = userEvent.setup();
+      const state = {
+        stage: "authenticated" as "authenticated" | "anonymous",
+        capabilities: 0,
+        capabilityStatus,
+      };
+      let logouts = 0;
+      let resets = 0;
+      document.cookie = `mia_csrf=${crypto.randomUUID()}; Path=/`;
+      renderAt(
+        `/password-reset#token=${crypto.randomUUID()}`,
+        ...stageHandlers(state),
+        http.post("/api/v1/auth/logout", () => {
+          logouts++;
+          state.stage = "anonymous";
+          return noContent();
+        }),
+        http.post("/api/v1/auth/password-resets", () => {
+          resets++;
+          return noContent();
+        }),
+      );
+
+      expect(
+        await screen.findByText(
+          "You're currently signed in. To reset a password with this link, sign out first.",
+        ),
+      ).toBeInTheDocument();
+      expect(window.location.pathname).toBe("/password-reset");
+      expect(document.title).toBe("Reset password | MIA");
+      expect(screen.queryByRole("heading", { name: "Home" })).toBeNull();
+      expect(screen.queryByRole("navigation")).toBeNull();
+      await delay(50);
+      expect(state.capabilities).toBe(0);
+      await user.click(
+        screen.getByRole("button", { name: "Sign out and continue" }),
+      );
+
+      const newPassword = await screen.findByLabelText(
+        "New password (required)",
+      );
+      await waitFor(() => expect(newPassword).toHaveFocus());
+      await waitFor(() =>
+        expect(announcementRegion("polite")).toHaveTextContent(
+          "Signed out. You can now choose a new password.",
+        ),
+      );
+      expect(logouts).toBe(1);
+      const password = crypto.randomUUID();
+      await fillPasswords(user, password);
+      await user.click(screen.getByRole("button", { name: "Change password" }));
+      await screen.findByRole("heading", {
+        level: 2,
+        name: "Your password has been changed.",
+      });
+      expect({ resets, capabilities: state.capabilities }).toEqual({
+        resets: 1,
+        capabilities: 0,
+      });
+    },
+  );
+
+  it.each([
+    [200, "Home", "/"],
+    // A failed gate keeps the neutral error where it happened, as on any path.
+    [500, "Unable to check access", "/password-reset"],
+  ] as const)(
+    "runs the capability gate only after a deliberate Go back (capabilities %s)",
+    async (capabilityStatus, heading, path) => {
+      const user = userEvent.setup();
+      const state = {
+        stage: "authenticated" as "authenticated" | "anonymous",
+        capabilities: 0,
+        capabilityStatus,
+      };
+      renderAt(
+        `/password-reset#token=${crypto.randomUUID()}`,
+        ...stageHandlers(state),
+      );
+      await user.click(await screen.findByRole("button", { name: "Go back" }));
+
+      expect(
+        await screen.findByRole("heading", { level: 1, name: heading }),
+      ).toBeInTheDocument();
+      expect(state.capabilities).toBe(1);
+      expect(window.location.pathname).toBe(path);
+    },
+  );
+
+  it("drops the token on Go back and dispatches to the current stage", async () => {
+    const user = userEvent.setup();
+    let resets = 0;
+    renderAt(
+      `/password-reset#token=${crypto.randomUUID()}`,
+      sessionHandler("password-change"),
+      http.post("/api/v1/auth/password-resets", () => {
+        resets++;
+        return noContent();
+      }),
+    );
+    await user.click(await screen.findByRole("button", { name: "Go back" }));
+
+    expect(
+      await screen.findByRole("heading", {
+        level: 1,
+        name: "Choose a new password",
+      }),
+    ).toHaveFocus();
+    expect(window.location.pathname).toBe("/auth/password-change");
+    expect(resets).toBe(0);
   });
 });

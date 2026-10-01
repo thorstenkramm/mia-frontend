@@ -1,5 +1,5 @@
 import { ExclamationTriangleIcon } from "@heroicons/react/20/solid";
-import { Suspense } from "react";
+import { Suspense, useEffect, useSyncExternalStore } from "react";
 import { useIntl } from "react-intl";
 import {
   BrowserRouter,
@@ -11,28 +11,52 @@ import {
 import {
   EntryDataProvider,
   useAuthenticationBootstrapState,
+  useSessionActions,
   type AuthenticationBootstrapState,
   type EntryError,
 } from "../platform/data/EntryDataProvider";
 import { messages } from "../platform/i18n/messages";
 import { TechnicalErrorDisclosure } from "../platform/api/TechnicalErrorDisclosure";
 import type { TextSize } from "../platform/prefs/preferences";
+import {
+  passwordResetPath,
+  passwordResetSurface,
+  type PasswordResetLink,
+  type PasswordResetSurface,
+} from "../platform/session/passwordResetLink";
 import { entryRoutes, type EntryRouteKey } from "./routes/entryRoutes";
 import { SimpleEntrySurface } from "./routes/SimpleEntrySurface";
 
 type AppProps = {
   initialTextSize: TextSize;
+  passwordResetLink: PasswordResetLink;
   queryClient?: Parameters<typeof EntryDataProvider>[0]["queryClient"];
 };
 
-export function App({ initialTextSize, queryClient }: AppProps) {
+export function App({
+  initialTextSize,
+  passwordResetLink,
+  queryClient,
+}: AppProps) {
   return (
-    <EntryDataProvider {...(queryClient ? { queryClient } : {})}>
+    <EntryDataProvider
+      // A link captured at bootstrap shows its interstitial from stage discovery
+      // alone; the capability gate runs only after a deliberate Go back.
+      deferCapabilityGate={
+        passwordResetLink.getSnapshot().kind === "Awaiting stage"
+      }
+      {...(queryClient ? { queryClient } : {})}
+    >
       <BrowserRouter>
         <Routes>
           <Route
             path="*"
-            element={<CanonicalEntry initialTextSize={initialTextSize} />}
+            element={
+              <CanonicalEntry
+                initialTextSize={initialTextSize}
+                passwordResetLink={passwordResetLink}
+              />
+            }
           />
         </Routes>
       </BrowserRouter>
@@ -43,7 +67,16 @@ export function App({ initialTextSize, queryClient }: AppProps) {
 function routeKey(
   state: AuthenticationBootstrapState,
   pathname: string,
+  resetSurface: PasswordResetSurface | null,
 ): EntryRouteKey | null {
+  // A captured reset link owns its path until the flow ends; otherwise the
+  // public recovery and reset routes exist only for anonymous sessions.
+  if (resetSurface !== null) return "passwordReset";
+  if (
+    pathname === "/login/recovery" &&
+    (state.kind === "Signed out" || state.kind === "Logout confirmed")
+  )
+    return "passwordRecovery";
   switch (state.kind) {
     case "Cold":
     case "Checking":
@@ -63,6 +96,9 @@ function routeKey(
       return "passwordChange";
     case "Authenticated":
       return "home";
+    case "Access deferred":
+      // Only the reset interstitial renders this state; without it, stay neutral.
+      return null;
     case "Restricted expired":
       return "signedOut";
     case "Rotating":
@@ -90,10 +126,43 @@ function routeKey(
   }
 }
 
-function CanonicalEntry({ initialTextSize }: AppProps) {
+function CanonicalEntry({
+  initialTextSize,
+  passwordResetLink,
+}: Omit<AppProps, "queryClient">) {
   const state = useAuthenticationBootstrapState();
+  const { continueDeferredAccess } = useSessionActions();
   const location = useLocation();
-  const key = routeKey(state, location.pathname);
+  const resetState = useSyncExternalStore(
+    passwordResetLink.subscribe,
+    passwordResetLink.getSnapshot,
+    passwordResetLink.getSnapshot,
+  );
+  const resetSurface = passwordResetSurface(
+    state,
+    resetState,
+    location.pathname,
+  );
+  const key = routeKey(state, location.pathname, resetSurface);
+
+  // Both stores live outside React: the reset flow follows session changes and
+  // drops its token as soon as the reset path is left.
+  useEffect(() => {
+    passwordResetLink.observeSession(state);
+  }, [passwordResetLink, state]);
+  useEffect(() => {
+    if (location.pathname !== passwordResetPath) passwordResetLink.depart();
+  }, [passwordResetLink, location.pathname]);
+  useEffect(() => {
+    // A link can be abandoned while discovery is pending. Once discovery then
+    // reports authenticated, resume the ordinary gate instead of stranding the
+    // departed route in its reset-only deferred state.
+    if (
+      state.kind === "Access deferred" &&
+      passwordResetLink.getSnapshot().kind === "Link unusable"
+    )
+      void continueDeferredAccess();
+  }, [continueDeferredAccess, passwordResetLink, state]);
 
   if (key === null) {
     return <EntryStateSurface state={state} />;
@@ -119,12 +188,17 @@ function CanonicalEntry({ initialTextSize }: AppProps) {
               (state.kind === "Logout unconfirmed" ||
                 state.kind === "Logout reconciliation needed")
             ? messages.logoutUnconfirmedHeading
-            : route.headingMessage
+            : // The uniform unusable-link result is the page heading, so route
+              // entry and a rejected submission focus the same target.
+              resetSurface?.kind === "link unusable"
+              ? messages.resetLinkUnusableHeading
+              : route.headingMessage
       }
     >
       <Suspense fallback={null}>
         <RouteContent
           initialTextSize={initialTextSize}
+          passwordResetLink={passwordResetLink}
           {...(state.kind === "Logout confirmed"
             ? { logoutConfirmed: true }
             : {})}
@@ -151,6 +225,7 @@ function EntryStateSurface({ state }: { state: AuthenticationBootstrapState }) {
         <EntryFailure error={state.error} source="capabilities" />
       );
     case "Rotating":
+    case "Access deferred":
       return <CheckingAccess />;
     case "Signed out":
     case "MFA required":

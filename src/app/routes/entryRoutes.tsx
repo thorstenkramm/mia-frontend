@@ -1,21 +1,26 @@
 import { lazy, type ComponentType, type LazyExoticComponent } from "react";
 import { messages } from "../../platform/i18n/messages";
 import type { TextSize } from "../../platform/prefs/preferences";
+import type { PasswordResetLink } from "../../platform/session/passwordResetLink";
 
 export type EntryRouteProps = {
   initialTextSize: TextSize;
   logoutConfirmed?: boolean;
+  passwordResetLink: PasswordResetLink;
 };
 type EntryRoute = {
   readonly path:
     | "/"
     | "/login"
+    | "/login/recovery"
+    | "/password-reset"
     | "/auth/mfa"
     | "/auth/mfa/recovery"
     | "/auth/password-change"
     | "/auth/logout";
   readonly gate:
     | "Public"
+    | "Public + Token(reset)"
     | "Restricted(mfa)"
     | "Restricted(password-change)"
     | "Restricted(logout)"
@@ -32,6 +37,24 @@ export const entryRoutes = {
     titleMessage: messages.pageTitle,
     headingMessage: messages.heading,
     component: lazy(() => import("../../features/auth/SignedOutEntryRoute")),
+  },
+  passwordRecovery: {
+    path: "/login/recovery",
+    gate: "Public",
+    titleMessage: messages.recoveryPageTitle,
+    headingMessage: messages.recoveryHeading,
+    component: lazy(
+      () => import("../../features/auth/PasswordRecoveryEntryRoute"),
+    ),
+  },
+  passwordReset: {
+    path: "/password-reset",
+    gate: "Public + Token(reset)",
+    titleMessage: messages.resetPageTitle,
+    headingMessage: messages.resetHeading,
+    component: lazy(
+      () => import("../../features/auth/PasswordResetEntryRoute"),
+    ),
   },
   mfa: {
     path: "/auth/mfa",

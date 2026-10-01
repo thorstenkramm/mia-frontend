@@ -274,22 +274,75 @@ export async function getCurrentAccountCapabilities(
   return { accountId: toAccountId(document.data.id) };
 }
 
-export async function logoutCurrentBrowser(
+export function logoutCurrentBrowser(
   csrfToken: string,
   signal?: AbortSignal,
 ): Promise<void> {
-  const response = await sendUnsafeRequest({
+  return sendNoContent({
     path: "/api/v1/auth/logout",
     csrfToken,
     ...(signal === undefined ? {} : { signal }),
   });
+}
+
+declare const passwordResetTokenBrand: unique symbol;
+// A captured, canonical lowercase UUID v4 bearer token from a reset link.
+export type PasswordResetToken = string & {
+  readonly [passwordResetTokenBrand]: "PasswordResetToken";
+};
+
+// Only `204` is success. Any other non-error status is a malformed outcome.
+export function requestPasswordRecovery(
+  username: string,
+  csrfToken: string,
+): Promise<void> {
+  const body = {
+    data: { type: "password-recovery-requests", attributes: { username } },
+  } satisfies operations["requestPasswordRecovery"]["requestBody"]["content"][typeof jsonApiMediaType];
+  return sendNoContent({
+    path: "/api/v1/auth/password-recovery-requests",
+    csrfToken,
+    body: JSON.stringify(body),
+  });
+}
+
+export function resetPassword(
+  token: PasswordResetToken,
+  password: string,
+  passwordConfirmation: string,
+  csrfToken: string,
+): Promise<void> {
+  const body = {
+    data: {
+      type: "password-resets",
+      attributes: {
+        token,
+        password,
+        password_confirmation: passwordConfirmation,
+      },
+    },
+  } satisfies operations["resetPassword"]["requestBody"]["content"][typeof jsonApiMediaType];
+  return sendNoContent({
+    path: "/api/v1/auth/password-resets",
+    csrfToken,
+    body: JSON.stringify(body),
+  });
+}
+
+async function sendNoContent(
+  options: Parameters<typeof sendUnsafeRequest>[0],
+): Promise<void> {
+  const response = await sendUnsafeRequest(options);
   if (response.status === 204) {
     return;
   }
 
   const body = await response.text();
   if (!response.ok) {
-    throw new ApiHttpError({ status: response.status, body });
+    throw new ApiHttpError(
+      { status: response.status, body },
+      response.headers.get("Retry-After"),
+    );
   }
   throw new ApiProtocolError();
 }

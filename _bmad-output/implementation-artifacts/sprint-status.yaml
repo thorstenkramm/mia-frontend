@@ -29,11 +29,11 @@
 # - Dev moves story to 'review', then runs code-review (fresh context, different LLM recommended)
 # - Retrospective appends its action items to action_items; the status view surfaces open ones
 generated: 09-19-2026 13:57
-last_updated: 10-01-2026 12:00
+last_updated: 10-01-2026 19:21
 project: mia-frontend
 project_key: NOKEY
 tracking_system: file-system
-story_location: 
+story_location: |
   /Users/thorsten/projects/thorsten/mia-frontend/_bmad-output/implementation-artifacts
 development_status:
   epic-1: in-progress
@@ -42,7 +42,7 @@ development_status:
   1-3-password-sign-in-with-restricted-stage-isolation: done
   1-4-mfa-challenge-and-recovery-code-sign-in: done
   1-5-forced-password-replacement: done
-  1-6-password-recovery-and-token-reset: backlog
+  1-6-password-recovery-and-token-reset: done
   1-7-invitation-preview-and-acceptance: backlog
   1-8-session-lifecycle-idle-warning-expiry-shield-logout-bcg-001: backlog
   1-9-totp-enrollment-and-recovery-codes: backlog

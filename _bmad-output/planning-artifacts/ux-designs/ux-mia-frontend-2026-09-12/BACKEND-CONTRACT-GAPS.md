@@ -32,8 +32,8 @@ illustrative vocabulary in this handoff.
 
 ### BCG-001: Anonymous CSRF and authentication-session discovery
 
-Status: **OPEN — cold-entry, Story 1-3 login, Story 1-4 MFA, and Story 1-5 password-replacement slices approved;
-broader obligations remain.**
+Status: **OPEN — cold-entry, Story 1-3 login, Story 1-4 MFA, Story 1-5 password-replacement, and Story 1-6
+recovery/reset slices approved; broader obligations remain.**
 
 Reconciled on 2026-09-27 against backend revision `b83102114802b981a022c237c0746023c0aa6b79`, whose entry correction
 followed baseline `0626b751558c8baa7e4645708ef588b309446ed8`. Backend paths and line references in this BCG-001 assessment
@@ -42,8 +42,8 @@ the frontend did not rerun backend checks. Other BCG entries have not been broad
 
 #### BCG-001 frontend capability blocked
 
-The complete authentication journey remains blocked outside the approved entry, login, MFA, and password-replacement
-slices for invitation and recovery work, lifecycle/BFCache handling, and safe logout recovery. The owner-approved 2026-09-27 partial exception permits only cold
+The complete authentication journey remains blocked outside the approved entry, login, MFA, password-replacement, and
+recovery/reset slices for invitation work, lifecycle/BFCache handling, and safe logout recovery. The owner-approved 2026-09-27 partial exception permits only cold
 `GET /api/v1/auth/session`, authenticated-only `GET /api/v1/users/me/capabilities`, and canonical dispatch among
 `/login`, `/`, `/auth/mfa`, and `/auth/password-change`. It does not close this composite blocker.
 The separate 2026-09-30 Story 1-3 decision below resolves credential-slice authorization and sequencing after the
@@ -52,6 +52,8 @@ The separate 2026-10-01 Story 1-4 decision resolves only MFA challenge verificat
 it does not authorize resend, password replacement, or any broader authentication lifecycle.
 The separate 2026-10-01 Story 1-5 decision resolves only required password replacement through the restricted
 `password-change` stage; it does not authorize voluntary password change, recovery, reset, or invitations.
+The separate 2026-10-01 Story 1-6 decision resolves only staff password recovery on `/login/recovery` and the
+fragment-token reset on `/password-reset`; it does not authorize invitations or any broader lifecycle work.
 
 #### BCG-001 authoritative product requirement
 
@@ -292,6 +294,62 @@ This decision does not authorize voluntary password change, password recovery or
 logout or lifecycle/SSE/BFCache behavior, or anything else in BCG-001, and does not close BCG-001 or BCG-003. Existing
 fresh-CSRF, transition serialization, response fencing, no-replay, ambiguity discovery, restricted isolation, and logout
 ordering requirements still apply.
+
+#### BCG-001 Story 1-6 recovery-and-reset-slice decision
+
+Owner decision, 2026-10-01: Story 1-6 may implement only `POST /api/v1/auth/password-recovery-requests`
+(`requestPasswordRecovery`) on `/login/recovery` and `POST /api/v1/auth/password-resets` (`resetPassword`) on
+`/password-reset`, plus the existing logout where the signed-in interstitial below calls it. The sequencing guidance
+is `mia/docs/api-authentication-and-user-invitation.md` §Password recovery and token reset (lines 317-356); OpenAPI
+remains transport authority.
+
+- **Path:** the frontend adopts `/password-reset`, the path the backend already emails
+  (`mia/docs/product-requirements.md:559-561`). The backend does not change.
+- **Token handling:** synchronous bootstrap captures the fragment token before the application runs, removes the
+  complete fragment with `history.replaceState`, and keeps the token in memory only, never stored. Each request reads a
+  fresh CSRF cookie. Nothing is resent automatically, and ambiguous outcomes are modeled explicitly.
+- **Reset states:** the backend has no token pre-check and returns one uniform `422 auth_invalid_reset_token`. The
+  states are form ready (token captured, nothing checked); one uniform "link invalid or no longer usable" result for
+  `auth_invalid_reset_token`, which drops the token and offers Request a new link (`/login/recovery`) and Back to
+  sign-in; password rejected for `422 auth_invalid_password`, which keeps the token and form; no token (no fragment or
+  token lost on the route), rendered exactly like the uniform invalid result; and outcome unknown. A client-side
+  canonical lowercase UUID v4 check is allowed only as a pre-dispatch rule and renders identically to the uniform
+  invalid result. Invalid, expired, consumed, and throttled tokens are never distinguished in copy, focus, actions, URL,
+  title, announcement, or timing.
+- **Recovery request outcomes:** the operation declares `204/400/403/406/413/415/422`, and throttling returns `204`,
+  so no `429` path exists. `204` shows the uniform "If an eligible account exists, we've sent an email" result and
+  never confirms account existence or delivery. `403 csrf_invalid` refreshes CSRF through session discovery, keeps the
+  username, and allows a deliberate resubmit. `400/406/413/415/422` show a generic "request couldn't be processed"
+  error with no automatic retry. An undeclared `5xx`, timeout, or network loss shows "We couldn't confirm your
+  request", says an email may still arrive, and offers an explicit Send again that sends a new request only on a click.
+- **Reset outcomes:** the operation declares `204/400/403/406/413/415/422/429`; `429` is the global public limit. `429`
+  shows "Too many attempts, try again later", honors a valid `Retry-After`, keeps the token, clears the password
+  fields, and allows a deliberate resubmit. `403 csrf_invalid` refreshes CSRF through session discovery, keeps the
+  token, clears the passwords, and allows a deliberate resubmit. `400/406/413/415` follow Decision 7 below. An
+  undeclared `5xx`, timeout, or network loss is outcome unknown: drop the token, clear the
+  passwords, offer Try signing in with your new password (`/login`) and Request a new link (`/login/recovery`), and
+  offer no resubmit. The missing `500` declarations are accepted on the Story 1-4/1-5 precedent.
+- **Reset success:** `204` stays on `/password-reset` with a focused success state whose heading receives focus and is
+  announced: "Your password has been changed.", a note that MFA remains enabled, and a note that other signed-in
+  browsers are not signed out automatically and expire on their own. It never says "signed out everywhere". A Sign in
+  action goes to `/login`, where normal cold discovery runs; there is no automatic redirect. The token and password
+  fields are dropped.
+- **Link opened while signed in:** for stage `mfa`, `password-change`, or `authenticated`, token capture and stripping
+  happen first, then discovery. A focused interstitial with no user name, protected title, breadcrumb, application
+  navigation, or prefetch says "You're currently signed in. To reset a password with this link, sign out first." Sign
+  out and continue calls the existing logout; after its confirmed anonymous result the reset form shows with the
+  in-memory token. Go back drops the token and dispatches to the current stage. If logout fails or its outcome is
+  unknown, the token is dropped and the existing logout handling owns recovery; logout is never retried automatically.
+  The interstitial follows from session-stage discovery alone: for `authenticated`, the capability read is deferred
+  and runs only if the user deliberately chooses Go back.
+- **Decision 7 (2026-10-01), generic reset rejection:** after a reset `400`, `406`, `413`, or `415`, discard the token
+  and clear the password fields. Show the generic "request couldn't be processed" error with Request a new link
+  (`/login/recovery`) and Back to sign-in. Offer no resubmit.
+
+This decision does not authorize invitation preview or acceptance (Story 1-7), lifecycle/SSE/BFCache behavior, safe
+logout recovery beyond the existing handling, or anything else in BCG-001, and it does not close BCG-001 or BCG-003.
+Existing fresh-CSRF, serialization, response fencing, no-replay, restricted isolation, and logout ordering requirements
+still apply.
 
 #### BCG-001 required observable contract
 
