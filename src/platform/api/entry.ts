@@ -133,7 +133,7 @@ export type EntrySession =
       readonly accountId: AccountId;
       readonly challengeId: MfaChallengeId;
     }
-  | { readonly kind: "password-change" }
+  | { readonly kind: "password-change"; readonly accountId: AccountId }
   | { readonly kind: "authenticated"; readonly accountId: AccountId };
 
 export type AccountCapabilities = { readonly accountId: AccountId };
@@ -161,7 +161,10 @@ function toEntrySession(document: SessionDocument): EntrySession {
         ),
       };
     case "password-change":
-      return { kind: "password-change" };
+      return {
+        kind: "password-change",
+        accountId: toAccountId(document.data.id),
+      };
     case "authenticated":
       return {
         kind: "authenticated",
@@ -182,7 +185,7 @@ export async function discoverSession(
   return toEntrySession(document);
 }
 
-export async function loginWithPassword(
+export function loginWithPassword(
   username: string,
   password: string,
   csrfToken: string,
@@ -190,15 +193,21 @@ export async function loginWithPassword(
   const document = {
     data: { type: "login-attempts", attributes: { username, password } },
   } satisfies operations["login"]["requestBody"]["content"][typeof jsonApiMediaType];
+  return sendAuthTransition("/api/v1/auth/login", csrfToken, document);
+}
+
+async function sendAuthTransition(
+  path: string,
+  csrfToken: string,
+  body: unknown,
+): Promise<EntrySession> {
   const response = await sendUnsafeRequest({
-    path: "/api/v1/auth/login",
+    path,
     csrfToken,
-    body: JSON.stringify(document),
+    body: JSON.stringify(body),
   });
   const session = await parseJsonApiResponse(response, sessionDocumentSchema);
-  if (session.data === null) {
-    throw new ApiProtocolError();
-  }
+  if (session.data === null) throw new ApiProtocolError();
   return toEntrySession(session);
 }
 
@@ -220,14 +229,7 @@ async function completeMfaChallenge(
             attributes: { code },
           },
         } satisfies operations["consumeMFARecoveryCode"]["requestBody"]["content"][typeof jsonApiMediaType]);
-  const response = await sendUnsafeRequest({
-    path,
-    csrfToken,
-    body: JSON.stringify(body),
-  });
-  const session = await parseJsonApiResponse(response, sessionDocumentSchema);
-  if (session.data === null) throw new ApiProtocolError();
-  return toEntrySession(session);
+  return sendAuthTransition(path, csrfToken, body);
 }
 
 export function verifyMfaChallenge(
@@ -244,6 +246,20 @@ export function consumeMfaRecoveryCode(
   csrfToken: string,
 ): Promise<EntrySession> {
   return completeMfaChallenge(challengeId, csrfToken, "recovery", code);
+}
+
+export function changeTemporaryPassword(
+  password: string,
+  passwordConfirmation: string,
+  csrfToken: string,
+): Promise<EntrySession> {
+  const body = {
+    data: {
+      type: "password-changes",
+      attributes: { password, password_confirmation: passwordConfirmation },
+    },
+  } satisfies operations["changePassword"]["requestBody"]["content"][typeof jsonApiMediaType];
+  return sendAuthTransition("/api/v1/auth/password-changes", csrfToken, body);
 }
 
 export async function getCurrentAccountCapabilities(

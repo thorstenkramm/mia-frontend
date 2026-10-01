@@ -1,5 +1,6 @@
 import { createHash, randomBytes } from "node:crypto";
-import { act, render, screen, waitFor } from "@testing-library/react";
+import { useEffect } from "react";
+import { act, render, screen, waitFor, within } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
 import { delay, http, HttpResponse } from "msw";
 import { afterEach, describe, expect, it, vi } from "vitest";
@@ -9,7 +10,10 @@ import {
   createEntryQueryClient,
   type EntryQueryClient,
 } from "../platform/data/EntryDataProvider";
-import { AnnouncementProvider } from "../platform/announcer/AnnouncementRegion";
+import {
+  AnnouncementProvider,
+  useAnnouncer,
+} from "../platform/announcer/AnnouncementRegion";
 import { applyDocumentLocale } from "../platform/i18n/locales";
 import {
   MiaIntlProvider,
@@ -1423,5 +1427,601 @@ describe("localized anonymous entry", () => {
     expect(
       screen.getByText("Technical details could not be copied."),
     ).toBeInTheDocument();
+  });
+});
+
+describe("required password replacement", () => {
+  function authenticatedResponse() {
+    return HttpResponse.json(
+      {
+        data: {
+          type: "auth-sessions",
+          id: "account-id",
+          attributes: {
+            stage: "authenticated",
+            idle_expires_at: "2026-10-01T10:30:00.000000Z",
+            absolute_expires_at: "2026-10-01T22:00:00.000000Z",
+          },
+        },
+      },
+      { headers: { "Content-Type": mediaType } },
+    );
+  }
+
+  async function fillReplacement(
+    user: ReturnType<typeof userEvent.setup>,
+    password: string,
+    confirmation = password,
+  ) {
+    const newPassword = await screen.findByLabelText<HTMLInputElement>(
+      "New password (required)",
+    );
+    const confirm = screen.getByLabelText<HTMLInputElement>(
+      "Confirm new password (required)",
+    );
+    newPassword.focus();
+    await user.paste(password);
+    confirm.focus();
+    await user.paste(confirmation);
+    return { newPassword, confirm };
+  }
+
+  function saveButton() {
+    return screen.getByRole("button", { name: "Save new password" });
+  }
+
+  it("renders only the focused replacement form with new-password purposes and rules before entry", async () => {
+    let capabilities = 0;
+    renderEntry(
+      sessionHandler("password-change"),
+      http.get("/api/v1/users/me/capabilities", () => {
+        capabilities++;
+        return HttpResponse.json(capabilityDocument(), {
+          headers: { "Content-Type": mediaType },
+        });
+      }),
+    );
+
+    expect(
+      await screen.findByRole("heading", {
+        level: 1,
+        name: "Choose a new password",
+      }),
+    ).toBeInTheDocument();
+    expect(document.title).toBe("Choose a new password | MIA");
+    const newPassword = await screen.findByLabelText("New password (required)");
+    const confirm = screen.getByLabelText("Confirm new password (required)");
+    for (const input of [newPassword, confirm]) {
+      expect(input).toHaveAttribute("type", "password");
+      expect(input).toHaveAttribute("autocomplete", "new-password");
+      expect(input).not.toHaveAttribute("aria-invalid", "true");
+    }
+    expect(newPassword).toHaveAccessibleDescription(
+      /12 to 128 characters and at most 512 bytes.*not trimmed or normalized.*Very common passwords/u,
+    );
+    expect(screen.queryByLabelText(/current password/iu)).toBeNull();
+    expect(screen.queryByRole("navigation")).toBeNull();
+    expect(screen.queryByText("Home")).toBeNull();
+    expect(
+      screen.getByRole("button", { name: "Sign out" }),
+    ).toBeInTheDocument();
+    expect(capabilities).toBe(0);
+  });
+
+  it("submits exact pasted bytes once and reaches Home only through the capability gate", async () => {
+    const user = userEvent.setup();
+    const password = ` ${crypto.randomUUID()} é `;
+    let reads = 0;
+    let posts = 0;
+    let capabilities = 0;
+    let bodyFingerprint = "";
+    renderEntry(
+      sessionHandler("password-change", () => {
+        reads++;
+      }),
+      http.post("/api/v1/auth/password-changes", async ({ request }) => {
+        posts++;
+        bodyFingerprint = fingerprint(await request.text());
+        return authenticatedResponse();
+      }),
+      http.get("/api/v1/users/me/capabilities", async () => {
+        capabilities++;
+        await delay(20);
+        return HttpResponse.json(capabilityDocument(), {
+          headers: { "Content-Type": mediaType },
+        });
+      }),
+    );
+    document.cookie = `mia_csrf=${crypto.randomUUID()}; Path=/`;
+    await fillReplacement(user, password);
+
+    await user.click(saveButton());
+
+    expect(
+      await screen.findByRole("heading", { name: "Checking access" }),
+    ).toBeInTheDocument();
+    expect(screen.queryByRole("heading", { name: "Home" })).toBeNull();
+    expect(
+      await screen.findByRole("heading", { name: "Home" }),
+    ).toBeInTheDocument();
+    expect(bodyFingerprint).toBe(
+      fingerprint(
+        JSON.stringify({
+          data: {
+            type: "password-changes",
+            attributes: { password, password_confirmation: password },
+          },
+        }),
+      ),
+    );
+    expect({ reads, posts, capabilities }).toEqual({
+      reads: 1,
+      posts: 1,
+      capabilities: 1,
+    });
+    expect(screen.queryByLabelText("New password (required)")).toBeNull();
+  });
+
+  it.each([
+    ["too short", "a".repeat(11), "a".repeat(11), "new", "is too short"],
+    ["too long", "a".repeat(129), "a".repeat(129), "new", "is too long"],
+    [
+      "mismatched",
+      "a".repeat(12),
+      `${"a".repeat(12)} `,
+      "confirm",
+      "does not match",
+    ],
+  ] as const)(
+    "names a %s single-field rule, focuses that field, and sends nothing",
+    async (_label, password, confirmation, field, copy) => {
+      const user = userEvent.setup();
+      let posts = 0;
+      renderEntry(
+        sessionHandler("password-change"),
+        http.post("/api/v1/auth/password-changes", () => {
+          posts++;
+          return authenticatedResponse();
+        }),
+      );
+      document.cookie = `mia_csrf=${crypto.randomUUID()}; Path=/`;
+      const { newPassword, confirm } = await fillReplacement(
+        user,
+        password,
+        confirmation,
+      );
+
+      await user.click(saveButton());
+
+      const invalid = field === "new" ? newPassword : confirm;
+      const valid = field === "new" ? confirm : newPassword;
+      await waitFor(() => expect(invalid).toHaveFocus());
+      expect(invalid).toHaveAttribute("aria-invalid", "true");
+      expect(invalid).toHaveAccessibleDescription(new RegExp(copy, "u"));
+      expect(valid).toHaveAttribute("aria-invalid", "false");
+      expect(screen.queryByRole("heading", { level: 2 })).toBeNull();
+      expect(newPassword.value === password).toBe(true);
+      expect(confirm.value === confirmation).toBe(true);
+      expect(posts).toBe(0);
+    },
+  );
+
+  it("summarizes multiple failed rules, links to each control, and clears stale errors on a corrected submit", async () => {
+    const user = userEvent.setup();
+    let posts = 0;
+    renderEntry(
+      sessionHandler("password-change"),
+      http.post("/api/v1/auth/password-changes", () => {
+        posts++;
+        return authenticatedResponse();
+      }),
+      http.get("/api/v1/users/me/capabilities", () =>
+        HttpResponse.json(capabilityDocument(), {
+          headers: { "Content-Type": mediaType },
+        }),
+      ),
+    );
+    document.cookie = `mia_csrf=${crypto.randomUUID()}; Path=/`;
+    const { newPassword, confirm } = await fillReplacement(
+      user,
+      "short",
+      "other",
+    );
+
+    await user.click(saveButton());
+
+    const heading = await screen.findByRole("heading", {
+      level: 2,
+      name: "Correct these problems before saving your new password:",
+    });
+    const summary = heading.closest<HTMLElement>("[tabindex='-1']");
+    if (summary === null) throw new Error("Missing focusable error summary.");
+    await waitFor(() => expect(summary).toHaveFocus());
+    expect(newPassword).toHaveAttribute("aria-invalid", "true");
+    expect(confirm).toHaveAttribute("aria-invalid", "true");
+    const links = within(summary).getAllByRole("link");
+    expect(links.map((link) => link.textContent)).toEqual([
+      "The new password is too short. Use at least 12 characters.",
+      "The confirmation does not match the new password. Enter exactly the same password in both fields.",
+    ]);
+    const confirmationLink = links[1];
+    if (confirmationLink === undefined)
+      throw new Error("Missing confirmation summary link.");
+    await user.click(confirmationLink);
+    expect(confirm).toHaveFocus();
+    expect(window.location.hash).toBe("");
+    expect(posts).toBe(0);
+
+    const corrected = crypto.randomUUID();
+    await user.clear(newPassword);
+    await user.clear(confirm);
+    await fillReplacement(user, corrected);
+    await user.click(saveButton());
+
+    expect(
+      await screen.findByRole("heading", { name: "Home" }),
+    ).toBeInTheDocument();
+    expect(posts).toBe(1);
+  });
+
+  it.each([
+    [422, "auth_invalid_password", "That password was not accepted"],
+    [429, "rate_limited", "temporarily limited"],
+    [400, "malformed_request", "could not save the new password"],
+  ] as const)(
+    "preserves moved focus, values, and the form when delayed HTTP %s completes",
+    async (status, code, copy) => {
+      const user = userEvent.setup();
+      const password = ` ${crypto.randomUUID()} é `;
+      const raw = JSON.stringify({
+        errors: [
+          { status: String(status), code, detail: "<img src=x onerror=1>" },
+        ],
+      });
+      const response = deferredVoid();
+      let posts = 0;
+      renderEntry(
+        sessionHandler("password-change"),
+        http.post("/api/v1/auth/password-changes", async () => {
+          posts++;
+          await response.promise;
+          return new HttpResponse(raw, {
+            status,
+            headers: { "Content-Type": mediaType, "Retry-After": "42" },
+          });
+        }),
+      );
+      document.cookie = `mia_csrf=${crypto.randomUUID()}; Path=/`;
+      const { newPassword, confirm } = await fillReplacement(user, password);
+
+      await user.click(saveButton());
+      await waitFor(() => expect(posts).toBe(1));
+      expect(announcementRegion("polite")).toHaveTextContent(
+        "Saving new password…",
+      );
+      const signOut = screen.getByRole("button", { name: "Sign out" });
+      // Keyboard navigation continues while the response is pending.
+      signOut.focus();
+      response.resolve();
+
+      await waitFor(() =>
+        expect(announcementRegion("assertive")).toHaveTextContent(copy),
+      );
+      expect(signOut).toHaveFocus();
+      expect(
+        document.getElementById("password-change-status"),
+      ).toHaveTextContent(copy);
+      expect(screen.queryByRole("alert")).toBeNull();
+      expect(screen.queryByRole("status")).toBeNull();
+      expect(announcementRegion("assertive").textContent?.includes(raw)).toBe(
+        false,
+      );
+      expect(newPassword.value === password).toBe(true);
+      expect(confirm.value === password).toBe(true);
+      expect(newPassword).toHaveAttribute(
+        "aria-invalid",
+        status === 422 ? "true" : "false",
+      );
+      if (status === 429)
+        expect(announcementRegion("assertive")).toHaveTextContent("42 seconds");
+      else
+        expect(announcementRegion("assertive")).not.toHaveTextContent(
+          "42 seconds",
+        );
+      expect(
+        screen.getByRole("button", { name: "Technical details" }),
+      ).toHaveAttribute("aria-expanded", "false");
+      expect(document.querySelector("img")).toBeNull();
+      expect(posts).toBe(1);
+    },
+  );
+
+  it("rediscovers the stage after auth_password_change_required and returns anonymous users to sign-in", async () => {
+    const user = userEvent.setup();
+    let reads = 0;
+    let posts = 0;
+    renderEntry(
+      http.get("/api/v1/auth/session", () => {
+        reads++;
+        return reads === 1
+          ? HttpResponse.json(
+              {
+                data: {
+                  type: "auth-sessions",
+                  id: "account-id",
+                  attributes: {
+                    stage: "password-change",
+                    idle_expires_at: "2026-10-01T10:30:00.000000Z",
+                    absolute_expires_at: "2026-10-01T10:30:00.000000Z",
+                  },
+                },
+              },
+              { headers: { "Content-Type": mediaType } },
+            )
+          : HttpResponse.json(
+              { data: null, meta: { stage: "anonymous" } },
+              { headers: { "Content-Type": mediaType } },
+            );
+      }),
+      http.post("/api/v1/auth/password-changes", () => {
+        posts++;
+        return HttpResponse.json(
+          {
+            errors: [{ status: "403", code: "auth_password_change_required" }],
+          },
+          { status: 403, headers: { "Content-Type": mediaType } },
+        );
+      }),
+    );
+    document.cookie = `mia_csrf=${crypto.randomUUID()}; Path=/`;
+    await fillReplacement(user, crypto.randomUUID());
+
+    await user.click(saveButton());
+
+    expect(
+      await screen.findByRole("heading", { name: "Sign in to MIA" }),
+    ).toBeInTheDocument();
+    expect(screen.queryByLabelText("New password (required)")).toBeNull();
+    expect({ reads, posts }).toEqual({ reads: 2, posts: 1 });
+  });
+
+  it("shows outcome unknown without moving focus, keeps an explicit recheck focused, and never resends", async () => {
+    const user = userEvent.setup();
+    const password = crypto.randomUUID();
+    const recovery = deferredVoid();
+    let reads = 0;
+    let posts = 0;
+    renderEntry(
+      http.get("/api/v1/auth/session", async () => {
+        reads++;
+        if (reads === 2) return HttpResponse.error();
+        if (reads === 3) await recovery.promise;
+        return HttpResponse.json(
+          {
+            data: {
+              type: "auth-sessions",
+              id: "account-id",
+              attributes: {
+                stage: "password-change",
+                idle_expires_at: "2026-10-01T10:30:00.000000Z",
+                absolute_expires_at: "2026-10-01T10:30:00.000000Z",
+              },
+            },
+          },
+          { headers: { "Content-Type": mediaType } },
+        );
+      }),
+      http.post("/api/v1/auth/password-changes", () => {
+        posts++;
+        return new HttpResponse("upstream", { status: 502 });
+      }),
+    );
+    document.cookie = `mia_csrf=${crypto.randomUUID()}; Path=/`;
+    const { newPassword } = await fillReplacement(user, password);
+
+    await user.click(saveButton());
+
+    await waitFor(() =>
+      expect(announcementRegion("assertive")).toHaveTextContent(
+        "The outcome is unknown and status could not be checked.",
+      ),
+    );
+    const recheck = screen.getByRole("button", {
+      name: "Check sign-in status",
+    });
+    expect(saveButton()).toHaveFocus();
+    expect(saveButton()).toHaveAttribute("aria-disabled", "true");
+    expect(newPassword).toHaveAttribute("readonly");
+    await user.click(saveButton());
+    expect(posts).toBe(1);
+
+    await user.click(recheck);
+    expect(recheck).toHaveFocus();
+    expect(recheck).toHaveAttribute("aria-disabled", "true");
+    expect(announcementRegion("polite")).toHaveTextContent(
+      "The outcome is unknown. Checking current sign-in status…",
+    );
+    recovery.resolve();
+
+    await waitFor(() =>
+      expect(announcementRegion("assertive")).toHaveTextContent(
+        "The outcome was not confirmed. This browser still requires a new password.",
+      ),
+    );
+    expect(
+      screen.queryByRole("button", { name: "Check sign-in status" }),
+    ).toBeNull();
+    expect(newPassword).toHaveFocus();
+    expect(newPassword.value === password).toBe(true);
+    expect({ reads, posts }).toEqual({ reads: 3, posts: 1 });
+  });
+
+  it("announces each invalid submission assertively through the shared owner", async () => {
+    const user = userEvent.setup();
+    let posts = 0;
+    renderEntry(
+      sessionHandler("password-change"),
+      http.post("/api/v1/auth/password-changes", () => {
+        posts++;
+        return authenticatedResponse();
+      }),
+    );
+    document.cookie = `mia_csrf=${crypto.randomUUID()}; Path=/`;
+    await fillReplacement(user, "short", "other");
+
+    await user.click(saveButton());
+    await waitFor(() =>
+      expect(announcementRegion("assertive")).toHaveTextContent(
+        "Correct these problems before saving your new password: The new password is too short. Use at least 12 characters. The confirmation does not match the new password. Enter exactly the same password in both fields.",
+      ),
+    );
+    const firstNode = announcementRegion("assertive").firstElementChild;
+    expect(announcementRegion("polite")).toBeEmptyDOMElement();
+
+    await user.click(saveButton());
+    await waitFor(() =>
+      expect(announcementRegion("assertive").firstElementChild).not.toBe(
+        firstNode,
+      ),
+    );
+    expect(announcementRegion("assertive")).toHaveTextContent(
+      "Correct these problems before saving your new password:",
+    );
+    expect(document.querySelectorAll("main [aria-live]")).toHaveLength(0);
+    // The entered confirmation never reaches the announcement.
+    expect(announcementRegion("assertive").textContent?.includes("other")).toBe(
+      false,
+    );
+
+    const confirm = screen.getByLabelText<HTMLInputElement>(
+      "Confirm new password (required)",
+    );
+    await user.clear(confirm);
+    confirm.focus();
+    await user.paste("short");
+    await user.click(saveButton());
+    await waitFor(() =>
+      expect(announcementRegion("assertive")).toHaveTextContent(
+        /^The new password is too short\. Use at least 12 characters\.$/u,
+      ),
+    );
+    expect(posts).toBe(0);
+  });
+
+  it("lets copy feedback replace an outcome and retires the form's announcement on logout", async () => {
+    const user = userEvent.setup();
+    let posts = 0;
+    renderEntry(
+      sessionHandler("password-change"),
+      http.post("/api/v1/auth/password-changes", () => {
+        posts++;
+        return HttpResponse.json(
+          { errors: [{ status: "422", code: "auth_invalid_password" }] },
+          { status: 422, headers: { "Content-Type": mediaType } },
+        );
+      }),
+      http.post("/api/v1/auth/logout", async () => {
+        await delay(50);
+        return new HttpResponse(null, { status: 204 });
+      }),
+    );
+    document.cookie = `mia_csrf=${crypto.randomUUID()}; Path=/`;
+    await fillReplacement(user, crypto.randomUUID());
+    await user.click(saveButton());
+    await waitFor(() =>
+      expect(announcementRegion("assertive")).toHaveTextContent(
+        "That password was not accepted.",
+      ),
+    );
+
+    await user.click(screen.getByRole("button", { name: "Technical details" }));
+    await user.click(
+      screen.getByRole("button", { name: "Copy technical details" }),
+    );
+    await waitFor(() =>
+      expect(announcementRegion("polite")).toHaveTextContent(
+        /Technical details (copied|could not be copied)\./u,
+      ),
+    );
+    expect(announcementRegion("assertive")).toBeEmptyDOMElement();
+
+    await user.click(saveButton());
+    await waitFor(() =>
+      expect(announcementRegion("assertive")).toHaveTextContent(
+        "That password was not accepted.",
+      ),
+    );
+    await user.click(screen.getByRole("button", { name: "Sign out" }));
+    await screen.findByRole("heading", { level: 1, name: "Signing out" });
+    expect(announcementRegion("assertive")).not.toHaveTextContent(
+      "That password was not accepted.",
+    );
+    expect(posts).toBe(2);
+  });
+
+  it("lets a same-turn authentication-loss announcement win arbitration over form validation", async () => {
+    const user = userEvent.setup();
+    function AuthLossOnSubmit() {
+      const { announce } = useAnnouncer();
+      useEffect(() => {
+        const listener = () => announce("Sign-in expired.", "auth");
+        document.addEventListener("submit", listener, true);
+        return () => document.removeEventListener("submit", listener, true);
+      }, [announce]);
+      return null;
+    }
+    server.use(sessionHandler("password-change"));
+    applyDocumentLocale("en-US");
+    applyTextSize("standard");
+    render(
+      <AnnouncementProvider>
+        <AuthLossOnSubmit />
+        <MiaIntlProvider initialLocale="en-US">
+          <App initialTextSize="standard" />
+        </MiaIntlProvider>
+      </AnnouncementProvider>,
+    );
+    await fillReplacement(user, "short", "short");
+
+    await user.click(saveButton());
+
+    await waitFor(() =>
+      expect(announcementRegion("assertive")).toHaveTextContent(
+        "Sign-in expired.",
+      ),
+    );
+    expect(announcementRegion("assertive")).not.toHaveTextContent("too short");
+    expect(screen.getByLabelText("New password (required)")).toHaveAttribute(
+      "aria-invalid",
+      "true",
+    );
+  });
+
+  it("reveals each password with an object-specific pressed toggle that keeps value and selection", async () => {
+    const user = userEvent.setup();
+    renderEntry(sessionHandler("password-change"));
+    const password = ` ${crypto.randomUUID()} é `;
+    const { newPassword, confirm } = await fillReplacement(user, password);
+    newPassword.focus();
+    newPassword.setSelectionRange(2, 6);
+    await user.tab();
+    const reveal = screen.getByRole("button", { name: "Show new password" });
+    expect(reveal).toHaveFocus();
+    await user.keyboard(" ");
+
+    expect(reveal).toHaveAttribute("aria-pressed", "true");
+    expect(reveal).toHaveAccessibleName("Hide new password");
+    expect(newPassword).toHaveAttribute("type", "text");
+    expect(confirm).toHaveAttribute("type", "password");
+    expect(newPassword.value === password).toBe(true);
+    expect(
+      newPassword.selectionStart === 2 && newPassword.selectionEnd === 6,
+    ).toBe(true);
+    const confirmationReveal = screen.getByRole("button", {
+      name: "Show password confirmation",
+    });
+    await user.click(confirmationReveal);
+    expect(confirm).toHaveAttribute("type", "text");
+    expect(confirmationReveal).toHaveAttribute("aria-pressed", "true");
   });
 });

@@ -57,6 +57,11 @@ export function useSessionActions(): {
   readonly selectMfaRoute: (route: MfaRoute) => void;
   readonly submitMfa: (route: MfaRoute, code: string) => Promise<void>;
   readonly recheckMfa: () => Promise<void>;
+  readonly submitPasswordChange: (
+    password: string,
+    passwordConfirmation: string,
+  ) => Promise<void>;
+  readonly recheckPasswordChange: () => Promise<void>;
 } {
   const controller = useSessionController();
   return {
@@ -68,5 +73,8 @@ export function useSessionActions(): {
     selectMfaRoute: (route) => controller.selectMfaRoute(route),
     submitMfa: (route, code) => controller.submitMfa(route, code),
     recheckMfa: () => controller.recheckMfa(),
+    submitPasswordChange: (password, passwordConfirmation) =>
+      controller.submitPasswordChange(password, passwordConfirmation),
+    recheckPasswordChange: () => controller.recheckPasswordChange(),
   };
 }

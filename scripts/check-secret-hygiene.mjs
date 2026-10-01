@@ -15,6 +15,7 @@ const markers = [
     randomBytes(16),
     (byte) => recoveryAlphabet[byte % recoveryAlphabet.length],
   ).join(""),
+  `replacement-password-${randomBytes(24).toString("hex")}`,
 ];
 
 async function leakingArtifacts(directory) {
@@ -47,12 +48,18 @@ try {
         MIA_SECRET_HYGIENE_RAW_ERROR: markers[2],
         MIA_SECRET_HYGIENE_MFA_CODE: markers[3],
         MIA_SECRET_HYGIENE_RECOVERY_CODE: markers[4],
+        MIA_SECRET_HYGIENE_REPLACEMENT_PASSWORD: markers[5],
       },
       maxBuffer: 16 * 1024 * 1024,
     },
   );
-  if (result.error !== undefined || result.status !== 1) {
-    throw new Error("Controlled failure did not fail exactly once.");
+  // Both controlled tests (form flow and retained-secret assertion) must fail.
+  if (
+    result.error !== undefined ||
+    result.status !== 1 ||
+    !result.stdout.includes(Buffer.from("2 failed"))
+  ) {
+    throw new Error("Controlled failures did not each fail exactly once.");
   }
   const processLeak = markers.some(
     (marker) =>

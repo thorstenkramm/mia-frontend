@@ -127,6 +127,14 @@ confirms it. The planning package is complete; this spec binds it to the archite
   `authenticated` stages continue through the existing restricted placeholder or capability gate respectively. This
   approval does not authorize password replacement, recovery, invitations, broader lifecycle work, or close BCG-001 or
   BCG-003.
+- Owner-approved password-replacement alignment, 2026-10-01: Story 1-5 may implement only
+  `POST /api/v1/auth/password-changes` on `/auth/password-change` under `Restricted(password-change)`, plus the approved
+  restricted logout, as recorded in `BACKEND-CONTRACT-GAPS.md` §BCG-001 Story 1-5 password-replacement-slice decision.
+  A definitive authenticated `200` continues directly to the capability/scope gate without extra discovery.
+  `403 auth_password_change_required` rediscovers and follows the actual stage. Undeclared `5xx` and transport loss are
+  unclear outcomes reconciled by discovery without resend. The local length, byte, and exact-match checks send nothing
+  when they fail, and `422 auth_invalid_password` shows one general rejection. This approval does not authorize voluntary
+  password change, recovery, reset, invitations, broader lifecycle work, or close BCG-001 or BCG-003.
 
 ## Non-goals
 
@@ -156,6 +164,7 @@ activates a course without a manual, and a student completes a second tutoring s
 - BCG-001 and BCG-003 remain open after the owner-approved Story 1-2 entry slice; the exact partial exception is recorded
   under Constraints and in `BACKEND-CONTRACT-GAPS.md` and must not be generalized to their deferred obligations.
 - Story 1-3's request-ID interpretation, direct-success stage dispatch, and login internal-error response are resolved;
-  Story 1-4's method-neutral challenge, no-Resend decision, and recovery normalization are resolved. The broader
-  BCG-001 obligations remain open and are not part of either narrow approval.
+  Story 1-4's method-neutral challenge, no-Resend decision, and recovery normalization are resolved; Story 1-5's
+  password-replacement slice, stage-rediscovery, unclear-outcome, and local-validation questions are resolved. The
+  broader BCG-001 obligations remain open and are not part of any of these narrow approvals.
 - The exact Tailwind Plus component-to-blueprint binding is pending — a pre-implementation gate before UI stories.

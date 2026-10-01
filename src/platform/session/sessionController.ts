@@ -3,6 +3,7 @@ import {
   getCurrentAccountCapabilities,
   logoutCurrentBrowser,
   loginWithPassword,
+  changeTemporaryPassword,
   consumeMfaRecoveryCode,
   verifyMfaChallenge,
   type EntryApiFailure,
@@ -28,7 +29,11 @@ export type AuthenticationBootstrapState =
       readonly route: MfaRoute;
       readonly outcome?: MfaOutcome;
     }
-  | { readonly kind: "Password change" }
+  | {
+      readonly kind: "Password change";
+      readonly accountId: AccountId;
+      readonly outcome?: PasswordChangeOutcome;
+    }
   | { readonly kind: "Access checking"; readonly phase: "loading" }
   | {
       readonly kind: "Access checking";
@@ -50,6 +55,14 @@ export type AuthenticationBootstrapState =
       readonly route: MfaRoute;
       readonly accountId: AccountId;
       readonly challengeId: MfaChallengeId;
+      readonly error?: EntryApiFailure;
+      readonly reconciliationError?: EntryApiFailure;
+    }
+  | {
+      readonly kind: "Rotating";
+      readonly origin: "password-change";
+      readonly phase: "submitting" | "reconciling" | "reconciliation failed";
+      readonly accountId: AccountId;
       readonly error?: EntryApiFailure;
       readonly reconciliationError?: EntryApiFailure;
     }
@@ -76,6 +89,27 @@ type MfaOutcome = {
     | "unconfirmed"
     | "expired";
   readonly error: EntryApiFailure;
+};
+type PasswordChangeOutcome = {
+  readonly kind: "rejected" | "throttled" | "failed" | "unconfirmed";
+  readonly error: EntryApiFailure;
+};
+type HttpFailure = Extract<EntryApiFailure, { readonly kind: "http" }>;
+type RotatingPhase = "submitting" | "reconciling" | "reconciliation failed";
+type RotatingDetails = {
+  readonly error?: EntryApiFailure;
+  readonly reconciliationError?: EntryApiFailure;
+};
+// One restricted stage's authoritative binding. A transition and its recovery
+// use it to recognize the same context, render rotation, and return to the stage.
+type RestrictedContext = {
+  readonly isCurrent: (session: EntrySession) => boolean;
+  readonly rotating: (
+    phase: RotatingPhase,
+    details: RotatingDetails,
+  ) => AuthenticationBootstrapState;
+  readonly rejected: (failure: HttpFailure) => AuthenticationBootstrapState;
+  readonly restored: (error?: EntryApiFailure) => AuthenticationBootstrapState;
 };
 type LoginRecoveryOrigin = "none" | "local ambiguity" | "passive revalidation";
 type LoginOutcome = {
@@ -118,17 +152,15 @@ function readCurrentCsrfCookie(): string | null {
 
 function isRestrictedState(
   state: AuthenticationBootstrapState,
-): state is
-  | { readonly kind: "MFA required" }
-  | { readonly kind: "Password change" }
-  | Extract<
-      AuthenticationBootstrapState,
-      { readonly kind: "Rotating"; readonly origin: "mfa" }
-    > {
+): state is Extract<
+  AuthenticationBootstrapState,
+  | { readonly kind: "MFA required" | "Password change" }
+  | { readonly kind: "Rotating"; readonly origin: "mfa" | "password-change" }
+> {
   return (
     state.kind === "MFA required" ||
     state.kind === "Password change" ||
-    (state.kind === "Rotating" && state.origin === "mfa")
+    (state.kind === "Rotating" && state.origin !== "login")
   );
 }
 
@@ -259,17 +291,14 @@ export class SessionController {
     )
       return Promise.resolve();
     const sequence = ++this.sequence;
-    const accountId = this.state.accountId;
     const challengeId = this.state.challengeId;
-    this.setState({
-      kind: "Rotating",
-      origin: "mfa",
-      phase: "submitting",
-      route,
-      accountId,
-      challengeId,
-    });
-    const work = this.runMfa(route, code, accountId, challengeId, sequence);
+    const context = mfaContext(route, this.state.accountId, challengeId);
+    this.setState(context.rotating("submitting", {}));
+    const work = this.runRestrictedTransition(sequence, context, (csrf) =>
+      route === "challenge"
+        ? verifyMfaChallenge(challengeId, code, csrf)
+        : consumeMfaRecoveryCode(challengeId, code, csrf),
+    );
     this.trackSettlement(work);
     return work;
   }
@@ -281,11 +310,44 @@ export class SessionController {
       this.state.phase !== "reconciliation failed"
     )
       return Promise.resolve();
-    const work = this.reconcileMfa(
+    const work = this.reconcileRestricted(
       ++this.sequence,
-      this.state.route,
-      this.state.accountId,
-      this.state.challengeId,
+      mfaContext(
+        this.state.route,
+        this.state.accountId,
+        this.state.challengeId,
+      ),
+      this.state.error,
+    );
+    this.trackSettlement(work);
+    return work;
+  }
+
+  submitPasswordChange(
+    password: string,
+    passwordConfirmation: string,
+  ): Promise<void> {
+    if (this.state.kind !== "Password change") return Promise.resolve();
+    const sequence = ++this.sequence;
+    const context = passwordChangeContext(this.state.accountId);
+    this.setState(context.rotating("submitting", {}));
+    const work = this.runRestrictedTransition(sequence, context, (csrf) =>
+      changeTemporaryPassword(password, passwordConfirmation, csrf),
+    );
+    this.trackSettlement(work);
+    return work;
+  }
+
+  recheckPasswordChange(): Promise<void> {
+    if (
+      this.state.kind !== "Rotating" ||
+      this.state.origin !== "password-change" ||
+      this.state.phase !== "reconciliation failed"
+    )
+      return Promise.resolve();
+    const work = this.reconcileRestricted(
+      ++this.sequence,
+      passwordChangeContext(this.state.accountId),
       this.state.error,
     );
     this.trackSettlement(work);
@@ -459,12 +521,10 @@ export class SessionController {
     }
   }
 
-  private async runMfa(
-    route: MfaRoute,
-    code: string,
-    accountId: AccountId,
-    challengeId: MfaChallengeId,
+  private async runRestrictedTransition(
     sequence: number,
+    context: RestrictedContext,
+    dispatch: (csrf: string) => Promise<EntrySession>,
   ): Promise<void> {
     let ambiguity: EntryApiFailure | undefined;
     let mutationDispatched = false;
@@ -472,17 +532,11 @@ export class SessionController {
       await withLoginCoordinatorLock(async (queued) => {
         if (sequence !== this.sequence) return;
         if (queued) {
+          // A queued lease may follow another tab's transition: dispatch only
+          // while discovery still reports this exact restricted binding.
           const current = await discoverSession();
           if (sequence !== this.sequence) return;
-          if (current.kind !== "mfa" || current.challengeId !== challengeId) {
-            await this.applySession(
-              current,
-              sequence,
-              new AbortController().signal,
-            );
-            return;
-          }
-          if (current.accountId !== accountId) {
+          if (!context.isCurrent(current)) {
             await this.applySession(
               current,
               sequence,
@@ -494,81 +548,40 @@ export class SessionController {
         const csrf = readCurrentCsrfCookie();
         if (csrf === null) throw new ApiProtocolError();
         mutationDispatched = true;
-        const session =
-          route === "challenge"
-            ? await verifyMfaChallenge(challengeId, code, csrf)
-            : await consumeMfaRecoveryCode(challengeId, code, csrf);
+        const session = await dispatch(csrf);
         await this.applyTransitionSession(session, sequence);
       });
     } catch (error) {
       if (this.isSupersededTransition(sequence)) return;
       const failure = toEntryFailure(error);
-      if (mutationDispatched && isDefinitiveMfaFailure(failure)) {
-        this.setState({
-          kind: "MFA required",
-          accountId,
-          challengeId,
-          route,
-          outcome: { kind: mfaOutcomeKind(failure), error: failure },
-        });
-      } else if (mutationDispatched) ambiguity = failure;
-      else {
-        this.setState({
-          kind: "Rotating",
-          origin: "mfa",
-          phase: "reconciliation failed",
-          route,
-          accountId,
-          challengeId,
-          reconciliationError: failure,
-        });
-      }
+      if (mutationDispatched && isDefinitiveTransitionFailure(failure))
+        this.setState(context.rejected(failure));
+      else if (mutationDispatched) ambiguity = failure;
+      else
+        this.setState(
+          context.rotating("reconciliation failed", {
+            reconciliationError: failure,
+          }),
+        );
     }
     if (ambiguity !== undefined && sequence === this.sequence)
-      await this.reconcileMfa(
-        sequence,
-        route,
-        accountId,
-        challengeId,
-        ambiguity,
-      );
+      await this.reconcileRestricted(sequence, context, ambiguity);
   }
 
-  private async reconcileMfa(
+  private async reconcileRestricted(
     sequence: number,
-    route: MfaRoute,
-    accountId: AccountId,
-    challengeId: MfaChallengeId,
+    context: RestrictedContext,
     error?: EntryApiFailure,
   ): Promise<void> {
-    this.setState({
-      kind: "Rotating",
-      origin: "mfa",
-      phase: "reconciling",
-      route,
-      accountId,
-      challengeId,
-      ...(error ? { error } : {}),
-    });
+    const details = error ? { error } : {};
+    this.setState(context.rotating("reconciling", details));
     try {
       await withCoordinatorLock("shared", async () => {
         if (sequence !== this.sequence) return;
         const session = await discoverSession();
         if (sequence !== this.sequence) return;
-        if (
-          session.kind === "mfa" &&
-          session.accountId === accountId &&
-          session.challengeId === challengeId
-        ) {
-          this.setState({
-            kind: "MFA required",
-            accountId,
-            challengeId,
-            route,
-            ...(error
-              ? { outcome: { kind: "unconfirmed", error } satisfies MfaOutcome }
-              : {}),
-          });
+        if (context.isCurrent(session)) {
+          this.setState(context.restored(error));
           return;
         }
         const applied = this.applySession(
@@ -581,16 +594,12 @@ export class SessionController {
       });
     } catch (failure) {
       if (sequence === this.sequence)
-        this.setState({
-          kind: "Rotating",
-          origin: "mfa",
-          phase: "reconciliation failed",
-          route,
-          accountId,
-          challengeId,
-          ...(error ? { error } : {}),
-          reconciliationError: toEntryFailure(failure),
-        });
+        this.setState(
+          context.rotating("reconciliation failed", {
+            ...details,
+            reconciliationError: toEntryFailure(failure),
+          }),
+        );
     }
   }
 
@@ -676,7 +685,10 @@ export class SessionController {
         });
         return;
       case "password-change":
-        this.setState({ kind: "Password change" });
+        this.setState({
+          kind: "Password change",
+          accountId: session.accountId,
+        });
         return;
       case "authenticated": {
         this.setState({ kind: "Access checking", phase: "loading" });
@@ -1066,9 +1078,71 @@ function isSecurityMessageKind(
   );
 }
 
-function isDefinitiveMfaFailure(
+function mfaContext(
+  route: MfaRoute,
+  accountId: AccountId,
+  challengeId: MfaChallengeId,
+): RestrictedContext {
+  return {
+    isCurrent: (session) =>
+      session.kind === "mfa" &&
+      session.accountId === accountId &&
+      session.challengeId === challengeId,
+    rotating: (phase, details) => ({
+      kind: "Rotating",
+      origin: "mfa",
+      phase,
+      route,
+      accountId,
+      challengeId,
+      ...details,
+    }),
+    rejected: (failure) => ({
+      kind: "MFA required",
+      accountId,
+      challengeId,
+      route,
+      outcome: { kind: mfaOutcomeKind(failure), error: failure },
+    }),
+    restored: (error) => ({
+      kind: "MFA required",
+      accountId,
+      challengeId,
+      route,
+      ...(error ? { outcome: { kind: "unconfirmed", error } } : {}),
+    }),
+  };
+}
+
+function passwordChangeContext(accountId: AccountId): RestrictedContext {
+  return {
+    isCurrent: (session) =>
+      session.kind === "password-change" && session.accountId === accountId,
+    rotating: (phase, details) => ({
+      kind: "Rotating",
+      origin: "password-change",
+      phase,
+      accountId,
+      ...details,
+    }),
+    rejected: (failure) => ({
+      kind: "Password change",
+      accountId,
+      outcome: { kind: passwordChangeOutcomeKind(failure), error: failure },
+    }),
+    restored: (error) => ({
+      kind: "Password change",
+      accountId,
+      ...(error ? { outcome: { kind: "unconfirmed", error } } : {}),
+    }),
+  };
+}
+
+// Stage-loss, CSRF, and server-side failures cannot prove the transition did
+// not commit; they reconcile through discovery instead of rendering a result.
+function isDefinitiveTransitionFailure(
   failure: EntryApiFailure,
-): failure is Extract<EntryApiFailure, { readonly kind: "http" }> {
+): failure is HttpFailure {
   return (
     failure.kind === "http" &&
     failure.disclosure.status < 500 &&
@@ -1078,9 +1152,15 @@ function isDefinitiveMfaFailure(
   );
 }
 
-function mfaOutcomeKind(
-  failure: Extract<EntryApiFailure, { readonly kind: "http" }>,
-): MfaOutcome["kind"] {
+function passwordChangeOutcomeKind(
+  failure: HttpFailure,
+): PasswordChangeOutcome["kind"] {
+  if (failure.code === "auth_invalid_password") return "rejected";
+  if (failure.disclosure.status === 429) return "throttled";
+  return "failed";
+}
+
+function mfaOutcomeKind(failure: HttpFailure): MfaOutcome["kind"] {
   if (failure.code === "auth_mfa_challenge_expired") return "expired";
   if (failure.code === "auth_mfa_step_used") return "step-used";
   if (

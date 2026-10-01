@@ -1,7 +1,7 @@
 ---
 name: MIA frontend backend contract gaps
 status: draft
-updated: 2026-09-30
+updated: 2026-10-01
 sources:
   - .memlog.md
   - mia/docs/product-requirements.md
@@ -32,7 +32,8 @@ illustrative vocabulary in this handoff.
 
 ### BCG-001: Anonymous CSRF and authentication-session discovery
 
-Status: **OPEN — cold-entry, Story 1-3 login, and Story 1-4 MFA slices approved; broader obligations remain.**
+Status: **OPEN — cold-entry, Story 1-3 login, Story 1-4 MFA, and Story 1-5 password-replacement slices approved;
+broader obligations remain.**
 
 Reconciled on 2026-09-27 against backend revision `b83102114802b981a022c237c0746023c0aa6b79`, whose entry correction
 followed baseline `0626b751558c8baa7e4645708ef588b309446ed8`. Backend paths and line references in this BCG-001 assessment
@@ -41,14 +42,16 @@ the frontend did not rerun backend checks. Other BCG entries have not been broad
 
 #### BCG-001 frontend capability blocked
 
-The complete authentication journey remains blocked outside the approved entry, login, and MFA slices for continuation
-forms, invitation and recovery work, lifecycle/BFCache handling, and safe logout recovery. The owner-approved 2026-09-27 partial exception permits only cold
+The complete authentication journey remains blocked outside the approved entry, login, MFA, and password-replacement
+slices for invitation and recovery work, lifecycle/BFCache handling, and safe logout recovery. The owner-approved 2026-09-27 partial exception permits only cold
 `GET /api/v1/auth/session`, authenticated-only `GET /api/v1/users/me/capabilities`, and canonical dispatch among
 `/login`, `/`, `/auth/mfa`, and `/auth/password-change`. It does not close this composite blocker.
 The separate 2026-09-30 Story 1-3 decision below resolves credential-slice authorization and sequencing after the
 login error-response correction was rechecked; it does not expand the earlier Story 1-2 decision.
 The separate 2026-10-01 Story 1-4 decision resolves only MFA challenge verification and recovery-code consumption;
 it does not authorize resend, password replacement, or any broader authentication lifecycle.
+The separate 2026-10-01 Story 1-5 decision resolves only required password replacement through the restricted
+`password-change` stage; it does not authorize voluntary password change, recovery, reset, or invitations.
 
 #### BCG-001 authoritative product requirement
 
@@ -257,6 +260,38 @@ without changing the wire contract.
 This decision does not authorize password-replacement forms, resend, password recovery, invitations, broader logout or
 lifecycle/SSE/BFCache behavior, and does not close BCG-001 or BCG-003. Existing fresh-CSRF, transition serialization,
 response fencing, no-replay, ambiguity discovery, restricted isolation, and logout ordering requirements still apply.
+
+#### BCG-001 Story 1-5 password-replacement-slice decision
+
+Owner decision, 2026-10-01: Story 1-5 may implement only `POST /api/v1/auth/password-changes` (`changePassword`) on
+`/auth/password-change` under `Restricted(password-change)`, plus the already approved restricted-stage logout. The
+sequencing guidance is `mia/docs/api-authentication-and-user-invitation.md` §First password change and later forced
+replacement (lines 288-315) and §Error handling and ambiguous outcomes; OpenAPI remains transport authority. The request
+carries only the new password and its confirmation; there is no current-password field.
+
+A definitive `200` with stage `authenticated` carries rotated cookies and CSRF. The frontend reads the current CSRF
+cookie again immediately before any later unsafe dispatch and proceeds directly to the existing non-refreshing
+capability/scope gate (`GET /api/v1/users/me/capabilities`) before Home, with no additional session discovery.
+
+`403 auth_password_change_required` from this operation, including the expired or invalid restricted cookie the backend
+clears, follows guide lines 259 and 641: the frontend shows no fixed terminal message and infers nothing from the code
+name. It rediscovers the actual stage through `GET /api/v1/auth/session` and follows it; `anonymous` returns to sign-in.
+The POST is never replayed.
+
+An undeclared `5xx`, timeout, abort, network loss, or malformed success is an unclear outcome, handled as in Story 1-4:
+an outcome-unknown presentation, no automatic resend, and reconciliation through session discovery (guide line 646).
+The operation's missing `500` declaration is accepted for this slice on the Story 1-4 precedent.
+
+Before dispatch, the frontend checks 12-128 Unicode code points, at most 512 UTF-8 bytes, and an exact confirmation
+match, never trimming or normalizing input. A failed check names the failed rule through the established accessible
+form-error pattern and sends nothing. The server remains final authority: `422 auth_invalid_password` shows one general
+"password not accepted" result that also covers the server-only common-password check, keeps the user in the form
+(guide line 643), and infers no specific failed rule.
+
+This decision does not authorize voluntary password change, password recovery or token reset, invitations, broader
+logout or lifecycle/SSE/BFCache behavior, or anything else in BCG-001, and does not close BCG-001 or BCG-003. Existing
+fresh-CSRF, transition serialization, response fencing, no-replay, ambiguity discovery, restricted isolation, and logout
+ordering requirements still apply.
 
 #### BCG-001 required observable contract
 

@@ -8,7 +8,6 @@ import {
   useState,
   type RefObject,
 } from "react";
-import { useFormStatus } from "react-dom";
 import { useIntl } from "react-intl";
 import {
   useAuthenticationBootstrapState,
@@ -17,6 +16,8 @@ import {
 } from "../../platform/data/EntryDataProvider";
 import { TechnicalErrorDisclosure } from "../../platform/api/TechnicalErrorDisclosure";
 import { messages } from "../../platform/i18n/messages";
+import { AuthSubmitButton } from "./AuthSubmitButton";
+import { PasswordRevealButton } from "./PasswordRevealButton";
 
 const outcomeMessages = {
   rejected: messages.loginRejected,
@@ -186,30 +187,20 @@ function PasswordSignInFields({
             className="block w-full rounded-md bg-white px-3 py-1.5 text-base text-gray-900 outline-1 -outline-offset-1 outline-gray-300 focus:outline-2 focus:-outline-offset-2 focus:outline-indigo-600 sm:text-sm/6"
           />
         </div>
-        <button
-          type="button"
-          aria-pressed={revealed}
-          aria-disabled={!enabled}
-          onClick={() => {
-            const input = passwordInput.current;
-            if (!enabled || input === null) return;
-            const { selectionStart, selectionEnd, selectionDirection } = input;
-            input.type = revealed ? "password" : "text";
-            input.setSelectionRange(
-              selectionStart,
-              selectionEnd,
-              selectionDirection ?? undefined,
-            );
-            setRevealed(!revealed);
-          }}
-          className="mt-2 min-h-6 text-sm/6 font-semibold text-indigo-600 underline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-indigo-600"
-        >
-          {intl.formatMessage(
+        <PasswordRevealButton
+          inputRef={passwordInput}
+          revealed={revealed}
+          enabled={enabled}
+          label={intl.formatMessage(
             revealed ? messages.loginHide : messages.loginReveal,
           )}
-        </button>
+          onRevealedChange={setRevealed}
+        />
       </div>
-      <SignInButton enabled={enabled} />
+      <AuthSubmitButton
+        enabled={enabled}
+        label={intl.formatMessage(messages.loginSubmit)}
+      />
       <p
         role={
           outcome || (rotating && state.phase === "reconciliation failed")
@@ -256,22 +247,5 @@ function PasswordSignInFields({
         </button>
       ) : null}
     </form>
-  );
-}
-
-function SignInButton({ enabled }: { enabled: boolean }) {
-  const { pending } = useFormStatus();
-  const intl = useIntl();
-  return (
-    <button
-      type="submit"
-      aria-disabled={!enabled || pending}
-      onClick={(event) => {
-        if (!enabled || pending) event.preventDefault();
-      }}
-      className="flex w-full justify-center rounded-md bg-indigo-600 px-3 py-1.5 text-sm/6 font-semibold text-white shadow-xs hover:bg-indigo-500 focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-indigo-600"
-    >
-      {intl.formatMessage(messages.loginSubmit)}
-    </button>
   );
 }

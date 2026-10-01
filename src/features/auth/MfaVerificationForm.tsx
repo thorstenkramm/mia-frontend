@@ -2,7 +2,6 @@
 // Library version: 2026-09-13-083323, v4 React light. MIA keeps the blueprint's
 // single-field form anatomy and adds method-neutral MFA outcomes and route switching.
 import { useActionState, useLayoutEffect, useRef } from "react";
-import { useFormStatus } from "react-dom";
 import { useIntl } from "react-intl";
 import { useNavigate } from "react-router";
 import { TechnicalErrorDisclosure } from "../../platform/api/TechnicalErrorDisclosure";
@@ -13,6 +12,7 @@ import {
 } from "../../platform/data/EntryDataProvider";
 import { messages } from "../../platform/i18n/messages";
 import type { MfaRoute } from "../../platform/session/sessionController";
+import { AuthSubmitButton } from "./AuthSubmitButton";
 import { isSixDigitMfaCode, normalizeRecoveryCode } from "./mfaCodes";
 
 type LocalResult = "invalid" | null;
@@ -151,7 +151,7 @@ export function MfaVerificationForm({ route }: { readonly route: MfaRoute }) {
             />
           </div>
         </div>
-        <MfaSubmitButton
+        <AuthSubmitButton
           enabled={enabled}
           label={intl.formatMessage(
             route === "challenge"
@@ -208,28 +208,6 @@ export function MfaVerificationForm({ route }: { readonly route: MfaRoute }) {
         </button>
       ) : null}
     </>
-  );
-}
-
-function MfaSubmitButton({
-  enabled,
-  label,
-}: {
-  enabled: boolean;
-  label: string;
-}) {
-  const { pending } = useFormStatus();
-  return (
-    <button
-      type="submit"
-      aria-disabled={!enabled || pending}
-      onClick={(event) => {
-        if (!enabled || pending) event.preventDefault();
-      }}
-      className="flex w-full justify-center rounded-md bg-indigo-600 px-3 py-1.5 text-sm/6 font-semibold text-white shadow-xs hover:bg-indigo-500 focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-indigo-600"
-    >
-      {label}
-    </button>
   );
 }
 

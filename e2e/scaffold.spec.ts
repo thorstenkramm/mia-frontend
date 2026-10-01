@@ -6,6 +6,7 @@ import { fileURLToPath } from "node:url";
 import { expect, test, type Locator, type Page } from "@playwright/test";
 import AxeBuilder from "@axe-core/playwright";
 import { chromium } from "playwright";
+import { expectRetainedSecret } from "./secretAssertions";
 
 const locales = [
   "en-US",
@@ -730,6 +731,319 @@ test.describe("MFA sign-in", () => {
     await expect(assertiveRegion).toBeEmpty();
   });
 });
+test.describe("required password replacement", () => {
+  function sessionBody(stage: "password-change" | "authenticated") {
+    return JSON.stringify({
+      data: {
+        type: "auth-sessions",
+        id: "account-id",
+        attributes: {
+          stage,
+          idle_expires_at: "2026-10-01T10:30:00.000000Z",
+          absolute_expires_at: "2026-10-01T22:00:00.000000Z",
+        },
+      },
+    });
+  }
+
+  test("keyboard and paste replacement sends exact bytes once and reaches Home through capabilities", async ({
+    page,
+    context,
+  }) => {
+    await mockSession(page, "password-change");
+    await mockCapabilities(page, 100);
+    await context.grantPermissions(["clipboard-read", "clipboard-write"]);
+    const csrf = crypto.randomUUID();
+    await context.addCookies([{ name: "mia_csrf", value: csrf, url: appUrl }]);
+    const password = ` ${crypto.randomUUID()} é `;
+    let posts = 0;
+    let exactWire = false;
+    let protectedBeforeSuccess = 0;
+    let replaced = false;
+    page.on("request", (request) => {
+      const path = new URL(request.url()).pathname;
+      if (
+        !replaced &&
+        path.startsWith("/api/") &&
+        !path.startsWith("/api/v1/auth/")
+      )
+        protectedBeforeSuccess++;
+    });
+    await page.route("**/api/v1/auth/password-changes", async (route) => {
+      posts++;
+      exactWire =
+        route.request().headers()["x-csrf-token"] === csrf &&
+        fingerprint(route.request().postData() ?? "") ===
+          fingerprint(
+            JSON.stringify({
+              data: {
+                type: "password-changes",
+                attributes: { password, password_confirmation: password },
+              },
+            }),
+          );
+      replaced = true;
+      await route.fulfill({
+        status: 200,
+        contentType: mediaType,
+        body: sessionBody("authenticated"),
+      });
+    });
+    await page.goto("/auth/password-change");
+    await expect(
+      page.getByRole("heading", { level: 1, name: "Choose a new password" }),
+    ).toBeFocused();
+    await expect(page.getByRole("navigation")).toHaveCount(0);
+    const newPassword = page.getByLabel("New password (required)", {
+      exact: true,
+    });
+    const confirm = page.getByLabel("Confirm new password (required)", {
+      exact: true,
+    });
+    await expect(newPassword).toHaveAttribute("autocomplete", "new-password");
+    await expect(confirm).toHaveAttribute("autocomplete", "new-password");
+    await pasteInto(page, newPassword, password);
+    await page.keyboard.press("Tab");
+    await expect(
+      page.getByRole("button", { name: "Show new password" }),
+    ).toBeFocused();
+    await page.keyboard.press("Tab");
+    await expect(confirm).toBeFocused();
+    await pasteInto(page, confirm, password);
+    expect(
+      await page.evaluate(async () => {
+        const secrets = Array.from(
+          document.querySelectorAll<HTMLInputElement>("input[type=password]"),
+          (input) => input.value,
+        ).filter(Boolean);
+        const persisted = JSON.stringify({
+          href: location.href,
+          history: history.state,
+          local: Object.entries(localStorage),
+          session: Object.entries(sessionStorage),
+          caches: "caches" in window ? await caches.keys() : [],
+          title: document.title,
+        });
+        return (
+          secrets.length === 2 &&
+          secrets.every((secret) => !persisted.includes(secret))
+        );
+      }),
+    ).toBe(true);
+    await confirm.press("Enter");
+    await expect(
+      page.getByRole("heading", { name: "Checking access" }),
+    ).toBeVisible();
+    await expect(page.getByRole("heading", { name: "Home" })).toBeFocused();
+    await expect(page).toHaveURL(/\/$/u);
+    expect({ exactWire, posts, protectedBeforeSuccess }).toEqual({
+      exactWire: true,
+      posts: 1,
+      protectedBeforeSuccess: 0,
+    });
+  });
+
+  test("local rule failures send nothing; server rejection and response loss never replay at 320 CSS pixels", async ({
+    page,
+    context,
+  }) => {
+    let reads = 0;
+    let outcome: "reject" | "lose" = "reject";
+    await page.route("**/api/v1/auth/session", async (route) => {
+      reads++;
+      await route.fulfill({
+        status: 200,
+        contentType: mediaType,
+        body: sessionBody("password-change"),
+      });
+    });
+    await context.addCookies([
+      { name: "mia_csrf", value: crypto.randomUUID(), url: appUrl },
+    ]);
+    let posts = 0;
+    await page.route("**/api/v1/auth/password-changes", async (route) => {
+      posts++;
+      if (outcome === "lose") {
+        await route.abort("connectionfailed");
+        return;
+      }
+      await route.fulfill({
+        status: 422,
+        contentType: mediaType,
+        body: JSON.stringify({
+          errors: [{ status: "422", code: "auth_invalid_password" }],
+        }),
+      });
+    });
+    await page.setViewportSize({ width: 320, height: 900 });
+    await page.goto("/auth/password-change");
+    const newPassword = page.locator("#new-password");
+    const confirm = page.locator("#password-confirmation");
+    await newPassword.fill("short");
+    await confirm.fill("other");
+    await confirm.press("Enter");
+    await expect(
+      page.getByRole("heading", {
+        level: 2,
+        name: "Correct these problems before saving your new password:",
+      }),
+    ).toBeVisible();
+    await expect(newPassword).toHaveAttribute("aria-invalid", "true");
+    await expect(confirm).toHaveAttribute("aria-invalid", "true");
+    const assertive = page.locator('[aria-live="assertive"]');
+    await expect(assertive).toHaveText(
+      /^Correct these problems before saving your new password: The new password is too short\./u,
+    );
+    await expect(
+      page.locator("main [aria-live], main [role=alert]"),
+    ).toHaveCount(0);
+    expect(posts).toBe(0);
+    await expectNoPageOverflow(page);
+    await expectNoWcagViolations(page);
+
+    const password = crypto.randomUUID();
+    await newPassword.fill(password);
+    await confirm.fill(password);
+    const save = page.getByRole("button", { name: "Save new password" });
+    await save.click();
+    await expect(assertive).toHaveText(
+      "That password was not accepted. Choose a different password that meets the rules above.",
+    );
+    await expect(save).toBeFocused();
+    expectRetainedSecret(
+      await newPassword.inputValue(),
+      password,
+      "New password field",
+    );
+    expect(posts).toBe(1);
+
+    outcome = "lose";
+    await page.getByRole("button", { name: "Save new password" }).click();
+    const unconfirmed =
+      "The outcome was not confirmed. This browser still requires a new password.";
+    await expect(page.locator("#password-change-status")).toHaveText(
+      unconfirmed,
+    );
+    await expect(assertive).toHaveText(unconfirmed);
+    expect({ posts, reads }).toEqual({ posts: 2, reads: 2 });
+    await applyWcagTextSpacing(page);
+    for (const textSize of textSizes) {
+      await page.evaluate((nextTextSize) => {
+        document.documentElement.classList.remove(
+          "text-base",
+          "text-lg",
+          "text-xl",
+        );
+        document.documentElement.classList.add(
+          nextTextSize === "standard"
+            ? "text-base"
+            : nextTextSize === "large"
+              ? "text-lg"
+              : "text-xl",
+        );
+      }, textSize);
+      for (const control of [
+        newPassword,
+        confirm,
+        page.getByRole("button", { name: "Save new password" }),
+        page.getByRole("button", { name: "Show new password" }),
+        page.getByRole("button", { name: "Show password confirmation" }),
+        page.getByRole("button", { name: "Sign out" }),
+      ])
+        await expectMinimumPointerTarget(control);
+      // A text-size change reflows the already focused control; refocus it the
+      // way keyboard navigation would so the browser reveals it.
+      await confirm.blur();
+      await expectFocusedAndUnobscured(page, confirm);
+      await expectNoPageOverflow(page);
+    }
+    await expectNoWcagViolations(page);
+  });
+
+  test("the localized replacement route reflows in every locale and text mode at 320 CSS pixels", async ({
+    page,
+  }) => {
+    test.slow();
+    await page.setViewportSize({ width: 320, height: 900 });
+    await mockSession(page, "password-change");
+    await page.goto("/auth/password-change");
+    for (const locale of locales) {
+      for (const textSize of textSizes) {
+        await page.evaluate(
+          ([nextLocale, nextTextSize]) => {
+            localStorage.setItem("mia.interface.locale", nextLocale);
+            localStorage.setItem("mia.interface.text-size", nextTextSize);
+          },
+          [locale, textSize] as const,
+        );
+        await page.goto("/auth/password-change");
+        await applyWcagTextSpacing(page);
+        await expect(page.locator("html")).toHaveAttribute("lang", locale);
+        const newPassword = page.locator("#new-password");
+        await newPassword.fill("short");
+        await page.locator("#password-confirmation").fill("other");
+        await page.locator("button[type=submit]").click();
+        await expect(newPassword).toHaveAttribute("aria-invalid", "true");
+        await expectFocusedAndUnobscured(page, newPassword);
+        for (const control of [
+          newPassword,
+          page.locator("#password-confirmation"),
+          page.locator("button[type=submit]"),
+          ...(await page.locator("button[type=button]").all()),
+        ])
+          await expectMinimumPointerTarget(control);
+        await expectNoPageOverflow(page);
+      }
+    }
+    await expectNoWcagViolations(page);
+  });
+});
+
+for (const zoomFactor of [2, 4] as const) {
+  test(`password replacement reflows at actual ${zoomFactor * 100}% browser zoom`, async () => {
+    const { context, userDataDirectory } = await launchBrowserZoomContext();
+    try {
+      const page = await context.newPage();
+      await mockSession(page, "password-change");
+      await page.goto(appUrl);
+      await setActualBrowserZoom(page, zoomFactor);
+      expect(await page.evaluate(() => window.innerWidth)).toBe(
+        1280 / zoomFactor,
+      );
+      for (const textSize of textSizes) {
+        await page.evaluate((nextTextSize) => {
+          localStorage.setItem("mia.interface.locale", "en-US");
+          localStorage.setItem("mia.interface.text-size", nextTextSize);
+        }, textSize);
+        await page.goto("/auth/password-change");
+        await applyWcagTextSpacing(page);
+        const newPassword = page.locator("#new-password");
+        await newPassword.fill("short");
+        await page.locator("#password-confirmation").fill("other");
+        await page.locator("button[type=submit]").click();
+        const summary = page.getByRole("heading", {
+          level: 2,
+          name: "Correct these problems before saving your new password:",
+        });
+        await expect(summary).toBeVisible();
+        await expectFocusedAndUnobscured(page, newPassword);
+        for (const control of [
+          newPassword,
+          page.locator("#password-confirmation"),
+          page.locator("button[type=submit]"),
+          ...(await page.locator("button[type=button]").all()),
+        ])
+          await expectMinimumPointerTarget(control);
+        await expectNoPageOverflow(page);
+      }
+      await expectNoWcagViolations(page);
+    } finally {
+      await context.close();
+      await rm(userDataDirectory, { force: true, recursive: true });
+    }
+  });
+}
+
 const browserZoomExtension = fileURLToPath(
   new URL("./fixtures/browser-zoom-extension", import.meta.url),
 );

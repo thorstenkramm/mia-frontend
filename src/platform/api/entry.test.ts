@@ -9,6 +9,7 @@ import {
   jsonApiMediaType,
 } from "./client";
 import {
+  changeTemporaryPassword,
   discoverSession,
   consumeMfaRecoveryCode,
   getCurrentAccountCapabilities,
@@ -233,6 +234,85 @@ describe("entry API boundary", () => {
       "password-change",
     );
     expect(exactWire).toBe(true);
+  });
+
+  it("sends exact unnormalized password-change bytes once with current CSRF and no current password", async () => {
+    // Leading/trailing spaces and a decomposed accent prove nothing is trimmed or normalized.
+    const password = ` ${crypto.randomUUID()} e\u0301 `;
+    const csrf = crypto.randomUUID();
+    let exactWire = false;
+    let posts = 0;
+    server.use(
+      http.post("/api/v1/auth/password-changes", async ({ request }) => {
+        posts++;
+        exactWire =
+          (await request.text()) ===
+            JSON.stringify({
+              data: {
+                type: "password-changes",
+                attributes: { password, password_confirmation: password },
+              },
+            }) &&
+          request.headers.get("X-CSRF-Token") === csrf &&
+          request.headers.get("Content-Type") === jsonApiMediaType &&
+          !request.headers.has("X-Request-ID") &&
+          !request.headers.has("Idempotency-Key");
+        return jsonApiResponse({
+          data: {
+            type: "auth-sessions",
+            id: "account-id",
+            attributes: {
+              stage: "authenticated",
+              idle_expires_at: "2026-10-01T10:30:00.000000Z",
+              absolute_expires_at: "2026-10-01T22:00:00.000000Z",
+            },
+          },
+        });
+      }),
+    );
+    expect(await changeTemporaryPassword(password, password, csrf)).toEqual({
+      kind: "authenticated",
+      accountId: "account-id",
+    });
+    expect({ exactWire, posts }).toEqual({ exactWire: true, posts: 1 });
+  });
+
+  it.each([400, 403, 406, 413, 415, 422, 429, 500, 502])(
+    "retains exact password-change HTTP %s disclosure and never replays",
+    async (status) => {
+      const raw = `controlled ${crypto.randomUUID()}\r\n`;
+      let posts = 0;
+      server.use(
+        http.post("/api/v1/auth/password-changes", () => {
+          posts++;
+          return new HttpResponse(raw, { status });
+        }),
+      );
+      const password = crypto.randomUUID();
+      const result = await changeTemporaryPassword(
+        password,
+        password,
+        crypto.randomUUID(),
+      ).catch((error: unknown) => error);
+      expect(
+        result instanceof ApiHttpError &&
+          result.disclosure.status === status &&
+          result.disclosure.body === raw,
+      ).toBe(true);
+      expect(posts).toBe(1);
+    },
+  );
+
+  it("rejects anonymous password-change success as ambiguous", async () => {
+    server.use(
+      http.post("/api/v1/auth/password-changes", () =>
+        jsonApiResponse({ data: null, meta: { stage: "anonymous" } }),
+      ),
+    );
+    const password = crypto.randomUUID();
+    await expect(
+      changeTemporaryPassword(password, password, crypto.randomUUID()),
+    ).rejects.toBeInstanceOf(ApiProtocolError);
   });
 
   it.each([

@@ -1263,3 +1263,457 @@ describe("SessionController logout coordination", () => {
     peer.close();
   });
 });
+
+function stageSession(
+  stage: "password-change" | "authenticated",
+  accountId = "account-id",
+) {
+  return HttpResponse.json(
+    {
+      data: {
+        type: "auth-sessions",
+        id: accountId,
+        attributes: {
+          stage,
+          idle_expires_at: "2026-10-01T10:30:00.000000Z",
+          absolute_expires_at: "2026-10-01T22:00:00.000000Z",
+        },
+      },
+    },
+    { headers: { "Content-Type": mediaType } },
+  );
+}
+
+function capabilitiesFor(accountId = "account-id") {
+  const actions = [
+    "profile.view",
+    "profile.edit",
+    "accounts.administer",
+    "audit.view",
+    "jobs.view",
+    "courses.create",
+    "course_records.manage",
+    "course_supervisors.manage",
+    "courses.supervise",
+    "students.manage",
+    "students.ban",
+    "students.unban",
+    "learning.participate",
+    "mentoring.fulfill",
+  ];
+  return HttpResponse.json(
+    {
+      data: {
+        type: "account-capabilities",
+        id: accountId,
+        attributes: {
+          capabilities: actions.map((action) => ({
+            action,
+            available: false,
+            scope: {
+              global: false,
+              course_ids: [],
+              student_ids: [],
+              course_students: [],
+              own_resource: false,
+            },
+          })),
+        },
+      },
+    },
+    { headers: { "Content-Type": mediaType } },
+  );
+}
+
+function errorDocument(status: number, code: string, retryAfter?: string) {
+  return HttpResponse.json(
+    { errors: [{ status: String(status), code }] },
+    {
+      status,
+      headers: {
+        "Content-Type": mediaType,
+        ...(retryAfter === undefined ? {} : { "Retry-After": retryAfter }),
+      },
+    },
+  );
+}
+
+async function startInPasswordChange(controller: SessionController) {
+  document.cookie = `mia_csrf=${crypto.randomUUID()}; Path=/`;
+  controller.start();
+  await waitFor(() =>
+    expect(controller.getSnapshot().kind).toBe("Password change"),
+  );
+}
+
+describe("SessionController required password replacement", () => {
+  it("dispatches once with current CSRF and chains directly to the capability gate", async () => {
+    const controller = new SessionController();
+    const password = crypto.randomUUID();
+    let reads = 0;
+    let posts = 0;
+    let capabilities = 0;
+    let csrfAtDispatch: string | null = null;
+    let currentCsrf = "";
+    server.use(
+      http.get("/api/v1/auth/session", () => {
+        reads++;
+        return stageSession("password-change");
+      }),
+      http.post("/api/v1/auth/password-changes", ({ request }) => {
+        posts++;
+        csrfAtDispatch = request.headers.get("X-CSRF-Token");
+        return stageSession("authenticated");
+      }),
+      http.get("/api/v1/users/me/capabilities", () => {
+        capabilities++;
+        return capabilitiesFor();
+      }),
+    );
+    await startInPasswordChange(controller);
+    // A rotated cookie written after discovery must be the one sent.
+    currentCsrf = crypto.randomUUID();
+    document.cookie = `mia_csrf=${currentCsrf}; Path=/`;
+    const states: string[] = [];
+    controller.subscribe(() => states.push(controller.getSnapshot().kind));
+
+    await controller.submitPasswordChange(password, password);
+
+    expect(controller.getSnapshot().kind).toBe("Authenticated");
+    expect(states).toEqual(["Rotating", "Access checking", "Authenticated"]);
+    expect(csrfAtDispatch === currentCsrf).toBe(true);
+    expect({ reads, posts, capabilities }).toEqual({
+      reads: 1,
+      posts: 1,
+      capabilities: 1,
+    });
+    controller.stop();
+  });
+
+  it.each([
+    [422, "auth_invalid_password", "rejected"],
+    [429, "rate_limited", "throttled"],
+    [400, "malformed_request", "failed"],
+    [415, "unsupported_media_type", "failed"],
+  ] as const)(
+    "keeps definitive HTTP %s %s in the form without replay or discovery",
+    async (status, code, outcome) => {
+      const controller = new SessionController();
+      let reads = 0;
+      let posts = 0;
+      server.use(
+        http.get("/api/v1/auth/session", () => {
+          reads++;
+          return stageSession("password-change");
+        }),
+        http.post("/api/v1/auth/password-changes", () => {
+          posts++;
+          return errorDocument(status, code, "17");
+        }),
+      );
+      await startInPasswordChange(controller);
+      const password = crypto.randomUUID();
+
+      await controller.submitPasswordChange(password, password);
+
+      expect(controller.getSnapshot()).toMatchObject({
+        kind: "Password change",
+        accountId: "account-id",
+        outcome: { kind: outcome },
+      });
+      expect({ reads, posts }).toEqual({ reads: 1, posts: 1 });
+      controller.stop();
+    },
+  );
+
+  it.each([
+    ["anonymous", "Signed out"],
+    ["password-change", "Password change"],
+    ["authenticated", "Authenticated"],
+  ] as const)(
+    "rediscovers the actual stage after auth_password_change_required (%s)",
+    async (recovered, expected) => {
+      const controller = new SessionController();
+      let reads = 0;
+      let posts = 0;
+      server.use(
+        http.get("/api/v1/auth/session", () => {
+          reads++;
+          if (reads === 1) return stageSession("password-change");
+          return recovered === "anonymous"
+            ? anonymousSession()
+            : stageSession(recovered);
+        }),
+        http.post("/api/v1/auth/password-changes", () => {
+          posts++;
+          return errorDocument(403, "auth_password_change_required");
+        }),
+        http.get("/api/v1/users/me/capabilities", () => capabilitiesFor()),
+      );
+      await startInPasswordChange(controller);
+      const password = crypto.randomUUID();
+
+      await controller.submitPasswordChange(password, password);
+
+      await waitFor(() => expect(controller.getSnapshot().kind).toBe(expected));
+      if (recovered === "password-change")
+        expect(controller.getSnapshot()).toMatchObject({
+          outcome: { kind: "unconfirmed" },
+        });
+      expect({ reads, posts }).toEqual({ reads: 2, posts: 1 });
+      controller.stop();
+    },
+  );
+
+  it.each(["transport", "500", "503", "csrf_invalid", "malformed"] as const)(
+    "treats %s as an unclear outcome reconciled only by discovery",
+    async (failure) => {
+      const controller = new SessionController();
+      let reads = 0;
+      let posts = 0;
+      server.use(
+        http.get("/api/v1/auth/session", () => {
+          reads++;
+          return stageSession("password-change");
+        }),
+        http.post("/api/v1/auth/password-changes", () => {
+          posts++;
+          switch (failure) {
+            case "transport":
+              return HttpResponse.error();
+            case "500":
+            case "503":
+              return new HttpResponse("controlled", {
+                status: Number(failure),
+              });
+            case "csrf_invalid":
+              return errorDocument(403, "csrf_invalid");
+            case "malformed":
+              return HttpResponse.json(
+                { data: null, meta: { stage: "anonymous" } },
+                { headers: { "Content-Type": mediaType } },
+              );
+          }
+        }),
+      );
+      await startInPasswordChange(controller);
+      const states: string[] = [];
+      controller.subscribe(() => {
+        const state = controller.getSnapshot();
+        states.push(
+          state.kind === "Rotating" ? `Rotating:${state.phase}` : state.kind,
+        );
+      });
+      const password = crypto.randomUUID();
+
+      await controller.submitPasswordChange(password, password);
+
+      expect(states).toEqual([
+        "Rotating:submitting",
+        "Rotating:reconciling",
+        "Password change",
+      ]);
+      expect(controller.getSnapshot()).toMatchObject({
+        kind: "Password change",
+        outcome: { kind: "unconfirmed" },
+      });
+      expect({ reads, posts }).toEqual({ reads: 2, posts: 1 });
+      controller.stop();
+    },
+  );
+
+  it("permits only an explicit safe recheck after failed reconciliation", async () => {
+    const controller = new SessionController();
+    let reads = 0;
+    let posts = 0;
+    let capabilities = 0;
+    server.use(
+      http.get("/api/v1/auth/session", () => {
+        reads++;
+        if (reads === 1) return stageSession("password-change");
+        if (reads === 2) return HttpResponse.error();
+        return stageSession("authenticated");
+      }),
+      http.post("/api/v1/auth/password-changes", () => {
+        posts++;
+        return HttpResponse.error();
+      }),
+      http.get("/api/v1/users/me/capabilities", () => {
+        capabilities++;
+        return capabilitiesFor();
+      }),
+    );
+    await startInPasswordChange(controller);
+    const password = crypto.randomUUID();
+
+    await controller.submitPasswordChange(password, password);
+    expect(controller.getSnapshot()).toMatchObject({
+      kind: "Rotating",
+      origin: "password-change",
+      phase: "reconciliation failed",
+    });
+    await controller.submitPasswordChange(password, password);
+    expect({ reads, posts }).toEqual({ reads: 2, posts: 1 });
+
+    await controller.recheckPasswordChange();
+
+    await waitFor(() =>
+      expect(controller.getSnapshot().kind).toBe("Authenticated"),
+    );
+    expect({ reads, posts, capabilities }).toEqual({
+      reads: 3,
+      posts: 1,
+      capabilities: 1,
+    });
+    controller.stop();
+  });
+
+  it("rebinds the stage to a replacement account found by discovery", async () => {
+    const controller = new SessionController();
+    let reads = 0;
+    server.use(
+      http.get("/api/v1/auth/session", () => {
+        reads++;
+        return stageSession(
+          "password-change",
+          reads === 1 ? "account-id" : "other-account",
+        );
+      }),
+      http.post("/api/v1/auth/password-changes", () => HttpResponse.error()),
+    );
+    await startInPasswordChange(controller);
+    const password = crypto.randomUUID();
+
+    await controller.submitPasswordChange(password, password);
+
+    const state = controller.getSnapshot();
+    expect(state).toMatchObject({
+      kind: "Password change",
+      accountId: "other-account",
+    });
+    expect("outcome" in state).toBe(false);
+    controller.stop();
+  });
+
+  it("quiesces an admitted replacement before restricted logout and fences its late result", async () => {
+    const controller = new SessionController();
+    let release = () => {};
+    const pending = new Promise<void>((resolve) => {
+      release = resolve;
+    });
+    let posts = 0;
+    let logoutPosts = 0;
+    let capabilities = 0;
+    server.use(
+      http.get("/api/v1/auth/session", () => stageSession("password-change")),
+      http.post("/api/v1/auth/password-changes", async () => {
+        posts++;
+        await pending;
+        return stageSession("authenticated");
+      }),
+      http.post("/api/v1/auth/logout", () => {
+        logoutPosts++;
+        return new HttpResponse(null, { status: 204 });
+      }),
+      http.get("/api/v1/users/me/capabilities", () => {
+        capabilities++;
+        return capabilitiesFor();
+      }),
+    );
+    await startInPasswordChange(controller);
+    const password = crypto.randomUUID();
+    const transition = controller.submitPasswordChange(password, password);
+    await waitFor(() => expect(posts).toBe(1));
+
+    controller.beginRestrictedLogout();
+    expect(controller.getSnapshot().kind).toBe("Logout quiescing");
+    expect(logoutPosts).toBe(0);
+    release();
+    await transition;
+    await waitFor(() => expect(logoutPosts).toBe(1));
+    await waitFor(() =>
+      expect(controller.getSnapshot().kind).toBe(
+        "Logout reconciliation needed",
+      ),
+    );
+    expect({ posts, capabilities }).toEqual({ posts: 1, capabilities: 0 });
+    controller.stop();
+  });
+
+  it("serializes two tabs and never sends a queued replacement after the stage changed", async () => {
+    const first = new SessionController();
+    const second = new SessionController();
+    let release = () => {};
+    const pending = new Promise<void>((resolve) => {
+      release = resolve;
+    });
+    let replaced = false;
+    let posts = 0;
+    server.use(
+      http.get("/api/v1/auth/session", () =>
+        stageSession(replaced ? "authenticated" : "password-change"),
+      ),
+      http.post("/api/v1/auth/password-changes", async () => {
+        posts++;
+        await pending;
+        replaced = true;
+        return stageSession("authenticated");
+      }),
+      http.get("/api/v1/users/me/capabilities", () => capabilitiesFor()),
+    );
+    document.cookie = `mia_csrf=${crypto.randomUUID()}; Path=/`;
+    first.start();
+    second.start();
+    await waitFor(() =>
+      expect([first.getSnapshot().kind, second.getSnapshot().kind]).toEqual([
+        "Password change",
+        "Password change",
+      ]),
+    );
+    const firstPassword = crypto.randomUUID();
+    const secondPassword = crypto.randomUUID();
+    const firstWork = first.submitPasswordChange(firstPassword, firstPassword);
+    await waitFor(() => expect(posts).toBe(1));
+    const queuedWork = second.submitPasswordChange(
+      secondPassword,
+      secondPassword,
+    );
+    release();
+    await Promise.all([firstWork, queuedWork]);
+
+    expect(posts).toBe(1);
+    await waitFor(() =>
+      expect([first.getSnapshot().kind, second.getSnapshot().kind]).toEqual([
+        "Authenticated",
+        "Authenticated",
+      ]),
+    );
+    first.stop();
+    second.stop();
+  });
+
+  it("dispatches nothing without a readable CSRF cookie", async () => {
+    const controller = new SessionController();
+    let posts = 0;
+    server.use(
+      http.get("/api/v1/auth/session", () => stageSession("password-change")),
+      http.post("/api/v1/auth/password-changes", () => {
+        posts++;
+        return stageSession("authenticated");
+      }),
+    );
+    await startInPasswordChange(controller);
+    document.cookie = "mia_csrf=; Max-Age=0; Path=/";
+    const password = crypto.randomUUID();
+
+    await controller.submitPasswordChange(password, password);
+
+    expect(posts).toBe(0);
+    expect(controller.getSnapshot()).toMatchObject({
+      kind: "Rotating",
+      origin: "password-change",
+      phase: "reconciliation failed",
+    });
+    controller.stop();
+  });
+});

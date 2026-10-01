@@ -261,6 +261,102 @@ export const messages = defineMessages({
     id: "entry.passwordChange.introduction",
     defaultMessage: "Password replacement is required before MIA can continue.",
   },
+  passwordChangeNewLabel: {
+    id: "entry.passwordChange.password.label",
+    defaultMessage: "New password (required)",
+  },
+  passwordChangeRules: {
+    id: "entry.passwordChange.password.help",
+    defaultMessage:
+      "Use 12 to 128 characters and at most 512 bytes. Spaces, Unicode, and password-manager values are allowed. Your password is not trimmed or normalized. Very common passwords are not accepted.",
+  },
+  passwordChangeConfirmationLabel: {
+    id: "entry.passwordChange.confirmation.label",
+    defaultMessage: "Confirm new password (required)",
+  },
+  passwordChangeConfirmationHelp: {
+    id: "entry.passwordChange.confirmation.help",
+    defaultMessage: "Enter exactly the same password again.",
+  },
+  passwordChangeReveal: {
+    id: "entry.passwordChange.password.reveal",
+    defaultMessage: "Show new password",
+  },
+  passwordChangeHide: {
+    id: "entry.passwordChange.password.hide",
+    defaultMessage: "Hide new password",
+  },
+  passwordChangeConfirmationReveal: {
+    id: "entry.passwordChange.confirmation.reveal",
+    defaultMessage: "Show password confirmation",
+  },
+  passwordChangeConfirmationHide: {
+    id: "entry.passwordChange.confirmation.hide",
+    defaultMessage: "Hide password confirmation",
+  },
+  passwordChangeSubmit: {
+    id: "entry.passwordChange.submit",
+    defaultMessage: "Save new password",
+  },
+  passwordChangeSubmitting: {
+    id: "entry.passwordChange.submitting",
+    defaultMessage: "Saving new password…",
+  },
+  passwordChangeErrorSummary: {
+    id: "entry.passwordChange.errorSummary",
+    defaultMessage: "Correct these problems before saving your new password:",
+  },
+  passwordChangeTooShort: {
+    id: "entry.passwordChange.tooShort",
+    defaultMessage:
+      "The new password is too short. Use at least 12 characters.",
+  },
+  passwordChangeTooLong: {
+    id: "entry.passwordChange.tooLong",
+    defaultMessage:
+      "The new password is too long. Use at most 128 characters and 512 bytes.",
+  },
+  passwordChangeMismatch: {
+    id: "entry.passwordChange.mismatch",
+    defaultMessage:
+      "The confirmation does not match the new password. Enter exactly the same password in both fields.",
+  },
+  passwordChangeRejected: {
+    id: "entry.passwordChange.rejected",
+    defaultMessage:
+      "That password was not accepted. Choose a different password that meets the rules above.",
+  },
+  passwordChangeThrottled: {
+    id: "entry.passwordChange.throttled",
+    defaultMessage:
+      "Password replacement is temporarily limited. Wait before trying again.",
+  },
+  passwordChangeWait: {
+    id: "entry.passwordChange.wait",
+    defaultMessage:
+      "Wait at least {seconds, number} seconds before trying again.",
+  },
+  passwordChangeFailed: {
+    id: "entry.passwordChange.failed",
+    defaultMessage: "MIA could not save the new password. Try again later.",
+  },
+  passwordChangeUnconfirmed: {
+    id: "entry.passwordChange.unconfirmed",
+    defaultMessage:
+      "The outcome was not confirmed. This browser still requires a new password.",
+  },
+  passwordChangeReconciling: {
+    id: "entry.passwordChange.reconciling",
+    defaultMessage: "The outcome is unknown. Checking current sign-in status…",
+  },
+  passwordChangeRecheckNeeded: {
+    id: "entry.passwordChange.recheckNeeded",
+    defaultMessage: "The outcome is unknown and status could not be checked.",
+  },
+  passwordChangeRecheck: {
+    id: "entry.passwordChange.recheck",
+    defaultMessage: "Check sign-in status",
+  },
   logoutButton: {
     id: "entry.logout.button",
     defaultMessage: "Sign out",

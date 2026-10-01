@@ -65,6 +65,13 @@ There is no login-challenge Resend transition. `auth_mfa_step_used` and invalid-
 sign-in through logout. `429` never schedules submission. Ambiguous mutation outcomes enter `Rotating` and reconcile by
 session discovery without automatic replay.
 
+For Story 1-5, `Password change` carries the authoritative account identity. Its named actions are one replacement
+submission and logout. A failed local length, byte, or confirmation check stays in `Password change` and sends nothing.
+`422 auth_invalid_password`, `429`, and other definitive rejections return to `Password change` with the retained form.
+`403 auth_password_change_required`, `csrf_invalid`, `401`, `5xx`, transport loss, and malformed success enter `Rotating`
+and follow the stage returned by session discovery, never replaying the replacement request. A definitive authenticated
+response enters `Access checking` directly.
+
 The session-discovery operation, anonymous CSRF issuance, stages, expiries, and safe logout recovery are `BLOCKED` on
 `BCG-001: Anonymous CSRF and authentication-session discovery`. Protected responses also depend on
 `BCG-005: Shared-device no-store response policy`.

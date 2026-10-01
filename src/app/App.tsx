@@ -66,11 +66,16 @@ function routeKey(
     case "Restricted expired":
       return "signedOut";
     case "Rotating":
-      return state.origin === "login"
-        ? "signedOut"
-        : state.route === "challenge"
-          ? "mfa"
-          : "mfaRecovery";
+      switch (state.origin) {
+        case "login":
+          return "signedOut";
+        case "mfa":
+          return state.route === "challenge" ? "mfa" : "mfaRecovery";
+        case "password-change":
+          return "passwordChange";
+        default:
+          return assertNever(state);
+      }
     case "Logout confirmed":
       return "signedOut";
     case "Logout start":
