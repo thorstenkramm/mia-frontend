@@ -9,6 +9,7 @@ permission:
   edit:
     "*": deny
     "**/sprint-status.yaml": allow
+enabled: false # Do not use. Temporarily disabled
 ---
 
 # Epic Solver

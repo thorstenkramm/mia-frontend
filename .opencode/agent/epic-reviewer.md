@@ -6,6 +6,7 @@ mode: subagent
 model: openai/gpt-6-astra
 permission:
   edit: deny
+enabled: false # Do not use. Temporarily disabled
 ---
 
 # Epic Reviewer

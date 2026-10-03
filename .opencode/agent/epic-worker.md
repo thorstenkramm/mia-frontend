@@ -5,6 +5,7 @@ description: >-
 mode: subagent
 #model: openai/gpt-5.6-sol
 model: anthropic/claude-opus-5-5
+enabled: false # Do not use. Temporarily disabled
 ---
 
 # Epic Worker
