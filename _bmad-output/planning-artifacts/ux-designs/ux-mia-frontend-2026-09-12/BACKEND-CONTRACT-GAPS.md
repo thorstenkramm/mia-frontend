@@ -32,8 +32,8 @@ illustrative vocabulary in this handoff.
 
 ### BCG-001: Anonymous CSRF and authentication-session discovery
 
-Status: **OPEN — cold-entry, Story 1-3 login, Story 1-4 MFA, Story 1-5 password-replacement, and Story 1-6
-recovery/reset slices approved; broader obligations remain.**
+Status: **OPEN — cold-entry, Story 1-3 login, Story 1-4 MFA, Story 1-5 password-replacement, Story 1-6
+recovery/reset, and Story 1-7 invitation slices approved; broader obligations remain.**
 
 Reconciled on 2026-09-27 against backend revision `b83102114802b981a022c237c0746023c0aa6b79`, whose entry correction
 followed baseline `0626b751558c8baa7e4645708ef588b309446ed8`. Backend paths and line references in this BCG-001 assessment
@@ -42,8 +42,8 @@ the frontend did not rerun backend checks. Other BCG entries have not been broad
 
 #### BCG-001 frontend capability blocked
 
-The complete authentication journey remains blocked outside the approved entry, login, MFA, password-replacement, and
-recovery/reset slices for invitation work, lifecycle/BFCache handling, and safe logout recovery. The owner-approved 2026-09-27 partial exception permits only cold
+The complete authentication journey remains blocked outside the approved entry, login, MFA, password-replacement,
+recovery/reset, and invitation slices for lifecycle/BFCache handling and safe logout recovery. The owner-approved 2026-09-27 partial exception permits only cold
 `GET /api/v1/auth/session`, authenticated-only `GET /api/v1/users/me/capabilities`, and canonical dispatch among
 `/login`, `/`, `/auth/mfa`, and `/auth/password-change`. It does not close this composite blocker.
 The separate 2026-09-30 Story 1-3 decision below resolves credential-slice authorization and sequencing after the
@@ -54,6 +54,8 @@ The separate 2026-10-01 Story 1-5 decision resolves only required password repla
 `password-change` stage; it does not authorize voluntary password change, recovery, reset, or invitations.
 The separate 2026-10-01 Story 1-6 decision resolves only staff password recovery on `/login/recovery` and the
 fragment-token reset on `/password-reset`; it does not authorize invitations or any broader lifecycle work.
+The separate 2026-10-03 Story 1-7 decision resolves only public invitation preview on `/invitation` and acceptance on
+`/invitation/accept`; it does not authorize invitation administration or any broader lifecycle work.
 
 #### BCG-001 authoritative product requirement
 
@@ -350,6 +352,49 @@ This decision does not authorize invitation preview or acceptance (Story 1-7), l
 logout recovery beyond the existing handling, or anything else in BCG-001, and it does not close BCG-001 or BCG-003.
 Existing fresh-CSRF, serialization, response fencing, no-replay, restricted isolation, and logout ordering requirements
 still apply.
+
+#### BCG-001 Story 1-7 invitation-slice decision
+
+Owner decision, 2026-10-03: Story 1-7 may implement only `POST /api/v1/invitation-previews` (`previewInvitation`) on
+`/invitation` and `POST /api/v1/invitation-acceptances` (`acceptInvitation`) on `/invitation/accept`, plus the existing
+logout where the signed-in interstitial below calls it. The sequencing guidance is
+`mia/docs/api-authentication-and-user-invitation.md` §Preview the bearer invitation, §Accept and create the account,
+and §Error handling and ambiguous outcomes; OpenAPI remains transport authority.
+
+- **Token handling:** the Story 1-6 bootstrap applies to `/invitation#token=<uuid>`. It captures a canonical lowercase
+  UUID v4 token before the application runs, removes the complete fragment with `history.replaceState`, and keeps the
+  token in memory only, handed from `/invitation` to `/invitation/accept` inside the active flow. Each request reads a
+  fresh CSRF cookie and is sent at most once per deliberate activation. Nothing is resent automatically.
+- **Preview:** `200` shows only the invited role. `422 invitation_invalid`, a malformed fragment, and a missing or lost
+  token share one uniform invalid presentation with Sign in (`/login`). `429` (honoring a valid `Retry-After`) and
+  `403 csrf_invalid` (CSRF refreshed through session discovery) keep the token and allow a deliberate retry.
+  `400/406/413/415`, an undeclared `5xx`, timeout, network loss, or a malformed success drop the token and offer Sign
+  in; the user reopens the email link to try again.
+- **Acceptance fields:** username, password, password confirmation, language, country, and time zone are required
+  visible fields. Language is prefilled from the negotiated interface locale and time zone from the browser's IANA time
+  zone; the user can change both. The Story 1-5 local password rules apply before dispatch, and failed local checks
+  send nothing.
+- **Acceptance outcomes:** `201` shows account created with no session claim and a Sign in action to `/login`; the
+  token and fields are dropped. `409 username_taken`, `422 auth_invalid_password`, `422 auth_invalid_request`, `429`,
+  and `403 csrf_invalid` keep the token, clear the password fields, and allow a deliberate resubmit after correction.
+  `409 invitation_email_registered`, `422 invitation_invalid`, `400/406/413/415`, and outcome unknown (undeclared
+  `5xx`, timeout, network loss, Stop waiting, or a malformed success) drop the token and fields and offer no resubmit.
+  Outcome unknown makes no creation claim and offers Sign in and reopening the original email link, stating that
+  neither proves the prior outcome.
+- **Reopened link after ambiguity:** an invalid reopened link always shows the one uniform invalid result with Sign
+  in. The frontend keeps no record of an earlier attempt, so `FRONTEND-STATE-MACHINES.md` §27 Consumed-token ambiguity
+  is that uniform result.
+- **Link opened while signed in:** the Story 1-6 interstitial applies to both routes, from stage discovery alone, with
+  the capability read deferred until a deliberate Go back. Sign out and continue calls the existing logout; after its
+  confirmed anonymous result the preview runs with the in-memory token. Go back, a failed logout, or an unknown logout
+  outcome drops the token.
+- **Direct entry:** `/invitation/accept` opened or reloaded without an active flow token shows the uniform invalid
+  result.
+
+This decision does not authorize invitation administration, delivery reconciliation (BCG-006), Revoke or Delete
+(BCG-014), lifecycle/SSE/BFCache behavior, or anything else in BCG-001, and does not close BCG-001 or BCG-003. Existing
+fresh-CSRF, serialization, response fencing, no-replay, restricted isolation, and logout ordering requirements still
+apply.
 
 #### BCG-001 required observable contract
 

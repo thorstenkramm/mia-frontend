@@ -146,6 +146,15 @@ confirms it. The planning package is complete; this spec binds it to the archite
   signed in shows a focused interstitial from stage discovery alone, whose Sign out and continue calls the existing
   logout; the capability gate runs only after a deliberate Go back. This approval does not
   authorize invitations, broader lifecycle work, or close BCG-001 or BCG-003.
+- Owner-approved invitation alignment, 2026-10-03: Story 1-7 may implement only `POST /api/v1/invitation-previews` on
+  `/invitation` and `POST /api/v1/invitation-acceptances` on `/invitation/accept`, as recorded in
+  `BACKEND-CONTRACT-GAPS.md` §BCG-001 Story 1-7 invitation-slice decision. The Story 1-6 fragment bootstrap captures
+  the token, which lives only in the in-memory flow. Correctable acceptance rejections (`username_taken`,
+  `auth_invalid_password`, `auth_invalid_request`, `429`, `csrf_invalid`) keep the token for a deliberate resubmit;
+  every other rejection and outcome unknown drops it. A reopened invalid link, and `/invitation/accept` without a flow
+  token, show the one uniform invalid result with Sign in. Language and time zone are prefilled from the interface
+  locale and browser; the Story 1-6 signed-in interstitial applies. This approval does not authorize invitation
+  administration, broader lifecycle work, or close BCG-001 or BCG-003.
 
 ## Non-goals
 
@@ -177,6 +186,7 @@ activates a course without a manual, and a student completes a second tutoring s
 - Story 1-3's request-ID interpretation, direct-success stage dispatch, and login internal-error response are resolved;
   Story 1-4's method-neutral challenge, no-Resend decision, and recovery normalization are resolved; Story 1-5's
   password-replacement slice, stage-rediscovery, unclear-outcome, and local-validation questions are resolved; Story
-  1-6's recovery/reset slice, reset path, uniform token states, and signed-in interstitial are resolved. The broader
+  1-6's recovery/reset slice, reset path, uniform token states, and signed-in interstitial are resolved; Story 1-7's
+  invitation slice, token retention, consumed-token presentation, and profile defaults are resolved. The broader
   BCG-001 obligations remain open and are not part of any of these narrow approvals.
 - The exact Tailwind Plus component-to-blueprint binding is pending — a pre-implementation gate before UI stories.

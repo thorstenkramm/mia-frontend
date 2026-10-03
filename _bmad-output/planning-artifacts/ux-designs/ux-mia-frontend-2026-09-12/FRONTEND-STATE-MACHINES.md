@@ -879,6 +879,19 @@ proves account creation or invitation consumption. An invalid reopened link afte
 not proof that the prior acceptance succeeded.
 This safe recovery creates no additional backend blocker because it promises no deterministic outcome discovery.
 
+Story 1-7 owner decision, 2026-10-03 (`BACKEND-CONTRACT-GAPS.md` §BCG-001 Story 1-7 invitation-slice decision):
+
+- This replaces the first-byte token drop above: the flow keeps the token in memory while acceptance is in flight,
+  so a correctable rejection can be resubmitted. The token never reaches storage, URL, history state, title, or
+  announcements.
+- Acceptance rejected splits by cause. `409 username_taken`, `422 auth_invalid_password`, `422 auth_invalid_request`,
+  `429`, and `403 csrf_invalid` keep the token, clear the password fields, and return to Acceptance ready for a
+  deliberate resubmit after correction. `409 invitation_email_registered`, `422 invitation_invalid`, and
+  `400/406/413/415` drop the token and offer Sign in only.
+- Acceptance outcome unknown drops the token and offers Sign in and reopening the original email link.
+- Consumed-token ambiguity is the one uniform invalid result with Sign in. The frontend keeps no record of an earlier
+  attempt, so a reopened link cannot know whether an earlier acceptance was ambiguous.
+
 ## 28. Cross-Domain Announcements
 
 | State | Trigger | UI | Permitted action | Authoritative recovery |
