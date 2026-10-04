@@ -25,6 +25,10 @@ import {
   readTextSize,
 } from "../platform/prefs/preferences";
 import {
+  captureInvitationLink,
+  InvitationLink,
+} from "../platform/session/invitationLink";
+import {
   capturePasswordResetLink,
   PasswordResetLink,
 } from "../platform/session/passwordResetLink";
@@ -136,6 +140,7 @@ function renderEntry(...handlers: Parameters<typeof server.use>) {
         <App
           initialTextSize="standard"
           passwordResetLink={new PasswordResetLink(null)}
+          invitationLink={new InvitationLink(null)}
         />
       </MiaIntlProvider>
     </AnnouncementProvider>,
@@ -155,6 +160,7 @@ function renderEntryWithQueryClient(
         <App
           initialTextSize="standard"
           passwordResetLink={new PasswordResetLink(null)}
+          invitationLink={new InvitationLink(null)}
           queryClient={queryClient}
         />
       </MiaIntlProvider>
@@ -598,6 +604,7 @@ describe("localized anonymous entry", () => {
           <App
             initialTextSize="standard"
             passwordResetLink={new PasswordResetLink(null)}
+            invitationLink={new InvitationLink(null)}
           />
         </MiaIntlProvider>
       </AnnouncementProvider>,
@@ -1994,6 +2001,7 @@ describe("required password replacement", () => {
           <App
             initialTextSize="standard"
             passwordResetLink={new PasswordResetLink(null)}
+            invitationLink={new InvitationLink(null)}
           />
         </MiaIntlProvider>
       </AnnouncementProvider>,
@@ -2054,6 +2062,10 @@ describe("password recovery and token reset", () => {
       window.location,
       window.history,
     );
+    const invitationLink = captureInvitationLink(
+      window.location,
+      window.history,
+    );
     server.use(...handlers);
     applyDocumentLocale("en-US");
     applyTextSize("standard");
@@ -2063,6 +2075,7 @@ describe("password recovery and token reset", () => {
           <App
             initialTextSize="standard"
             passwordResetLink={passwordResetLink}
+            invitationLink={invitationLink}
           />
         </MiaIntlProvider>
       </AnnouncementProvider>,
@@ -2786,4 +2799,956 @@ describe("password recovery and token reset", () => {
     expect(window.location.pathname).toBe("/auth/password-change");
     expect(resets).toBe(0);
   });
+});
+
+describe("invitation preview and acceptance", () => {
+  function renderAt(
+    path: string,
+    ...handlers: Parameters<typeof server.use>
+  ): ReturnType<typeof render> {
+    window.history.replaceState(null, "", path);
+    // The production bootstrap order: capture both links before anything renders.
+    const passwordResetLink = capturePasswordResetLink(
+      window.location,
+      window.history,
+    );
+    const invitationLink = captureInvitationLink(
+      window.location,
+      window.history,
+    );
+    server.use(...handlers);
+    applyDocumentLocale("en-US");
+    applyTextSize("standard");
+    return render(
+      <AnnouncementProvider>
+        <MiaIntlProvider initialLocale="en-US">
+          <App
+            initialTextSize="standard"
+            passwordResetLink={passwordResetLink}
+            invitationLink={invitationLink}
+          />
+        </MiaIntlProvider>
+      </AnnouncementProvider>,
+    );
+  }
+
+  function errorResponse(status: number, code: string, retryAfter?: string) {
+    return HttpResponse.json(
+      { errors: [{ status: String(status), code }] },
+      {
+        status,
+        headers: {
+          "Content-Type": mediaType,
+          ...(retryAfter === undefined ? {} : { "Retry-After": retryAfter }),
+        },
+      },
+    );
+  }
+
+  function previewResponse(role = "supervisor") {
+    return HttpResponse.json(
+      {
+        data: {
+          type: "invitation-previews",
+          id: "preview",
+          attributes: { platform: "mia", role },
+        },
+      },
+      { headers: { "Content-Type": mediaType } },
+    );
+  }
+
+  function createdResponse() {
+    return HttpResponse.json(
+      { data: { type: "users", id: "user-id", attributes: {} } },
+      { status: 201, headers: { "Content-Type": mediaType } },
+    );
+  }
+
+  const invalidHeading = "This invitation link is invalid or no longer usable";
+  const invalidBody =
+    "If you already have an account, sign in. Otherwise, ask the person who invited you for a new invitation.";
+
+  async function openAcceptance(
+    user: ReturnType<typeof userEvent.setup>,
+  ): Promise<void> {
+    await user.click(
+      await screen.findByRole("link", { name: "Accept invitation" }),
+    );
+    expect(
+      await screen.findByRole("heading", {
+        level: 1,
+        name: "Create your MIA account",
+      }),
+    ).toHaveFocus();
+  }
+
+  async function fillAcceptance(
+    user: ReturnType<typeof userEvent.setup>,
+    password: string,
+    options: { readonly username?: string; readonly country?: string } = {},
+  ): Promise<void> {
+    const username = screen.getByLabelText<HTMLInputElement>(
+      "Username (required)",
+    );
+    await user.clear(username);
+    await user.type(username, options.username ?? "example.supervisor");
+    await user.type(screen.getByLabelText("New password (required)"), password);
+    await user.type(
+      screen.getByLabelText("Confirm new password (required)"),
+      password,
+    );
+    if (options.country !== "")
+      await user.selectOptions(
+        screen.getByLabelText("Country (required)"),
+        options.country ?? "DE",
+      );
+  }
+
+  function passwordValues(): string[] {
+    return [
+      screen.getByLabelText<HTMLInputElement>("New password (required)").value,
+      screen.getByLabelText<HTMLInputElement>("Confirm new password (required)")
+        .value,
+    ];
+  }
+
+  it("captures the token before render, previews once, accepts once, and claims no session", async () => {
+    const user = userEvent.setup();
+    const token = crypto.randomUUID();
+    const password = ` ${crypto.randomUUID()} `;
+    const timeZone = Intl.DateTimeFormat().resolvedOptions().timeZone;
+    let previews = 0;
+    let acceptances = 0;
+    let exactPreview = false;
+    let exactAcceptance = false;
+    document.cookie = `mia_csrf=${crypto.randomUUID()}; Path=/`;
+    renderAt(
+      `/invitation#token=${token}`,
+      anonymousHandler(),
+      http.post("/api/v1/invitation-previews", async ({ request }) => {
+        previews++;
+        exactPreview =
+          fingerprint(await request.text()) ===
+          fingerprint(
+            JSON.stringify({
+              data: { type: "invitation-previews", attributes: { token } },
+            }),
+          );
+        return previewResponse();
+      }),
+      http.post("/api/v1/invitation-acceptances", async ({ request }) => {
+        acceptances++;
+        exactAcceptance =
+          fingerprint(await request.text()) ===
+          fingerprint(
+            JSON.stringify({
+              data: {
+                type: "invitation-acceptances",
+                attributes: {
+                  token,
+                  username: "example.supervisor",
+                  password,
+                  password_confirmation: password,
+                  language: "en-US",
+                  country: "DE",
+                  time_zone: timeZone,
+                },
+              },
+            }),
+          );
+        return createdResponse();
+      }),
+    );
+    expect(window.location.hash).toBe("");
+
+    expect(
+      await screen.findByText("Invited role: Supervisor", {
+        selector: "main *",
+      }),
+    ).toBeInTheDocument();
+    expect(document.title).toBe("Invitation | MIA");
+    expect(
+      screen.getByRole("heading", { level: 1, name: "Your MIA invitation" }),
+    ).toHaveFocus();
+    expect(screen.queryByRole("navigation")).toBeNull();
+    await waitFor(() =>
+      expect(announcementRegion("polite")).toHaveTextContent(
+        "Invited role: Supervisor",
+      ),
+    );
+    await openAcceptance(user);
+    expect(window.location.pathname).toBe("/invitation/accept");
+    expect(document.title).toBe("Create account | MIA");
+    expect(
+      screen.getByLabelText<HTMLSelectElement>("Language (required)").value,
+    ).toBe("en-US");
+    expect(
+      screen.getByLabelText<HTMLSelectElement>("Time zone (required)").value,
+    ).toBe(timeZone);
+    expect(
+      screen.getByLabelText<HTMLSelectElement>("Country (required)").value,
+    ).toBe("");
+    await fillAcceptance(user, password);
+    await user.click(screen.getByRole("button", { name: "Create account" }));
+
+    expect(
+      await screen.findByRole("heading", {
+        level: 2,
+        name: "Your account has been created.",
+      }),
+    ).toHaveFocus();
+    expect(
+      screen.getByText(
+        "You are not signed in yet. Sign in with the username and password you chose.",
+      ),
+    ).toBeInTheDocument();
+    expect(screen.getByRole("link", { name: "Sign in" })).toHaveAttribute(
+      "href",
+      "/login",
+    );
+    expect(screen.queryByLabelText("New password (required)")).toBeNull();
+    await delay(50);
+    expect(window.location.pathname).toBe("/invitation/accept");
+    expect({ previews, acceptances, exactPreview, exactAcceptance }).toEqual({
+      previews: 1,
+      acceptances: 1,
+      exactPreview: true,
+      exactAcceptance: true,
+    });
+    const exposed = JSON.stringify({
+      href: window.location.href,
+      history: window.history.state as unknown,
+      title: document.title,
+      body: new XMLSerializer().serializeToString(document.body),
+    });
+    expect(exposed.includes(token)).toBe(false);
+    expect(exposed.includes(password.trim())).toBe(false);
+  });
+
+  it("renders every invalid cause with one heading, copy, action, focus, title, and announcement", async () => {
+    const user = userEvent.setup();
+    async function observeResult() {
+      const heading = await screen.findByRole("heading", {
+        level: 1,
+        name: invalidHeading,
+      });
+      await waitFor(() => expect(heading).toHaveFocus());
+      await waitFor(() =>
+        expect(announcementRegion("assertive")).toHaveTextContent(
+          `${invalidHeading} ${invalidBody}`,
+        ),
+      );
+      expect(screen.queryByRole("button")).toBeNull();
+      return {
+        main: new XMLSerializer().serializeToString(screen.getByRole("main")),
+        title: document.title,
+        path: window.location.pathname,
+        hash: window.location.hash,
+        focused: document.activeElement?.textContent ?? null,
+        assertive: announcementRegion("assertive").textContent,
+      };
+    }
+
+    const results = [];
+    // 422 invitation_invalid on preview.
+    document.cookie = `mia_csrf=${crypto.randomUUID()}; Path=/`;
+    let view = renderAt(
+      `/invitation#token=${crypto.randomUUID()}`,
+      anonymousHandler(),
+      http.post("/api/v1/invitation-previews", () =>
+        errorResponse(422, "invitation_invalid"),
+      ),
+    );
+    results.push(await observeResult());
+    view.unmount();
+    // 422 invitation_invalid on acceptance.
+    view = renderAt(
+      `/invitation#token=${crypto.randomUUID()}`,
+      anonymousHandler(),
+      http.post("/api/v1/invitation-previews", () => previewResponse()),
+      http.post("/api/v1/invitation-acceptances", () =>
+        errorResponse(422, "invitation_invalid"),
+      ),
+    );
+    await openAcceptance(user);
+    await fillAcceptance(user, crypto.randomUUID());
+    await user.click(screen.getByRole("button", { name: "Create account" }));
+    results.push(await observeResult());
+    view.unmount();
+    // A malformed fragment, a missing fragment, and a bare acceptance path.
+    let posts = 0;
+    for (const path of [
+      `/invitation#token=${crypto.randomUUID().toUpperCase()}`,
+      "/invitation",
+      "/invitation/accept",
+    ]) {
+      view = renderAt(
+        path,
+        anonymousHandler(),
+        http.post("/api/v1/invitation-previews", () => {
+          posts++;
+          return previewResponse();
+        }),
+      );
+      results.push(await observeResult());
+      view.unmount();
+    }
+
+    for (const result of results) expect(result).toEqual(results[0]);
+    expect(results[0]?.title).toBe("Invitation | MIA");
+    expect(results[0]?.path).toBe("/invitation");
+    expect(posts).toBe(0);
+  });
+
+  it.each([
+    [409, "username_taken", "That username is already taken."],
+    [422, "auth_invalid_password", "That password was not accepted."],
+    [422, "auth_invalid_request", "Some details were not accepted."],
+    [429, "rate_limited", "Too many attempts."],
+    [403, "csrf_invalid", "The security check for this page expired."],
+  ] as const)(
+    "keeps the form after HTTP %s %s, clears passwords, and resubmits only deliberately",
+    async (status, code, copy) => {
+      const user = userEvent.setup();
+      const token = crypto.randomUUID();
+      const sent: boolean[] = [];
+      let reads = 0;
+      document.cookie = `mia_csrf=${crypto.randomUUID()}; Path=/`;
+      renderAt(
+        `/invitation#token=${token}`,
+        http.get("/api/v1/auth/session", () => {
+          reads++;
+          return HttpResponse.json(
+            { data: null, meta: { stage: "anonymous" } },
+            { headers: { "Content-Type": mediaType } },
+          );
+        }),
+        http.post("/api/v1/invitation-previews", () => previewResponse()),
+        http.post("/api/v1/invitation-acceptances", async ({ request }) => {
+          sent.push((await request.text()).includes(token));
+          return sent.length === 1
+            ? errorResponse(status, code, status === 429 ? "0" : undefined)
+            : createdResponse();
+        }),
+      );
+      await openAcceptance(user);
+      const password = crypto.randomUUID();
+      await fillAcceptance(user, password, { username: "taken.name" });
+      await user.click(screen.getByRole("button", { name: "Create account" }));
+
+      await waitFor(() =>
+        expect(announcementRegion("assertive")).toHaveTextContent(copy),
+      );
+      expect(document.getElementById("invitation-status")).toHaveTextContent(
+        copy,
+      );
+      expect(passwordValues()).toEqual(["", ""]);
+      expect(
+        screen.getByLabelText<HTMLInputElement>("Username (required)").value,
+      ).toBe("taken.name");
+      expect(
+        screen.getByLabelText<HTMLSelectElement>("Country (required)").value,
+      ).toBe("DE");
+      // Only a taken username is attributed to the username field; a profile
+      // rejection may concern any field.
+      expect(screen.getByLabelText("Username (required)")).toHaveAttribute(
+        "aria-invalid",
+        code === "username_taken" ? "true" : "false",
+      );
+      await delay(50);
+      expect(sent).toEqual([true]);
+      expect(reads).toBe(code === "csrf_invalid" ? 2 : 1);
+
+      await user.type(
+        screen.getByLabelText("New password (required)"),
+        password,
+      );
+      await user.type(
+        screen.getByLabelText("Confirm new password (required)"),
+        password,
+      );
+      await user.click(screen.getByRole("button", { name: "Create account" }));
+      await screen.findByRole("heading", {
+        level: 2,
+        name: "Your account has been created.",
+      });
+      expect(sent).toEqual([true, true]);
+    },
+  );
+
+  it("sends nothing when a local check fails and names each failed field", async () => {
+    const user = userEvent.setup();
+    let posts = 0;
+    document.cookie = `mia_csrf=${crypto.randomUUID()}; Path=/`;
+    renderAt(
+      `/invitation#token=${crypto.randomUUID()}`,
+      anonymousHandler(),
+      http.post("/api/v1/invitation-previews", () => previewResponse()),
+      http.post("/api/v1/invitation-acceptances", () => {
+        posts++;
+        return createdResponse();
+      }),
+    );
+    await openAcceptance(user);
+    await fillAcceptance(user, crypto.randomUUID(), { country: "" });
+    await user.click(screen.getByRole("button", { name: "Create account" }));
+
+    const country = screen.getByLabelText("Country (required)");
+    expect(country).toHaveFocus();
+    expect(country).toHaveAttribute("aria-invalid", "true");
+    expect(country).toHaveAccessibleDescription("Choose your country.");
+    await waitFor(() =>
+      expect(announcementRegion("assertive")).toHaveTextContent(
+        "Choose your country.",
+      ),
+    );
+
+    for (const input of [
+      screen.getByLabelText("New password (required)"),
+      screen.getByLabelText("Confirm new password (required)"),
+    ])
+      await user.clear(input);
+    await user.type(screen.getByLabelText("New password (required)"), "short");
+    await user.type(
+      screen.getByLabelText("Confirm new password (required)"),
+      "short",
+    );
+    await user.click(screen.getByRole("button", { name: "Create account" }));
+    expect(screen.getByLabelText("New password (required)")).toHaveFocus();
+    await delay(50);
+    expect(posts).toBe(0);
+  });
+
+  it.each([
+    [409, "invitation_email_registered", /^An account already uses the email/u],
+    [400, "malformed_request", /^Your request couldn't be processed\./u],
+    [415, "unsupported_media_type", /^Your request couldn't be processed\./u],
+  ] as const)(
+    "ends the flow after HTTP %s %s without a resubmit",
+    async (status, code, copy) => {
+      const user = userEvent.setup();
+      let posts = 0;
+      document.cookie = `mia_csrf=${crypto.randomUUID()}; Path=/`;
+      renderAt(
+        `/invitation#token=${crypto.randomUUID()}`,
+        anonymousHandler(),
+        http.post("/api/v1/invitation-previews", () => previewResponse()),
+        http.post("/api/v1/invitation-acceptances", () => {
+          posts++;
+          return errorResponse(status, code);
+        }),
+      );
+      await openAcceptance(user);
+      await fillAcceptance(user, crypto.randomUUID());
+      await user.click(screen.getByRole("button", { name: "Create account" }));
+
+      expect(
+        await screen.findByRole("heading", {
+          level: 2,
+          name: "Account not created",
+        }),
+      ).toHaveFocus();
+      expect(within(screen.getByRole("main")).getByText(copy)).toBeVisible();
+      expect(
+        screen.getByRole("button", { name: "Technical details" }),
+      ).toHaveAttribute("aria-expanded", "false");
+      expect(screen.queryByLabelText("New password (required)")).toBeNull();
+      expect(screen.queryByRole("button", { name: "Create account" })).toBe(
+        null,
+      );
+      expect(screen.getByRole("link", { name: "Sign in" })).toHaveAttribute(
+        "href",
+        "/login",
+      );
+      await delay(50);
+      expect(posts).toBe(1);
+    },
+  );
+
+  it("makes no creation claim after response loss and offers no resubmit", async () => {
+    const user = userEvent.setup();
+    let posts = 0;
+    document.cookie = `mia_csrf=${crypto.randomUUID()}; Path=/`;
+    renderAt(
+      `/invitation#token=${crypto.randomUUID()}`,
+      anonymousHandler(),
+      http.post("/api/v1/invitation-previews", () => previewResponse()),
+      http.post("/api/v1/invitation-acceptances", () => {
+        posts++;
+        return HttpResponse.error();
+      }),
+    );
+    await openAcceptance(user);
+    await fillAcceptance(user, crypto.randomUUID());
+    await user.click(screen.getByRole("button", { name: "Create account" }));
+
+    expect(
+      await screen.findByRole("heading", {
+        level: 2,
+        name: "Account creation not confirmed",
+      }),
+    ).toHaveFocus();
+    expect(
+      within(screen.getByRole("main")).getByText(
+        /Neither step proves whether the account was created\./u,
+      ),
+    ).toBeInTheDocument();
+    expect(document.body).not.toHaveTextContent(
+      "Your account has been created",
+    );
+    expect(screen.queryByRole("button", { name: "Create account" })).toBeNull();
+    await delay(50);
+    expect(posts).toBe(1);
+  });
+
+  it("enters outcome unknown on Stop waiting and ignores the late response", async () => {
+    const user = userEvent.setup();
+    let posts = 0;
+    const response = deferredVoid();
+    document.cookie = `mia_csrf=${crypto.randomUUID()}; Path=/`;
+    renderAt(
+      `/invitation#token=${crypto.randomUUID()}`,
+      anonymousHandler(),
+      http.post("/api/v1/invitation-previews", () => previewResponse()),
+      http.post("/api/v1/invitation-acceptances", async () => {
+        posts++;
+        await response.promise;
+        return createdResponse();
+      }),
+    );
+    await openAcceptance(user);
+    await fillAcceptance(user, crypto.randomUUID());
+    await user.click(screen.getByRole("button", { name: "Create account" }));
+    await waitFor(() => expect(posts).toBe(1));
+    expect(screen.getByLabelText("Username (required)")).toHaveAttribute(
+      "aria-disabled",
+      "true",
+    );
+    await user.click(screen.getByRole("button", { name: "Stop waiting" }));
+
+    expect(
+      await screen.findByRole("heading", {
+        level: 2,
+        name: "Account creation not confirmed",
+      }),
+    ).toHaveFocus();
+    response.resolve();
+    await delay(50);
+    expect(
+      screen.queryByRole("heading", { name: "Your account has been created." }),
+    ).toBeNull();
+    expect(posts).toBe(1);
+  });
+
+  it("keeps the token for a deliberate preview retry after throttling and CSRF rejection", async () => {
+    const user = userEvent.setup();
+    const token = crypto.randomUUID();
+    const sent: boolean[] = [];
+    let reads = 0;
+    document.cookie = `mia_csrf=${crypto.randomUUID()}; Path=/`;
+    renderAt(
+      `/invitation#token=${token}`,
+      http.get("/api/v1/auth/session", () => {
+        reads++;
+        return HttpResponse.json(
+          { data: null, meta: { stage: "anonymous" } },
+          { headers: { "Content-Type": mediaType } },
+        );
+      }),
+      http.post("/api/v1/invitation-previews", async ({ request }) => {
+        sent.push((await request.text()).includes(token));
+        if (sent.length === 1) return errorResponse(429, "rate_limited", "0");
+        if (sent.length === 2) return errorResponse(403, "csrf_invalid");
+        return previewResponse("mentor");
+      }),
+    );
+
+    const retry = await screen.findByRole("button", { name: "Try again" });
+    await waitFor(() =>
+      expect(announcementRegion("assertive")).toHaveTextContent(
+        "Too many attempts to check this invitation.",
+      ),
+    );
+    await delay(50);
+    expect(sent).toEqual([true]);
+    await user.click(retry);
+    await waitFor(() =>
+      expect(announcementRegion("assertive")).toHaveTextContent(
+        "The security check for this page expired. Try again.",
+      ),
+    );
+    expect(retry).toHaveFocus();
+    expect(reads).toBe(2);
+    await user.click(retry);
+
+    expect(
+      await screen.findByText("Invited role: Mentor", { selector: "main *" }),
+    ).toBeInTheDocument();
+    expect(
+      screen.getByRole("link", { name: "Accept invitation" }),
+    ).toHaveFocus();
+    expect(sent).toEqual([true, true, true]);
+  });
+
+  it.each([
+    [503, "unavailable"],
+    [400, "malformed_request"],
+  ] as const)(
+    "drops the token after preview HTTP %s and asks to reopen the email link",
+    async (status, code) => {
+      let posts = 0;
+      document.cookie = `mia_csrf=${crypto.randomUUID()}; Path=/`;
+      renderAt(
+        `/invitation#token=${crypto.randomUUID()}`,
+        anonymousHandler(),
+        http.post("/api/v1/invitation-previews", () => {
+          posts++;
+          return errorResponse(status, code);
+        }),
+      );
+
+      expect(
+        await screen.findByRole("heading", {
+          level: 2,
+          name: "Invitation could not be checked",
+        }),
+      ).toBeInTheDocument();
+      expect(
+        within(screen.getByRole("main")).getByText(
+          /open the link in your invitation email again/u,
+        ),
+      ).toBeInTheDocument();
+      expect(screen.queryByRole("button", { name: "Try again" })).toBeNull();
+      expect(screen.getByRole("link", { name: "Sign in" })).toHaveAttribute(
+        "href",
+        "/login",
+      );
+      await delay(50);
+      expect(posts).toBe(1);
+    },
+  );
+
+  it("keeps the token across Back and Forward between the two paths and drops it on departure", async () => {
+    const user = userEvent.setup();
+    let previews = 0;
+    document.cookie = `mia_csrf=${crypto.randomUUID()}; Path=/`;
+    renderAt(
+      `/invitation#token=${crypto.randomUUID()}`,
+      anonymousHandler(),
+      http.post("/api/v1/invitation-previews", () => {
+        previews++;
+        return previewResponse();
+      }),
+    );
+    await openAcceptance(user);
+
+    act(() => window.history.back());
+    expect(
+      await screen.findByRole("link", { name: "Accept invitation" }),
+    ).toBeInTheDocument();
+    act(() => window.history.forward());
+    expect(
+      await screen.findByLabelText("Username (required)"),
+    ).toBeInTheDocument();
+
+    await act(async () => {
+      window.history.pushState(null, "", "/login");
+      window.dispatchEvent(new PopStateEvent("popstate"));
+      await delay(20);
+    });
+    await screen.findByRole("heading", { level: 1, name: "Sign in to MIA" });
+    act(() => window.history.back());
+    expect(
+      await screen.findByRole("heading", { level: 1, name: invalidHeading }),
+    ).toBeInTheDocument();
+    expect(previews).toBe(1);
+  });
+
+  function stageHandlers(state: {
+    stage: "authenticated" | "anonymous";
+    capabilities: number;
+  }) {
+    return [
+      http.get("/api/v1/auth/session", () =>
+        HttpResponse.json(
+          state.stage === "anonymous"
+            ? { data: null, meta: { stage: state.stage } }
+            : {
+                data: {
+                  type: "auth-sessions",
+                  id: "account-id",
+                  attributes: {
+                    stage: state.stage,
+                    idle_expires_at: "2026-10-03T10:30:00.000000Z",
+                    absolute_expires_at: "2026-10-03T22:00:00.000000Z",
+                  },
+                },
+              },
+          { headers: { "Content-Type": mediaType } },
+        ),
+      ),
+      http.get("/api/v1/users/me/capabilities", () => {
+        state.capabilities++;
+        return HttpResponse.json(capabilityDocument(), {
+          headers: { "Content-Type": mediaType },
+        });
+      }),
+    ];
+  }
+
+  it("shows the signed-in interstitial from stage discovery alone and previews after confirmed sign-out", async () => {
+    const user = userEvent.setup();
+    const state = {
+      stage: "authenticated" as "authenticated" | "anonymous",
+      capabilities: 0,
+    };
+    let logouts = 0;
+    let previews = 0;
+    document.cookie = `mia_csrf=${crypto.randomUUID()}; Path=/`;
+    renderAt(
+      `/invitation#token=${crypto.randomUUID()}`,
+      ...stageHandlers(state),
+      http.post("/api/v1/auth/logout", () => {
+        logouts++;
+        state.stage = "anonymous";
+        return new HttpResponse(null, { status: 204 });
+      }),
+      http.post("/api/v1/invitation-previews", () => {
+        previews++;
+        return previewResponse();
+      }),
+    );
+
+    expect(
+      await screen.findByText(
+        "You're currently signed in. To use this invitation, sign out first.",
+      ),
+    ).toBeInTheDocument();
+    expect(document.title).toBe("Invitation | MIA");
+    expect(screen.queryByRole("navigation")).toBeNull();
+    await delay(50);
+    expect({ capabilities: state.capabilities, previews }).toEqual({
+      capabilities: 0,
+      previews: 0,
+    });
+    await user.click(
+      screen.getByRole("button", { name: "Sign out and continue" }),
+    );
+
+    expect(
+      await screen.findByText("Invited role: Supervisor", {
+        selector: "main *",
+      }),
+    ).toBeInTheDocument();
+    await waitFor(() =>
+      expect(
+        screen.getByRole("link", { name: "Accept invitation" }),
+      ).toHaveFocus(),
+    );
+    expect({ logouts, previews, capabilities: state.capabilities }).toEqual({
+      logouts: 1,
+      previews: 1,
+      capabilities: 0,
+    });
+  });
+
+  it("runs the capability gate only after a deliberate Go back and drops the token", async () => {
+    const user = userEvent.setup();
+    const state = {
+      stage: "authenticated" as "authenticated" | "anonymous",
+      capabilities: 0,
+    };
+    let previews = 0;
+    renderAt(
+      `/invitation#token=${crypto.randomUUID()}`,
+      ...stageHandlers(state),
+      http.post("/api/v1/invitation-previews", () => {
+        previews++;
+        return previewResponse();
+      }),
+    );
+    await user.click(await screen.findByRole("button", { name: "Go back" }));
+
+    expect(
+      await screen.findByRole("heading", { level: 1, name: "Home" }),
+    ).toBeInTheDocument();
+    expect(state.capabilities).toBe(1);
+    expect(window.location.pathname).toBe("/");
+    expect(previews).toBe(0);
+  });
+
+  it("keeps Try again unavailable during a nonzero preview Retry-After and sends nothing until it passes", async () => {
+    const user = userEvent.setup();
+    let previews = 0;
+    document.cookie = `mia_csrf=${crypto.randomUUID()}; Path=/`;
+    renderAt(
+      `/invitation#token=${crypto.randomUUID()}`,
+      anonymousHandler(),
+      http.post("/api/v1/invitation-previews", () => {
+        previews++;
+        return previews === 1
+          ? errorResponse(429, "rate_limited", "2")
+          : previewResponse();
+      }),
+    );
+
+    const retry = await screen.findByRole("button", { name: "Try again" });
+    expect(retry).toHaveAttribute("aria-disabled", "true");
+    expect(
+      within(screen.getByRole("main")).getByText(
+        /Wait at least 2 seconds before trying again\./u,
+      ),
+    ).toBeInTheDocument();
+    await user.click(retry);
+    await delay(50);
+    expect(previews).toBe(1);
+
+    await waitFor(
+      () => expect(retry).toHaveAttribute("aria-disabled", "false"),
+      { timeout: 3000 },
+    );
+    await user.click(retry);
+    expect(
+      await screen.findByText("Invited role: Supervisor", {
+        selector: "main *",
+      }),
+    ).toBeInTheDocument();
+    expect(previews).toBe(2);
+  });
+
+  it("keeps Create account unavailable during a nonzero acceptance Retry-After and sends nothing until it passes", async () => {
+    const user = userEvent.setup();
+    let acceptances = 0;
+    document.cookie = `mia_csrf=${crypto.randomUUID()}; Path=/`;
+    renderAt(
+      `/invitation#token=${crypto.randomUUID()}`,
+      anonymousHandler(),
+      http.post("/api/v1/invitation-previews", () => previewResponse()),
+      http.post("/api/v1/invitation-acceptances", () => {
+        acceptances++;
+        return acceptances === 1
+          ? errorResponse(429, "rate_limited", "2")
+          : createdResponse();
+      }),
+    );
+    await openAcceptance(user);
+    const password = crypto.randomUUID();
+    await fillAcceptance(user, password);
+    const submit = screen.getByRole("button", { name: "Create account" });
+    await user.click(submit);
+
+    await waitFor(() =>
+      expect(document.getElementById("invitation-status")).toHaveTextContent(
+        "Wait at least 2 seconds before trying again.",
+      ),
+    );
+    expect(submit).toHaveAttribute("aria-disabled", "true");
+    await user.click(submit);
+    await delay(50);
+    expect(acceptances).toBe(1);
+
+    await waitFor(
+      () => expect(submit).toHaveAttribute("aria-disabled", "false"),
+      { timeout: 3000 },
+    );
+    await user.type(screen.getByLabelText("New password (required)"), password);
+    await user.type(
+      screen.getByLabelText("Confirm new password (required)"),
+      password,
+    );
+    await user.click(submit);
+    await screen.findByRole("heading", {
+      level: 2,
+      name: "Your account has been created.",
+    });
+    expect(acceptances).toBe(2);
+  });
+
+  it.each(["mfa", "password-change"] as const)(
+    "holds a %s-stage link behind the focused interstitial with no restricted form, prefetch, or preview until sign-out",
+    async (stage) => {
+      const user = userEvent.setup();
+      let current: "mfa" | "password-change" | "anonymous" = stage;
+      let capabilities = 0;
+      let logouts = 0;
+      let previews = 0;
+      document.cookie = `mia_csrf=${crypto.randomUUID()}; Path=/`;
+      renderAt(
+        `/invitation#token=${crypto.randomUUID()}`,
+        http.get("/api/v1/auth/session", () =>
+          current === "anonymous"
+            ? HttpResponse.json(
+                { data: null, meta: { stage: "anonymous" } },
+                { headers: { "Content-Type": mediaType } },
+              )
+            : HttpResponse.json(
+                {
+                  data: {
+                    type: "auth-sessions",
+                    id: "account-id",
+                    attributes: {
+                      stage: current,
+                      ...(current === "mfa"
+                        ? { mfa_challenge_id: "challenge-id" }
+                        : {}),
+                      idle_expires_at: "2026-10-04T10:30:00.000000Z",
+                      absolute_expires_at: "2026-10-04T10:30:00.000000Z",
+                    },
+                  },
+                },
+                { headers: { "Content-Type": mediaType } },
+              ),
+        ),
+        http.get("/api/v1/users/me/capabilities", () => {
+          capabilities++;
+          return HttpResponse.json(capabilityDocument(), {
+            headers: { "Content-Type": mediaType },
+          });
+        }),
+        http.post("/api/v1/auth/logout", () => {
+          logouts++;
+          current = "anonymous";
+          return new HttpResponse(null, { status: 204 });
+        }),
+        http.post("/api/v1/invitation-previews", () => {
+          previews++;
+          return previewResponse();
+        }),
+      );
+
+      expect(
+        await screen.findByText(
+          "You're currently signed in. To use this invitation, sign out first.",
+        ),
+      ).toBeInTheDocument();
+      expect(
+        screen.getByRole("heading", { level: 1, name: "Your MIA invitation" }),
+      ).toHaveFocus();
+      expect(window.location.pathname).toBe("/invitation");
+      expect(document.title).toBe("Invitation | MIA");
+      expect(screen.queryByRole("navigation")).toBeNull();
+      expect(screen.queryByLabelText("Six-digit code (required)")).toBeNull();
+      expect(screen.queryByLabelText("New password (required)")).toBeNull();
+      await delay(50);
+      expect({ capabilities, previews }).toEqual({
+        capabilities: 0,
+        previews: 0,
+      });
+
+      await user.click(
+        screen.getByRole("button", { name: "Sign out and continue" }),
+      );
+      expect(
+        await screen.findByText("Invited role: Supervisor", {
+          selector: "main *",
+        }),
+      ).toBeInTheDocument();
+      expect({ logouts, previews, capabilities }).toEqual({
+        logouts: 1,
+        previews: 1,
+        capabilities: 0,
+      });
+    },
+  );
 });

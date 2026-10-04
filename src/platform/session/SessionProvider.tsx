@@ -12,7 +12,12 @@ import {
   type MfaRoute,
   type PublicMutationResult,
 } from "./sessionController";
-import type { PasswordResetToken } from "../api/entry";
+import type {
+  InvitationAcceptanceFields,
+  InvitationRole,
+  InvitationToken,
+  PasswordResetToken,
+} from "../api/entry";
 
 const SessionContext = createContext<SessionController | null>(null);
 
@@ -68,7 +73,7 @@ export function useSessionActions(): {
     passwordConfirmation: string,
   ) => Promise<void>;
   readonly recheckPasswordChange: () => Promise<void>;
-  readonly beginResetLinkLogout: () => boolean;
+  readonly beginLinkLogout: () => boolean;
   readonly continueDeferredAccess: () => Promise<void>;
   readonly requestPasswordRecovery: (
     username: string,
@@ -81,10 +86,25 @@ export function useSessionActions(): {
     isCurrent: () => boolean,
     signal: AbortSignal,
   ) => Promise<PublicMutationResult>;
+  readonly previewInvitation: (
+    token: InvitationToken,
+    isCurrent: () => boolean,
+    signal: AbortSignal,
+  ) => Promise<PublicMutationResult<InvitationRole>>;
+  readonly acceptInvitation: (
+    token: InvitationToken,
+    fields: InvitationAcceptanceFields,
+    isCurrent: () => boolean,
+    signal: AbortSignal,
+  ) => Promise<PublicMutationResult>;
 } {
   const controller = useSessionController();
   return {
-    beginResetLinkLogout: () => controller.beginResetLinkLogout(),
+    previewInvitation: (token, isCurrent, signal) =>
+      controller.previewInvitation(token, isCurrent, signal),
+    acceptInvitation: (token, fields, isCurrent, signal) =>
+      controller.acceptInvitation(token, fields, isCurrent, signal),
+    beginLinkLogout: () => controller.beginLinkLogout(),
     continueDeferredAccess: () => controller.continueDeferredAccess(),
     requestPasswordRecovery: (username, isCurrent) =>
       controller.requestPasswordRecovery(username, isCurrent),

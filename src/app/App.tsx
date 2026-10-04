@@ -19,6 +19,12 @@ import { messages } from "../platform/i18n/messages";
 import { TechnicalErrorDisclosure } from "../platform/api/TechnicalErrorDisclosure";
 import type { TextSize } from "../platform/prefs/preferences";
 import {
+  invitationPaths,
+  invitationSurface,
+  type InvitationLink,
+  type InvitationSurface,
+} from "../platform/session/invitationLink";
+import {
   passwordResetPath,
   passwordResetSurface,
   type PasswordResetLink,
@@ -30,12 +36,14 @@ import { SimpleEntrySurface } from "./routes/SimpleEntrySurface";
 type AppProps = {
   initialTextSize: TextSize;
   passwordResetLink: PasswordResetLink;
+  invitationLink: InvitationLink;
   queryClient?: Parameters<typeof EntryDataProvider>[0]["queryClient"];
 };
 
 export function App({
   initialTextSize,
   passwordResetLink,
+  invitationLink,
   queryClient,
 }: AppProps) {
   return (
@@ -43,7 +51,8 @@ export function App({
       // A link captured at bootstrap shows its interstitial from stage discovery
       // alone; the capability gate runs only after a deliberate Go back.
       deferCapabilityGate={
-        passwordResetLink.getSnapshot().kind === "Awaiting stage"
+        passwordResetLink.getSnapshot().kind === "Awaiting stage" ||
+        invitationLink.getSnapshot().kind === "Awaiting stage"
       }
       {...(queryClient ? { queryClient } : {})}
     >
@@ -55,6 +64,7 @@ export function App({
               <CanonicalEntry
                 initialTextSize={initialTextSize}
                 passwordResetLink={passwordResetLink}
+                invitationLink={invitationLink}
               />
             }
           />
@@ -68,10 +78,13 @@ function routeKey(
   state: AuthenticationBootstrapState,
   pathname: string,
   resetSurface: PasswordResetSurface | null,
+  invitation: InvitationSurface | null,
 ): EntryRouteKey | null {
-  // A captured reset link owns its path until the flow ends; otherwise the
-  // public recovery and reset routes exist only for anonymous sessions.
+  // A captured reset or invitation link owns its paths until the flow ends;
+  // otherwise the public recovery and link routes exist only for anonymous
+  // sessions.
   if (resetSurface !== null) return "passwordReset";
+  if (invitation !== null) return invitation.route;
   if (
     pathname === "/login/recovery" &&
     (state.kind === "Signed out" || state.kind === "Logout confirmed")
@@ -97,7 +110,7 @@ function routeKey(
     case "Authenticated":
       return "home";
     case "Access deferred":
-      // Only the reset interstitial renders this state; without it, stay neutral.
+      // Only a link interstitial renders this state; without it, stay neutral.
       return null;
     case "Restricted expired":
       return "signedOut";
@@ -129,6 +142,7 @@ function routeKey(
 function CanonicalEntry({
   initialTextSize,
   passwordResetLink,
+  invitationLink,
 }: Omit<AppProps, "queryClient">) {
   const state = useAuthenticationBootstrapState();
   const { continueDeferredAccess } = useSessionActions();
@@ -143,26 +157,40 @@ function CanonicalEntry({
     resetState,
     location.pathname,
   );
-  const key = routeKey(state, location.pathname, resetSurface);
+  const invitationState = useSyncExternalStore(
+    invitationLink.subscribe,
+    invitationLink.getSnapshot,
+    invitationLink.getSnapshot,
+  );
+  const invitation = invitationSurface(
+    state,
+    invitationState,
+    location.pathname,
+  );
+  const key = routeKey(state, location.pathname, resetSurface, invitation);
 
-  // Both stores live outside React: the reset flow follows session changes and
-  // drops its token as soon as the reset path is left.
+  // The stores live outside React: each link flow follows session changes and
+  // drops its token as soon as its paths are left. Back and Forward between
+  // the two invitation paths keep the invitation token.
   useEffect(() => {
     passwordResetLink.observeSession(state);
-  }, [passwordResetLink, state]);
+    invitationLink.observeSession(state);
+  }, [invitationLink, passwordResetLink, state]);
   useEffect(() => {
     if (location.pathname !== passwordResetPath) passwordResetLink.depart();
-  }, [passwordResetLink, location.pathname]);
+    if (!invitationPaths.includes(location.pathname)) invitationLink.depart();
+  }, [invitationLink, passwordResetLink, location.pathname]);
   useEffect(() => {
     // A link can be abandoned while discovery is pending. Once discovery then
     // reports authenticated, resume the ordinary gate instead of stranding the
-    // departed route in its reset-only deferred state.
+    // departed route in its link-only deferred state.
     if (
       state.kind === "Access deferred" &&
-      passwordResetLink.getSnapshot().kind === "Link unusable"
+      passwordResetLink.getSnapshot().kind === "Link unusable" &&
+      invitationLink.getSnapshot().kind === "Link invalid"
     )
       void continueDeferredAccess();
-  }, [continueDeferredAccess, passwordResetLink, state]);
+  }, [continueDeferredAccess, invitationLink, passwordResetLink, state]);
 
   if (key === null) {
     return <EntryStateSurface state={state} />;
@@ -176,10 +204,17 @@ function CanonicalEntry({
   const RouteContent = route.component;
   const mfaExpired =
     state.kind === "MFA required" && state.outcome?.kind === "expired";
+  // The uniform invalid invitation result has one title and heading on both
+  // invitation paths.
+  const invitationInvalid = invitation?.view.kind === "invalid";
   return (
     <SimpleEntrySurface
       titleMessage={
-        mfaExpired ? messages.mfaRestartPageTitle : route.titleMessage
+        mfaExpired
+          ? messages.mfaRestartPageTitle
+          : invitationInvalid
+            ? messages.invitationPageTitle
+            : route.titleMessage
       }
       headingMessage={
         mfaExpired
@@ -192,13 +227,16 @@ function CanonicalEntry({
               // entry and a rejected submission focus the same target.
               resetSurface?.kind === "link unusable"
               ? messages.resetLinkUnusableHeading
-              : route.headingMessage
+              : invitationInvalid
+                ? messages.invitationInvalidHeading
+                : route.headingMessage
       }
     >
       <Suspense fallback={null}>
         <RouteContent
           initialTextSize={initialTextSize}
           passwordResetLink={passwordResetLink}
+          invitationLink={invitationLink}
           {...(state.kind === "Logout confirmed"
             ? { logoutConfirmed: true }
             : {})}

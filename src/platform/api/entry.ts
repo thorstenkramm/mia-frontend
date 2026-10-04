@@ -329,6 +329,97 @@ export function resetPassword(
   });
 }
 
+declare const invitationTokenBrand: unique symbol;
+// A captured, canonical lowercase UUID v4 bearer token from an invitation link.
+export type InvitationToken = string & {
+  readonly [invitationTokenBrand]: "InvitationToken";
+};
+
+type InvitationPreviewDocument =
+  operations["previewInvitation"]["responses"][200]["content"][typeof jsonApiMediaType];
+export type InvitationRole =
+  InvitationPreviewDocument["data"]["attributes"]["role"];
+
+const invitationPreviewDocumentSchema = z.object({
+  data: z.object({
+    type: z.literal("invitation-previews"),
+    id: z.literal("preview"),
+    attributes: z.object({
+      platform: z.literal("mia"),
+      role: z.enum(["administrator", "supervisor", "mentor"]),
+    }),
+  }),
+}) satisfies z.ZodType<InvitationPreviewDocument>;
+
+type CreatedUserDocument =
+  operations["acceptInvitation"]["responses"][201]["content"][typeof jsonApiMediaType];
+
+const createdUserDocumentSchema = z.object({
+  data: z.object({
+    type: z.literal("users"),
+    id: resourceId,
+    attributes: z.object({}).strict(),
+  }),
+}) satisfies z.ZodType<CreatedUserDocument>;
+
+// Only the invited role leaves this boundary; the preview exposes nothing else.
+export async function previewInvitation(
+  token: InvitationToken,
+  csrfToken: string,
+): Promise<InvitationRole> {
+  const body = {
+    data: { type: "invitation-previews", attributes: { token } },
+  } satisfies operations["previewInvitation"]["requestBody"]["content"][typeof jsonApiMediaType];
+  const response = await sendUnsafeRequest({
+    path: "/api/v1/invitation-previews",
+    csrfToken,
+    body: JSON.stringify(body),
+  });
+  const document = await parseJsonApiResponse(
+    response,
+    invitationPreviewDocumentSchema,
+  );
+  return document.data.attributes.role;
+}
+
+export type InvitationAcceptanceFields = {
+  readonly username: string;
+  readonly password: string;
+  readonly passwordConfirmation: string;
+  readonly language: string;
+  readonly country: string;
+  readonly timeZone: string;
+};
+
+// Only a `201` identity-only `users` resource proves account creation. It never
+// creates a session, so nothing about the account is returned.
+export async function acceptInvitation(
+  token: InvitationToken,
+  fields: InvitationAcceptanceFields,
+  csrfToken: string,
+): Promise<void> {
+  const body = {
+    data: {
+      type: "invitation-acceptances",
+      attributes: {
+        token,
+        username: fields.username,
+        password: fields.password,
+        password_confirmation: fields.passwordConfirmation,
+        language: fields.language,
+        country: fields.country,
+        time_zone: fields.timeZone,
+      },
+    },
+  } satisfies operations["acceptInvitation"]["requestBody"]["content"][typeof jsonApiMediaType];
+  const response = await sendUnsafeRequest({
+    path: "/api/v1/invitation-acceptances",
+    csrfToken,
+    body: JSON.stringify(body),
+  });
+  await parseJsonApiResponse(response, createdUserDocumentSchema, 201);
+}
+
 async function sendNoContent(
   options: Parameters<typeof sendUnsafeRequest>[0],
 ): Promise<void> {

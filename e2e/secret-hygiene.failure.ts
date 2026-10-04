@@ -175,3 +175,60 @@ test("controlled reset-token failure", async ({ page, context }) => {
   // Deliberately fail without a locator, snapshot, fixture value, or DOM dump.
   expect(false).toBe(true);
 });
+
+test("controlled invitation-token failure", async ({ page, context }) => {
+  const invitationToken = process.env.MIA_SECRET_HYGIENE_INVITATION_TOKEN;
+  const invitationPassword = process.env.MIA_SECRET_HYGIENE_INVITATION_PASSWORD;
+  const rawError = process.env.MIA_SECRET_HYGIENE_RAW_ERROR;
+  if (
+    invitationToken === undefined ||
+    invitationPassword === undefined ||
+    rawError === undefined
+  )
+    throw new Error("Controlled fixture markers are required.");
+
+  await context.addCookies([
+    {
+      name: "mia_csrf",
+      value: crypto.randomUUID(),
+      url: "http://127.0.0.1:4173/",
+    },
+  ]);
+  await page.route("**/api/v1/auth/session", async (route) =>
+    route.fulfill({
+      status: 200,
+      contentType: mediaType,
+      body: JSON.stringify({ data: null, meta: { stage: "anonymous" } }),
+    }),
+  );
+  await page.route("**/api/v1/invitation-previews", async (route) =>
+    route.fulfill({
+      status: 200,
+      contentType: mediaType,
+      body: JSON.stringify({
+        data: {
+          type: "invitation-previews",
+          id: "preview",
+          attributes: { platform: "mia", role: "mentor" },
+        },
+      }),
+    }),
+  );
+  await page.route("**/api/v1/invitation-acceptances", async (route) =>
+    route.fulfill({ status: 409, contentType: mediaType, body: rawError }),
+  );
+  await page.goto(`/invitation#token=${invitationToken}`);
+  await page.getByRole("link", { name: "Accept invitation" }).click();
+  await page.locator("#username").fill("example.mentor");
+  await page.locator("#new-password").fill(invitationPassword);
+  await page.locator("#password-confirmation").fill(invitationPassword);
+  await page.getByRole("button", { name: "Show new password" }).click();
+  await page.locator("#country").selectOption("DE");
+  await page.getByRole("button", { name: "Create account" }).click();
+  await page.getByRole("button", { name: "Technical details" }).click();
+  await page.locator("pre").waitFor({ state: "visible" });
+  await page.close();
+
+  // Deliberately fail without a locator, snapshot, fixture value, or DOM dump.
+  expect(false).toBe(true);
+});

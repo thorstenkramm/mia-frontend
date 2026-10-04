@@ -1,15 +1,15 @@
 import type { ApiHttpError } from "../api/client";
 import type { EntryApiFailure, PasswordResetToken } from "../api/entry";
-import type {
-  AuthenticationBootstrapState,
-  PublicMutationResult,
+import { captureFragmentToken } from "./linkFragment";
+import {
+  isAnonymousState,
+  isLogoutPending,
+  isSignedInState,
+  type AuthenticationBootstrapState,
+  type PublicMutationResult,
 } from "./sessionController";
 
 export const passwordResetPath = "/password-reset";
-
-// Exactly one canonical lowercase UUID v4 token; anything else is unusable.
-const tokenFragment =
-  /^#token=([0-9a-f]{8}-[0-9a-f]{4}-4[0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12})$/u;
 
 // FRONTEND-STATE-MACHINES.md §1, Story 1-6 reset states.
 export type PasswordResetState =
@@ -143,6 +143,8 @@ export class PasswordResetLink {
     this.#set(resultState(result));
   }
 
+  // The invitation link repeats this token drop; its duplication marker and
+  // reason live in invitationLink.ts.
   #set(state: PasswordResetState): void {
     if (state === this.#state) return;
     if (!holdsToken(state)) {
@@ -155,51 +157,17 @@ export class PasswordResetLink {
   }
 }
 
-// Synchronous pre-application bootstrap. It reads the fragment once and removes
-// the complete fragment before React, the router, or any request can observe it.
+// Synchronous pre-application bootstrap (see linkFragment.ts).
 export function capturePasswordResetLink(
   location: Location,
   history: History,
 ): PasswordResetLink {
-  if (location.pathname !== passwordResetPath)
-    return new PasswordResetLink(null);
-  const fragment = location.hash;
-  if (fragment !== "")
-    history.replaceState(
-      history.state,
-      "",
-      `${location.pathname}${location.search}`,
-    );
-  const match = tokenFragment.exec(fragment);
+  const token = captureFragmentToken(location, history, passwordResetPath, [
+    passwordResetPath,
+  ]);
   return new PasswordResetLink(
-    match?.[1] === undefined ? null : toPasswordResetToken(match[1]),
+    token === null ? null : toPasswordResetToken(token),
   );
-}
-
-// A fragment added to an already running reset page (a same-document navigation,
-// such as pasting the link into this tab) never reaches the bootstrap. Reloading
-// hands it to the single synchronous capture instead of leaving it in the URL.
-// In-page navigation to an element of this document is not link ingestion and
-// never reloads, so it cannot discard the flow.
-export function reloadOnLateResetFragment(target: Window): () => void {
-  const reload = () => {
-    const { hash, pathname } = target.location;
-    if (pathname !== passwordResetPath || hash === "") return;
-    if (target.document.getElementById(decodeFragment(hash.slice(1))) !== null)
-      return;
-    target.location.reload();
-  };
-  target.addEventListener("hashchange", reload);
-  return () => target.removeEventListener("hashchange", reload);
-}
-
-function decodeFragment(fragment: string): string {
-  try {
-    return decodeURIComponent(fragment);
-  } catch {
-    // A malformed escape cannot name an element of this document.
-    return fragment;
-  }
 }
 
 function toPasswordResetToken(value: string): PasswordResetToken {
@@ -226,19 +194,19 @@ export function passwordResetSurface(
     case "Throttled":
     case "CSRF rejected":
     case "Failed":
-      return isAnonymous(session) ? { kind: "form", state } : null;
+      return isAnonymousState(session) ? { kind: "form", state } : null;
     case "Link unusable":
-      return isAnonymous(session) ? { kind: "link unusable" } : null;
+      return isAnonymousState(session) ? { kind: "link unusable" } : null;
     case "Request rejected":
-      return isAnonymous(session)
+      return isAnonymousState(session)
         ? { kind: "request rejected", error: state.error }
         : null;
     case "Outcome unknown":
-      return isAnonymous(session)
+      return isAnonymousState(session)
         ? { kind: "outcome unknown", error: state.error }
         : null;
     case "Password changed":
-      return isAnonymous(session) ? { kind: "password changed" } : null;
+      return isAnonymousState(session) ? { kind: "password changed" } : null;
     default:
       return assertNever(state);
   }
@@ -250,25 +218,22 @@ function nextResetState(
 ): PasswordResetState {
   switch (state.kind) {
     case "Awaiting stage":
-      if (isAnonymous(session)) return formReady;
-      return isSignedIn(session) ? { kind: "Signed-in interstitial" } : state;
+      if (isAnonymousState(session)) return formReady;
+      return isSignedInState(session)
+        ? { kind: "Signed-in interstitial" }
+        : state;
     case "Signed-in interstitial":
-      return isSignedIn(session) ? state : linkUnusable;
+      return isSignedInState(session) ? state : linkUnusable;
     case "Signing out":
       if (session.kind === "Logout confirmed") return formReady;
-      return session.kind === "Logout start" ||
-        session.kind === "Logout quiescing" ||
-        session.kind === "Logout dispatch" ||
-        session.kind === "Logout confirming"
-        ? state
-        : linkUnusable;
+      return isLogoutPending(session) ? state : linkUnusable;
     case "Form ready":
     case "Submitting":
     case "Password rejected":
     case "Throttled":
     case "CSRF rejected":
     case "Failed":
-      return isAnonymous(session) ? state : linkUnusable;
+      return isAnonymousState(session) ? state : linkUnusable;
     case "Link unusable":
     case "Request rejected":
     case "Outcome unknown":
@@ -327,19 +292,6 @@ function isSubmittable(state: PasswordResetState): boolean {
     state.kind === "Throttled" ||
     state.kind === "CSRF rejected" ||
     state.kind === "Failed"
-  );
-}
-
-function isAnonymous(session: AuthenticationBootstrapState): boolean {
-  return session.kind === "Signed out" || session.kind === "Logout confirmed";
-}
-
-function isSignedIn(session: AuthenticationBootstrapState): boolean {
-  return (
-    session.kind === "MFA required" ||
-    session.kind === "Password change" ||
-    session.kind === "Authenticated" ||
-    session.kind === "Access deferred"
   );
 }
 

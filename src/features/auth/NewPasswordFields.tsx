@@ -1,8 +1,9 @@
 // Tailwind Plus: Application UI > Forms > Input Groups > Input with validation error
 // Tailwind Plus: Application UI > Feedback > Alerts > With list (error summary)
 // Library version: 2026-09-13-083323, v4 React light. MIA adds rules help, pressed
-// reveal, and linked error-summary entries. Shared by required password replacement
-// and token reset, which apply the same local password rules before dispatch.
+// reveal, and linked error-summary entries. Shared by required password replacement,
+// token reset, and invitation acceptance, which apply the same local password rules
+// before dispatch; acceptance adds its own leading fields and one extra check.
 import { ExclamationCircleIcon } from "@heroicons/react/16/solid";
 import { XCircleIcon } from "@heroicons/react/20/solid";
 import { clsx } from "clsx";
@@ -28,6 +29,14 @@ const passwordProblemMessages = {
   "too-long": messages.passwordChangeTooLong,
 };
 
+// A form-specific local check beyond the password rules. `problem` reads the
+// native values and returns the localized correction, or null when it passes;
+// `focus` moves to the failed field when no password problem takes focus first.
+export type ExtraLocalCheck = {
+  readonly problem: (data: FormData) => string | null;
+  readonly focus: () => void;
+};
+
 export type NewPasswordCheck = {
   readonly problems: ReplacementPasswordProblems | null;
   readonly passwordRef: RefObject<HTMLInputElement | null>;
@@ -35,7 +44,10 @@ export type NewPasswordCheck = {
   readonly summaryRef: RefObject<HTMLDivElement | null>;
   // Checks the native values on submit. A failure cancels the submission, sends
   // nothing, moves focus to the failed field or summary, and announces it.
-  readonly checkSubmission: (event: FormEvent<HTMLFormElement>) => boolean;
+  readonly checkSubmission: (
+    event: FormEvent<HTMLFormElement>,
+    extra?: ExtraLocalCheck,
+  ) => boolean;
 };
 
 export function useNewPasswordCheck(): NewPasswordCheck {
@@ -57,7 +69,10 @@ export function useNewPasswordCheck(): NewPasswordCheck {
     else confirmationRef.current?.focus();
   }, [problems]);
 
-  function checkSubmission(event: FormEvent<HTMLFormElement>): boolean {
+  function checkSubmission(
+    event: FormEvent<HTMLFormElement>,
+    extra?: ExtraLocalCheck,
+  ): boolean {
     // Read the native values only to check them; nothing is retained.
     const data = new FormData(event.currentTarget);
     const password = data.get("password");
@@ -66,15 +81,17 @@ export function useNewPasswordCheck(): NewPasswordCheck {
       typeof password === "string" && typeof confirmation === "string"
         ? checkReplacementPassword(password, confirmation)
         : { password: "too-short" as const, confirmation: null };
+    const extraProblem = extra?.problem(data) ?? null;
     setProblems(found);
-    if (found === null) return true;
+    if (found === null && extraProblem === null) return true;
     event.preventDefault();
+    if (found === null) extra?.focus();
     // Form submit to invalid: one assertive corrective summary per attempt.
     const corrections = [
-      found.password === null
+      found === null || found.password === null
         ? null
         : intl.formatMessage(passwordProblemMessages[found.password]),
-      found.confirmation === null
+      found === null || found.confirmation === null
         ? null
         : intl.formatMessage(messages.passwordChangeMismatch),
     ].filter((text) => text !== null);
@@ -83,7 +100,7 @@ export function useNewPasswordCheck(): NewPasswordCheck {
         ? [intl.formatMessage(messages.passwordChangeErrorSummary)]
         : []
       )
-        .concat(corrections)
+        .concat(corrections, extraProblem ?? [])
         .join(" "),
       "urgent",
     );
@@ -108,6 +125,8 @@ export function NewPasswordForm({
   enabled,
   rejectedBy,
   className,
+  leading,
+  extraCheck,
   children,
 }: {
   readonly action: (data: FormData) => Promise<void>;
@@ -115,6 +134,9 @@ export function NewPasswordForm({
   readonly enabled: boolean;
   readonly rejectedBy: string | null;
   readonly className: string;
+  // Fields that precede the password pair, such as the invitation username.
+  readonly leading?: ReactNode;
+  readonly extraCheck?: ExtraLocalCheck;
   readonly children: ReactNode;
 }) {
   return (
@@ -126,11 +148,12 @@ export function NewPasswordForm({
           event.preventDefault();
           return;
         }
-        check.checkSubmission(event);
+        check.checkSubmission(event, extraCheck);
       }}
       onReset={(event) => event.preventDefault()}
       className={className}
     >
+      {leading}
       <NewPasswordFields
         check={check}
         enabled={enabled}

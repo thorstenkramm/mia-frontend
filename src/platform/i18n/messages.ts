@@ -610,6 +610,195 @@ export const messages = defineMessages({
     id: "entry.reset.rejected.heading",
     defaultMessage: "Password not changed",
   },
+  invitationPageTitle: {
+    id: "entry.invitation.pageTitle",
+    defaultMessage: "Invitation | MIA",
+  },
+  invitationHeading: {
+    id: "entry.invitation.heading",
+    defaultMessage: "Your MIA invitation",
+  },
+  invitationAcceptPageTitle: {
+    id: "entry.invitation.accept.pageTitle",
+    defaultMessage: "Create account | MIA",
+  },
+  invitationAcceptHeading: {
+    id: "entry.invitation.accept.heading",
+    defaultMessage: "Create your MIA account",
+  },
+  invitationChecking: {
+    id: "entry.invitation.checking",
+    defaultMessage: "Checking your invitation…",
+  },
+  invitationSignedInIntroduction: {
+    id: "entry.invitation.signedIn.introduction",
+    defaultMessage:
+      "You're currently signed in. To use this invitation, sign out first.",
+  },
+  invitationSignedOut: {
+    id: "entry.invitation.signedOut",
+    defaultMessage: "Signed out. Checking your invitation…",
+  },
+  invitationPreviewIntroduction: {
+    id: "entry.invitation.preview.introduction",
+    defaultMessage:
+      "You've been invited to create a MIA account. Accepting creates the account; you then sign in as usual.",
+  },
+  invitationRole: {
+    id: "entry.invitation.preview.role",
+    defaultMessage: "Invited role: {role}",
+  },
+  roleAdministrator: {
+    id: "entry.role.administrator",
+    defaultMessage: "Administrator",
+  },
+  roleSupervisor: {
+    id: "entry.role.supervisor",
+    defaultMessage: "Supervisor",
+  },
+  roleMentor: {
+    id: "entry.role.mentor",
+    defaultMessage: "Mentor",
+  },
+  invitationAccept: {
+    id: "entry.invitation.preview.accept",
+    defaultMessage: "Accept invitation",
+  },
+  invitationPreviewThrottled: {
+    id: "entry.invitation.preview.throttled",
+    defaultMessage:
+      "Too many attempts to check this invitation. Try again once the wait has passed.",
+  },
+  invitationPreviewCsrfRejected: {
+    id: "entry.invitation.preview.csrfRejected",
+    defaultMessage: "The security check for this page expired. Try again.",
+  },
+  invitationPreviewNotSent: {
+    id: "entry.invitation.preview.notSent",
+    defaultMessage:
+      "Your invitation could not be checked because the request was not sent. Try again.",
+  },
+  invitationTryAgain: {
+    id: "entry.invitation.preview.tryAgain",
+    defaultMessage: "Try again",
+  },
+  invitationLostHeading: {
+    id: "entry.invitation.lost.heading",
+    defaultMessage: "Invitation could not be checked",
+  },
+  invitationLost: {
+    id: "entry.invitation.lost",
+    defaultMessage:
+      "MIA could not check this invitation. To try again, open the link in your invitation email again.",
+  },
+  invitationInvalidHeading: {
+    id: "entry.invitation.invalid.heading",
+    defaultMessage: "This invitation link is invalid or no longer usable",
+  },
+  invitationInvalid: {
+    id: "entry.invitation.invalid",
+    defaultMessage:
+      "If you already have an account, sign in. Otherwise, ask the person who invited you for a new invitation.",
+  },
+  invitationAcceptIntroduction: {
+    id: "entry.invitation.accept.introduction",
+    defaultMessage:
+      "Choose your username and password, and confirm your language, country, and time zone.",
+  },
+  invitationUsernameHelp: {
+    id: "entry.invitation.username.help",
+    defaultMessage:
+      "3 to 32 characters: letters A–Z, digits, periods, underscores, or hyphens. Start and end with a letter or digit.",
+  },
+  invitationLanguageLabel: {
+    id: "entry.invitation.language.label",
+    defaultMessage: "Language (required)",
+  },
+  invitationCountryLabel: {
+    id: "entry.invitation.country.label",
+    defaultMessage: "Country (required)",
+  },
+  invitationCountryEmpty: {
+    id: "entry.invitation.country.empty",
+    defaultMessage: "Choose a country",
+  },
+  invitationCountryMissing: {
+    id: "entry.invitation.country.missing",
+    defaultMessage: "Choose your country.",
+  },
+  invitationTimeZoneLabel: {
+    id: "entry.invitation.timeZone.label",
+    defaultMessage: "Time zone (required)",
+  },
+  invitationSubmit: {
+    id: "entry.invitation.submit",
+    defaultMessage: "Create account",
+  },
+  invitationSubmitting: {
+    id: "entry.invitation.submitting",
+    defaultMessage: "Creating your account…",
+  },
+  invitationStopWaiting: {
+    id: "entry.invitation.stopWaiting",
+    defaultMessage: "Stop waiting",
+  },
+  invitationUsernameTaken: {
+    id: "entry.invitation.usernameTaken",
+    defaultMessage:
+      "That username is already taken. Choose another username, enter your password again, and submit.",
+  },
+  invitationPasswordRejected: {
+    id: "entry.invitation.passwordRejected",
+    defaultMessage:
+      "That password was not accepted. Choose a different password that meets the rules above and submit.",
+  },
+  invitationRequestInvalid: {
+    id: "entry.invitation.requestInvalid",
+    defaultMessage:
+      "Some details were not accepted. Check your username and the other fields, enter your password again, and submit.",
+  },
+  invitationThrottled: {
+    id: "entry.invitation.throttled",
+    defaultMessage:
+      "Too many attempts. Enter your password again and submit once the wait has passed.",
+  },
+  invitationCsrfRejected: {
+    id: "entry.invitation.csrfRejected",
+    defaultMessage:
+      "The security check for this page expired. Enter your password again and submit.",
+  },
+  invitationNotSent: {
+    id: "entry.invitation.notSent",
+    defaultMessage:
+      "Your account was not created because the request was not sent. Submit again.",
+  },
+  invitationCreatedHeading: {
+    id: "entry.invitation.created.heading",
+    defaultMessage: "Your account has been created.",
+  },
+  invitationCreated: {
+    id: "entry.invitation.created",
+    defaultMessage:
+      "You are not signed in yet. Sign in with the username and password you chose.",
+  },
+  invitationNotCreatedHeading: {
+    id: "entry.invitation.notCreated.heading",
+    defaultMessage: "Account not created",
+  },
+  invitationEmailRegistered: {
+    id: "entry.invitation.emailRegistered",
+    defaultMessage:
+      "An account already uses the email address this invitation was sent to. Sign in with that account, or ask the person who invited you for help.",
+  },
+  invitationUnknownHeading: {
+    id: "entry.invitation.unknown.heading",
+    defaultMessage: "Account creation not confirmed",
+  },
+  invitationUnknown: {
+    id: "entry.invitation.unknown",
+    defaultMessage:
+      "We couldn't confirm whether your account was created. Try signing in with the username and password you chose, or open the link in your invitation email again. Neither step proves whether the account was created.",
+  },
 });
 
 export type MessageId = (typeof messages)[keyof typeof messages]["id"];

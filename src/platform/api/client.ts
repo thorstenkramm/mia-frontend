@@ -104,9 +104,11 @@ export async function readJsonApi<T>({
   return parseJsonApiResponse(response, schema);
 }
 
+// Any other success status than the operation's declared one is malformed.
 export async function parseJsonApiResponse<T>(
   response: Response,
   schema: z.ZodType<T>,
+  expectedStatus: 200 | 201 = 200,
 ): Promise<T> {
   const body = await response.text();
   if (!response.ok) {
@@ -116,7 +118,7 @@ export async function parseJsonApiResponse<T>(
     );
   }
   if (
-    response.status !== 200 ||
+    response.status !== expectedStatus ||
     response.headers.get("Content-Type") !== jsonApiMediaType
   ) {
     throw new ApiProtocolError();

@@ -8,11 +8,16 @@ import {
   requestPasswordRecovery,
   resetPassword,
   verifyMfaChallenge,
+  previewInvitation,
+  acceptInvitation,
   type EntryApiFailure,
   type EntrySession,
   type AccountId,
   type MfaChallengeId,
   type PasswordResetToken,
+  type InvitationToken,
+  type InvitationRole,
+  type InvitationAcceptanceFields,
 } from "../api/entry";
 import { ApiProtocolError } from "../api/client";
 
@@ -44,7 +49,7 @@ export type AuthenticationBootstrapState =
       readonly error: EntryApiFailure;
     }
   | { readonly kind: "Authenticated" }
-  // Story 1-6: cold discovery found `authenticated` while a captured reset link
+  // Stories 1-6 and 1-7: cold discovery found `authenticated` while a captured link
   // waits for its interstitial. No capability or other protected read runs.
   | { readonly kind: "Access deferred"; readonly accountId: AccountId }
   | {
@@ -123,10 +128,11 @@ type LoginOutcome = {
     "rejected" | "blocked" | "throttled" | "failed" | "unconfirmed";
   readonly error: EntryApiFailure;
 };
-// The result of one public, session-free mutation (password recovery or reset).
+// The result of one public, session-free mutation (password recovery, reset,
+// invitation preview, or acceptance), carrying the completed response's value.
 // Only `unknown` means the request may have been processed without a response.
-export type PublicMutationResult =
-  | { readonly kind: "completed" }
+export type PublicMutationResult<T = void> =
+  | { readonly kind: "completed"; readonly value: T }
   | { readonly kind: "rejected"; readonly failure: HttpFailure }
   | {
       readonly kind: "csrf-rejected";
@@ -136,9 +142,9 @@ export type PublicMutationResult =
   | { readonly kind: "unknown"; readonly failure: EntryApiFailure }
   | { readonly kind: "not-sent"; readonly failure: EntryApiFailure }
   | { readonly kind: "superseded" };
-// Which stages a logout attempt may recover CSRF from: restricted logout, or the
-// password-reset interstitial, which may also start from `authenticated`.
-type LogoutScope = "restricted" | "reset-link";
+// Which stages a logout attempt may recover CSRF from: restricted logout, or a
+// fragment-token link's interstitial, which may also start from `authenticated`.
+type LogoutScope = "restricted" | "link";
 type LogoutAttemptOutcome =
   | { readonly kind: "confirmed" }
   | { readonly kind: "unconfirmed"; readonly error?: EntryApiFailure }
@@ -186,13 +192,33 @@ function isRestrictedState(
   );
 }
 
-function isAnonymousState(state: AuthenticationBootstrapState): boolean {
+export function isAnonymousState(state: AuthenticationBootstrapState): boolean {
   return state.kind === "Signed out" || state.kind === "Logout confirmed";
+}
+
+// The settled signed-in stages from which a link interstitial may sign out.
+export function isSignedInState(state: AuthenticationBootstrapState): boolean {
+  return (
+    state.kind === "MFA required" ||
+    state.kind === "Password change" ||
+    state.kind === "Authenticated" ||
+    state.kind === "Access deferred"
+  );
+}
+
+// A link interstitial's sign-out is still running in these phases.
+export function isLogoutPending(state: AuthenticationBootstrapState): boolean {
+  return (
+    state.kind === "Logout start" ||
+    state.kind === "Logout quiescing" ||
+    state.kind === "Logout dispatch" ||
+    state.kind === "Logout confirming"
+  );
 }
 
 export class SessionController {
   private state: AuthenticationBootstrapState = { kind: "Cold" };
-  // Set only while a captured reset link awaits its interstitial at cold entry.
+  // Set only while a captured reset or invitation link awaits its interstitial.
   private readonly deferCapabilityGate: boolean;
 
   constructor(options: { readonly deferCapabilityGate?: boolean } = {}) {
@@ -248,22 +274,15 @@ export class SessionController {
     this.startLogout("restricted");
   }
 
-  // The password-reset interstitial signs out a settled signed-in stage through
-  // the same logout phases before the captured link may be used.
-  beginResetLinkLogout(): boolean {
-    if (
-      (this.state.kind !== "MFA required" &&
-        this.state.kind !== "Password change" &&
-        this.state.kind !== "Authenticated" &&
-        this.state.kind !== "Access deferred") ||
-      this.logoutActive
-    )
-      return false;
-    this.startLogout("reset-link");
+  // A reset or invitation link's interstitial signs out a settled signed-in
+  // stage through the same logout phases before the captured link may be used.
+  beginLinkLogout(): boolean {
+    if (!isSignedInState(this.state) || this.logoutActive) return false;
+    this.startLogout("link");
     return true;
   }
 
-  // Go back from the reset interstitial: only now run the ordinary capability gate.
+  // Go back from a link interstitial: only now run the ordinary capability gate.
   continueDeferredAccess(): Promise<void> {
     if (this.state.kind !== "Access deferred") return Promise.resolve();
     const work = this.applyDiscoveredStage({
@@ -298,6 +317,31 @@ export class SessionController {
         send: (csrf) =>
           resetPassword(token, password, passwordConfirmation, csrf),
       },
+      isCurrent,
+      signal,
+    );
+  }
+
+  previewInvitation(
+    token: InvitationToken,
+    isCurrent: () => boolean,
+    signal: AbortSignal,
+  ): Promise<PublicMutationResult<InvitationRole>> {
+    return this.runPublicMutation(
+      { send: (csrf) => previewInvitation(token, csrf) },
+      isCurrent,
+      signal,
+    );
+  }
+
+  acceptInvitation(
+    token: InvitationToken,
+    fields: InvitationAcceptanceFields,
+    isCurrent: () => boolean,
+    signal: AbortSignal,
+  ): Promise<PublicMutationResult> {
+    return this.runPublicMutation(
+      { send: (csrf) => acceptInvitation(token, fields, csrf) },
       isCurrent,
       signal,
     );
@@ -469,20 +513,21 @@ export class SessionController {
     await work;
   }
 
-  // Recovery and reset create no session. They run only while this tab is
-  // anonymous, read CSRF at dispatch under a shared lease, and are sent once.
-  private async runPublicMutation(
-    request: { send: ((csrf: string) => Promise<void>) | null },
+  // Recovery, reset, and invitation operations create no session. They run only
+  // while this tab is anonymous, read CSRF at dispatch under a shared lease, and
+  // are sent once.
+  private async runPublicMutation<T>(
+    request: { send: ((csrf: string) => Promise<T>) | null },
     isCurrent: () => boolean,
     signal?: AbortSignal,
-  ): Promise<PublicMutationResult> {
+  ): Promise<PublicMutationResult<T>> {
     const sequence = this.sequence;
     const sessionCurrent = () =>
       sequence === this.sequence && isAnonymousState(this.state);
     const current = () => sessionCurrent() && isCurrent();
     // The payload lives only in `request`; an attempt that never dispatches
     // drops it, so a waiting lease cannot retain secrets after its owner ends.
-    const abandon = (): PublicMutationResult => {
+    const abandon = (): PublicMutationResult<T> => {
       request.send = null;
       return { kind: "superseded" };
     };
@@ -495,7 +540,7 @@ export class SessionController {
     try {
       return await withCoordinatorLock(
         "shared",
-        async (): Promise<PublicMutationResult> => {
+        async (): Promise<PublicMutationResult<T>> => {
           if (!current()) return abandon();
           let csrf = readCurrentCsrfCookie();
           if (csrf === null) {
@@ -515,8 +560,7 @@ export class SessionController {
           if (send === null || !current()) return abandon();
           request.send = null;
           dispatched = true;
-          await send(csrf);
-          return { kind: "completed" };
+          return { kind: "completed", value: await send(csrf) };
         },
       );
     } catch (error) {
@@ -533,10 +577,10 @@ export class SessionController {
     }
   }
 
-  private async refreshCsrfAfterRejection(
+  private async refreshCsrfAfterRejection<T>(
     failure: HttpFailure,
     current: () => boolean,
-  ): Promise<PublicMutationResult> {
+  ): Promise<PublicMutationResult<T>> {
     try {
       const session = await withCoordinatorLock("shared", discoverSession);
       if (!current()) return { kind: "superseded" };
@@ -930,8 +974,7 @@ export class SessionController {
           if (
             recovered.kind !== "mfa" &&
             recovered.kind !== "password-change" &&
-            (this.logoutScope !== "reset-link" ||
-              recovered.kind !== "authenticated")
+            (this.logoutScope !== "link" || recovered.kind !== "authenticated")
           ) {
             return { kind: "unconfirmed" };
           }

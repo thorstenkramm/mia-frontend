@@ -3,6 +3,7 @@ import { http, HttpResponse } from "msw";
 import { afterEach, describe, expect, it, vi } from "vitest";
 import { installTestOriginLocks } from "../../../test/originLocks";
 import { server } from "../../../test/server";
+import { captureInvitationLink } from "./invitationLink";
 import { capturePasswordResetLink } from "./passwordResetLink";
 import { SessionController } from "./sessionController";
 
@@ -1906,8 +1907,8 @@ describe("SessionController public recovery and reset", () => {
     // Recovering CSRF first must accept the authenticated stage.
     document.cookie = "mia_csrf=; Max-Age=0; Path=/";
 
-    expect(controller.beginResetLinkLogout()).toBe(true);
-    expect(controller.beginResetLinkLogout()).toBe(false);
+    expect(controller.beginLinkLogout()).toBe(true);
+    expect(controller.beginLinkLogout()).toBe(false);
     await waitFor(() =>
       expect(controller.getSnapshot().kind).toBe("Logout confirmed"),
     );
@@ -1999,6 +2000,165 @@ describe("SessionController reset attempt lifetime", () => {
     expect(posts).toBe(0);
     expect(link.getSnapshot().kind).toBe("Link unusable");
     window.history.replaceState(null, "", "/");
+    controller.stop();
+  });
+});
+
+describe("SessionController invitation preview and acceptance", () => {
+  const acceptanceFields = (password: string) => ({
+    username: "example.mentor",
+    password,
+    passwordConfirmation: password,
+    language: "en-US",
+    country: "US",
+    timeZone: "UTC",
+  });
+
+  async function startAnonymous(controller: SessionController) {
+    const csrf = crypto.randomUUID();
+    document.cookie = `mia_csrf=${csrf}; Path=/`;
+    controller.start();
+    await waitFor(() =>
+      expect(controller.getSnapshot().kind).toBe("Signed out"),
+    );
+    return csrf;
+  }
+
+  function openInvitation() {
+    window.history.replaceState(
+      null,
+      "",
+      `/invitation#token=${crypto.randomUUID()}`,
+    );
+    return captureInvitationLink(window.location, window.history);
+  }
+
+  afterEach(() => {
+    window.history.replaceState(null, "", "/");
+  });
+
+  it("previews once with the current CSRF and exposes only the role", async () => {
+    const controller = new SessionController();
+    let posts = 0;
+    const csrf: (string | null)[] = [];
+    server.use(
+      http.get("/api/v1/auth/session", () => anonymousSession()),
+      http.post("/api/v1/invitation-previews", ({ request }) => {
+        posts++;
+        csrf.push(request.headers.get("X-CSRF-Token"));
+        return HttpResponse.json(
+          {
+            data: {
+              type: "invitation-previews",
+              id: "preview",
+              attributes: { platform: "mia", role: "mentor" },
+            },
+          },
+          { headers: { "Content-Type": "application/vnd.api+json" } },
+        );
+      }),
+    );
+    const current = await startAnonymous(controller);
+    const link = openInvitation();
+    link.observeSession(controller.getSnapshot());
+
+    await link.preview((...args) => controller.previewInvitation(...args));
+
+    expect(link.getSnapshot()).toEqual({
+      kind: "Acceptance ready",
+      role: "mentor",
+    });
+    expect(posts).toBe(1);
+    expect(csrf).toEqual([current]);
+    controller.stop();
+  });
+
+  it("enters outcome unknown after connection loss with exactly one acceptance dispatch", async () => {
+    const controller = new SessionController();
+    let posts = 0;
+    server.use(
+      http.get("/api/v1/auth/session", () => anonymousSession()),
+      http.post("/api/v1/invitation-previews", () =>
+        HttpResponse.json(
+          {
+            data: {
+              type: "invitation-previews",
+              id: "preview",
+              attributes: { platform: "mia", role: "supervisor" },
+            },
+          },
+          { headers: { "Content-Type": "application/vnd.api+json" } },
+        ),
+      ),
+      http.post("/api/v1/invitation-acceptances", async ({ request }) => {
+        posts++;
+        // The request bytes reached the server before the connection dropped.
+        await request.text();
+        return HttpResponse.error();
+      }),
+    );
+    await startAnonymous(controller);
+    const link = openInvitation();
+    link.observeSession(controller.getSnapshot());
+    await link.preview((...args) => controller.previewInvitation(...args));
+
+    await link.accept(acceptanceFields(crypto.randomUUID()), (...args) =>
+      controller.acceptInvitation(...args),
+    );
+    await link.accept(acceptanceFields(crypto.randomUUID()), (...args) =>
+      controller.acceptInvitation(...args),
+    );
+
+    expect(link.getSnapshot().kind).toBe("Acceptance outcome unknown");
+    expect(posts).toBe(1);
+    controller.stop();
+  });
+
+  it("never sends an acceptance that waited for the coordinator after Stop waiting", async () => {
+    const controller = new SessionController();
+    let posts = 0;
+    server.use(
+      http.get("/api/v1/auth/session", () => anonymousSession()),
+      http.post("/api/v1/invitation-acceptances", () => {
+        posts++;
+        return new HttpResponse(null, { status: 500 });
+      }),
+    );
+    await startAnonymous(controller);
+    const link = openInvitation();
+    link.observeSession(controller.getSnapshot());
+    await link.preview(() =>
+      Promise.resolve({ kind: "completed", value: "mentor" }),
+    );
+    let release: () => void = () => undefined;
+    let held: () => void = () => undefined;
+    const lockHeld = new Promise<void>((resolve) => {
+      held = resolve;
+    });
+    const blocker = navigator.locks.request(
+      "mia-authenticated-requests-v1",
+      { mode: "exclusive" },
+      () =>
+        new Promise<void>((resolve) => {
+          release = resolve;
+          held();
+        }),
+    );
+    await lockHeld;
+
+    const pending = link.accept(
+      acceptanceFields(crypto.randomUUID()),
+      (...args) => controller.acceptInvitation(...args),
+    );
+    link.stopWaiting();
+    release();
+    await Promise.all([blocker, pending]);
+
+    expect(posts).toBe(0);
+    expect(link.getSnapshot()).toEqual({
+      kind: "Acceptance outcome unknown",
+      error: null,
+    });
     controller.stop();
   });
 });

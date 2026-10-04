@@ -14,18 +14,25 @@ import {
   type TextSize,
 } from "./platform/prefs/preferences";
 import {
+  captureInvitationLink,
+  invitationPaths,
+} from "./platform/session/invitationLink";
+import { reloadOnLateFragment } from "./platform/session/linkFragment";
+import {
   capturePasswordResetLink,
-  reloadOnLateResetFragment,
+  passwordResetPath,
 } from "./platform/session/passwordResetLink";
 
-// The first application instruction: capture and strip a reset-link fragment
-// before any render, router start, request, or diagnostic can observe it.
+// The first application instructions: capture and strip a reset or invitation
+// link fragment before any render, router start, request, or diagnostic can
+// observe it.
 const passwordResetLink = capturePasswordResetLink(
   window.location,
   window.history,
 );
+const invitationLink = captureInvitationLink(window.location, window.history);
 // Lives as long as the document; it never reads or retains a fragment itself.
-reloadOnLateResetFragment(window);
+reloadOnLateFragment(window, [passwordResetPath, ...invitationPaths]);
 
 const rootElement = document.getElementById("root");
 
@@ -45,6 +52,7 @@ createRoot(rootElement).render(
         <App
           initialTextSize={initialTextSize}
           passwordResetLink={passwordResetLink}
+          invitationLink={invitationLink}
         />
       </MiaIntlProvider>
     </AnnouncementProvider>

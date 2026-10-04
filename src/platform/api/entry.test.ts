@@ -1,5 +1,5 @@
 import { randomBytes } from "node:crypto";
-import { http, HttpResponse } from "msw";
+import { http, HttpResponse, type JsonBodyType } from "msw";
 import { describe, expect, it } from "vitest";
 import { server } from "../../../test/server";
 import {
@@ -15,9 +15,12 @@ import {
   getCurrentAccountCapabilities,
   logoutCurrentBrowser,
   loginWithPassword,
+  acceptInvitation,
+  previewInvitation,
   requestPasswordRecovery,
   resetPassword,
   verifyMfaChallenge,
+  type InvitationToken,
   type PasswordResetToken,
 } from "./entry";
 
@@ -605,5 +608,175 @@ describe("entry API boundary", () => {
     await expect(getCurrentAccountCapabilities()).rejects.toBeInstanceOf(
       ApiProtocolError,
     );
+  });
+});
+
+describe("invitation transport", () => {
+  function invitationToken(): InvitationToken {
+    return crypto.randomUUID() as InvitationToken;
+  }
+
+  function created<T extends JsonBodyType>(
+    body: T,
+    status = 201,
+  ): HttpResponse<T> {
+    return HttpResponse.json(body, {
+      headers: { "Content-Type": jsonApiMediaType },
+      status,
+    });
+  }
+
+  it("sends one exact preview document and returns only the invited role", async () => {
+    const token = invitationToken();
+    const csrf = crypto.randomUUID();
+    let exactWire = false;
+    let posts = 0;
+    server.use(
+      http.post("/api/v1/invitation-previews", async ({ request }) => {
+        posts++;
+        exactWire =
+          (await request.text()) ===
+            JSON.stringify({
+              data: { type: "invitation-previews", attributes: { token } },
+            }) &&
+          request.headers.get("X-CSRF-Token") === csrf &&
+          request.headers.get("Content-Type") === jsonApiMediaType;
+        return jsonApiResponse({
+          data: {
+            type: "invitation-previews",
+            id: "preview",
+            attributes: { platform: "mia", role: "supervisor" },
+          },
+        });
+      }),
+    );
+
+    expect(await previewInvitation(token, csrf)).toBe("supervisor");
+    expect({ exactWire, posts }).toEqual({ exactWire: true, posts: 1 });
+  });
+
+  it.each([
+    ["an unknown role", { platform: "mia", role: "student" }, 200],
+    ["another platform", { platform: "other", role: "mentor" }, 200],
+    ["a created status", { platform: "mia", role: "mentor" }, 201],
+  ] as const)(
+    "treats a preview with %s as malformed",
+    async (_label, attributes, status) => {
+      server.use(
+        http.post("/api/v1/invitation-previews", () =>
+          created(
+            {
+              data: { type: "invitation-previews", id: "preview", attributes },
+            },
+            status,
+          ),
+        ),
+      );
+      await expect(
+        previewInvitation(invitationToken(), crypto.randomUUID()),
+      ).rejects.toBeInstanceOf(ApiProtocolError);
+    },
+  );
+
+  it("keeps the exact preview error and its stable code", async () => {
+    server.use(
+      http.post("/api/v1/invitation-previews", () =>
+        HttpResponse.json(
+          { errors: [{ status: "422", code: "invitation_invalid" }] },
+          { status: 422, headers: { "Content-Type": jsonApiMediaType } },
+        ),
+      ),
+    );
+    const result = await previewInvitation(
+      invitationToken(),
+      crypto.randomUUID(),
+    ).catch((error: unknown) => error);
+    expect(
+      result instanceof ApiHttpError &&
+        result.code === "invitation_invalid" &&
+        result.disclosure.status === 422,
+    ).toBe(true);
+  });
+
+  it("sends one exact acceptance document with no email or role and accepts only 201 users", async () => {
+    const token = invitationToken();
+    const csrf = crypto.randomUUID();
+    const password = ` ${crypto.randomUUID()} e\u0301 `;
+    const fields = {
+      username: "example.supervisor",
+      password,
+      passwordConfirmation: password,
+      language: "de-DE",
+      country: "DE",
+      timeZone: "Europe/Berlin",
+    };
+    let exactWire = false;
+    let posts = 0;
+    let status = 201;
+    server.use(
+      http.post("/api/v1/invitation-acceptances", async ({ request }) => {
+        posts++;
+        exactWire =
+          (await request.text()) ===
+            JSON.stringify({
+              data: {
+                type: "invitation-acceptances",
+                attributes: {
+                  token,
+                  username: "example.supervisor",
+                  password,
+                  password_confirmation: password,
+                  language: "de-DE",
+                  country: "DE",
+                  time_zone: "Europe/Berlin",
+                },
+              },
+            }) && request.headers.get("X-CSRF-Token") === csrf;
+        return created(
+          { data: { type: "users", id: "user-id", attributes: {} } },
+          status,
+        );
+      }),
+    );
+
+    await acceptInvitation(token, fields, csrf);
+    expect({ exactWire, posts }).toEqual({ exactWire: true, posts: 1 });
+
+    status = 200;
+    await expect(acceptInvitation(token, fields, csrf)).rejects.toBeInstanceOf(
+      ApiProtocolError,
+    );
+    expect(posts).toBe(2);
+  });
+
+  it.each([
+    [
+      "another resource type",
+      { type: "auth-sessions", id: "x", attributes: {} },
+    ],
+    [
+      "account attributes",
+      { type: "users", id: "x", attributes: { username: "x" } },
+    ],
+    ["no identity", { type: "users", id: "", attributes: {} }],
+  ])("treats a 201 with %s as malformed", async (_label, data) => {
+    server.use(
+      http.post("/api/v1/invitation-acceptances", () => created({ data })),
+    );
+    const password = crypto.randomUUID();
+    await expect(
+      acceptInvitation(
+        invitationToken(),
+        {
+          username: "example",
+          password,
+          passwordConfirmation: password,
+          language: "en-US",
+          country: "US",
+          timeZone: "UTC",
+        },
+        crypto.randomUUID(),
+      ),
+    ).rejects.toBeInstanceOf(ApiProtocolError);
   });
 });

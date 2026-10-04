@@ -1,12 +1,14 @@
 import { lazy, type ComponentType, type LazyExoticComponent } from "react";
 import { messages } from "../../platform/i18n/messages";
 import type { TextSize } from "../../platform/prefs/preferences";
+import type { InvitationLink } from "../../platform/session/invitationLink";
 import type { PasswordResetLink } from "../../platform/session/passwordResetLink";
 
 export type EntryRouteProps = {
   initialTextSize: TextSize;
   logoutConfirmed?: boolean;
   passwordResetLink: PasswordResetLink;
+  invitationLink: InvitationLink;
 };
 type EntryRoute = {
   readonly path:
@@ -14,6 +16,8 @@ type EntryRoute = {
     | "/login"
     | "/login/recovery"
     | "/password-reset"
+    | "/invitation"
+    | "/invitation/accept"
     | "/auth/mfa"
     | "/auth/mfa/recovery"
     | "/auth/password-change"
@@ -21,6 +25,7 @@ type EntryRoute = {
   readonly gate:
     | "Public"
     | "Public + Token(reset)"
+    | "Public + Token(invitation)"
     | "Restricted(mfa)"
     | "Restricted(password-change)"
     | "Restricted(logout)"
@@ -55,6 +60,20 @@ export const entryRoutes = {
     component: lazy(
       () => import("../../features/auth/PasswordResetEntryRoute"),
     ),
+  },
+  invitation: {
+    path: "/invitation",
+    gate: "Public + Token(invitation)",
+    titleMessage: messages.invitationPageTitle,
+    headingMessage: messages.invitationHeading,
+    component: lazy(() => import("../../features/auth/InvitationEntryRoute")),
+  },
+  invitationAccept: {
+    path: "/invitation/accept",
+    gate: "Public + Token(invitation)",
+    titleMessage: messages.invitationAcceptPageTitle,
+    headingMessage: messages.invitationAcceptHeading,
+    component: lazy(() => import("../../features/auth/InvitationEntryRoute")),
   },
   mfa: {
     path: "/auth/mfa",

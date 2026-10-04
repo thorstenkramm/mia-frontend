@@ -19,6 +19,9 @@ const markers = [
   // A reset token must be a canonical lowercase UUID v4 to be captured at all.
   randomUUID(),
   `reset-password-${randomBytes(24).toString("hex")}`,
+  // An invitation token must also be a canonical lowercase UUID v4.
+  randomUUID(),
+  `invitation-password-${randomBytes(24).toString("hex")}`,
 ];
 
 async function leakingArtifacts(directory) {
@@ -54,16 +57,18 @@ try {
         MIA_SECRET_HYGIENE_REPLACEMENT_PASSWORD: markers[5],
         MIA_SECRET_HYGIENE_RESET_TOKEN: markers[6],
         MIA_SECRET_HYGIENE_RESET_PASSWORD: markers[7],
+        MIA_SECRET_HYGIENE_INVITATION_TOKEN: markers[8],
+        MIA_SECRET_HYGIENE_INVITATION_PASSWORD: markers[9],
       },
       maxBuffer: 16 * 1024 * 1024,
     },
   );
-  // Every controlled test (sign-in flow, retained-secret assertion, and reset
-  // token flow) must fail.
+  // Every controlled test (sign-in flow, retained-secret assertion, reset
+  // token flow, and invitation token flow) must fail.
   if (
     result.error !== undefined ||
     result.status !== 1 ||
-    !result.stdout.includes(Buffer.from("3 failed"))
+    !result.stdout.includes(Buffer.from("4 failed"))
   ) {
     throw new Error("Controlled failures did not each fail exactly once.");
   }
@@ -80,7 +85,7 @@ try {
   }
 
   // The token-bearing Vitest suites use the same shared assertion helpers as
-  // these controlled unit failures; all four must fail without a marker leak.
+  // these controlled unit failures; all six must fail without a marker leak.
   const unit = spawnSync(
     join(process.cwd(), "node_modules", ".bin", "vitest"),
     ["run", "--config", "vitest.secret-hygiene.config.ts"],
@@ -92,6 +97,8 @@ try {
         NO_COLOR: "1",
         MIA_SECRET_HYGIENE_RESET_TOKEN: markers[6],
         MIA_SECRET_HYGIENE_RESET_PASSWORD: markers[7],
+        MIA_SECRET_HYGIENE_INVITATION_TOKEN: markers[8],
+        MIA_SECRET_HYGIENE_INVITATION_PASSWORD: markers[9],
       },
       maxBuffer: 16 * 1024 * 1024,
     },
@@ -99,7 +106,7 @@ try {
   if (
     unit.error !== undefined ||
     unit.status !== 1 ||
-    !/Tests\s+4 failed/u.test(unit.stdout.toString())
+    !/Tests\s+6 failed/u.test(unit.stdout.toString())
   ) {
     throw new Error("Controlled unit failures did not each fail exactly once.");
   }

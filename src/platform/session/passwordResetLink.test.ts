@@ -5,10 +5,11 @@ import {
   expectSecretAbsent,
 } from "../../../test/secretAssertions";
 import { ApiHttpError, ApiTransportError } from "../api/client";
+import { reloadOnLateFragment } from "./linkFragment";
 import {
   capturePasswordResetLink,
+  passwordResetPath,
   passwordResetSurface,
-  reloadOnLateResetFragment,
   type PasswordResetLink,
 } from "./passwordResetLink";
 import type {
@@ -66,7 +67,9 @@ async function expectSentOnce(
 }
 
 async function expectNothingSent(link: PasswordResetLink): Promise<void> {
-  expect((await submitWith(link, { kind: "completed" })).length).toBe(0);
+  expect(
+    (await submitWith(link, { kind: "completed", value: undefined })).length,
+  ).toBe(0);
 }
 
 afterEach(() => {
@@ -98,7 +101,7 @@ describe("reset-link bootstrap capture", () => {
     );
     expect(link.getSnapshot().kind).toBe("Awaiting stage");
     link.observeSession(signedOut);
-    await expectSentOnce(link, token, { kind: "completed" });
+    await expectSentOnce(link, token, { kind: "completed", value: undefined });
   });
 
   it.each(Object.keys(invalidFragments))(
@@ -135,7 +138,7 @@ const outcomes: Record<
   }
 > = {
   success: {
-    result: () => ({ kind: "completed" }),
+    result: () => ({ kind: "completed", value: undefined }),
     kind: "Password changed",
     keepsToken: false,
   },
@@ -219,7 +222,10 @@ describe("reset-link flow", () => {
       await expectSentOnce(link, token, outcome.result());
       expect(link.getSnapshot().kind).toBe(outcome.kind);
       if (outcome.keepsToken)
-        await expectSentOnce(link, token, { kind: "completed" });
+        await expectSentOnce(link, token, {
+          kind: "completed",
+          value: undefined,
+        });
       else await expectNothingSent(link);
     },
   );
@@ -277,7 +283,7 @@ describe("reset-link flow", () => {
     link.depart();
     expect(isCurrent()).toBe(false);
     expect(attemptSignal?.aborted).toBe(true);
-    settle({ kind: "completed" });
+    settle({ kind: "completed", value: undefined });
     await pending;
 
     expect(link.getSnapshot().kind).toBe("Link unusable");
@@ -309,7 +315,7 @@ describe("reset-link flow", () => {
     }
     link.observeSession({ kind: "Logout confirmed" });
     expect(link.getSnapshot().kind).toBe("Form ready");
-    await expectSentOnce(link, token, { kind: "completed" });
+    await expectSentOnce(link, token, { kind: "completed", value: undefined });
   });
 
   it.each(["Logout unconfirmed", "Logout reconciliation needed"] as const)(
@@ -360,7 +366,7 @@ describe("late reset fragments", () => {
 
   it("reloads only for a fragment added on the reset path", () => {
     const { target, location, window } = stubWindow();
-    const stop = reloadOnLateResetFragment(window);
+    const stop = reloadOnLateFragment(window, [passwordResetPath]);
 
     target.dispatchEvent(new Event("hashchange"));
     location.hash = `#token=${crypto.randomUUID()}`;
@@ -378,7 +384,7 @@ describe("late reset fragments", () => {
 
   it("treats in-page navigation such as the bypass link as navigation, not ingestion", () => {
     const { target, location, window } = stubWindow();
-    reloadOnLateResetFragment(window);
+    reloadOnLateFragment(window, [passwordResetPath]);
 
     location.hash = "#main-content";
     target.dispatchEvent(new Event("hashchange"));

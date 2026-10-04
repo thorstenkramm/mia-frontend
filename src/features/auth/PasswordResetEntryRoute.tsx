@@ -7,18 +7,9 @@
 // buttons (interstitial and result actions)
 // Library version: 2026-09-13-083323, v4 React light. MIA keeps the card's two password
 // fields (NewPasswordFields), focuses each result heading, replaces alert buttons with
-// navigation links, and omits branding, social, and remember-me.
-import {
-  CheckCircleIcon,
-  ExclamationTriangleIcon,
-} from "@heroicons/react/20/solid";
-import {
-  useLayoutEffect,
-  useRef,
-  useState,
-  useSyncExternalStore,
-  type ReactNode,
-} from "react";
+// navigation links, and omits branding, social, and remember-me. The interstitial and
+// warning results are shared with the invitation route (LinkFlowParts).
+import { useLayoutEffect, useRef, useState, useSyncExternalStore } from "react";
 import { useIntl } from "react-intl";
 import { Link, useLocation } from "react-router";
 import { TechnicalErrorDisclosure } from "../../platform/api/TechnicalErrorDisclosure";
@@ -36,14 +27,18 @@ import {
   type PasswordResetState,
 } from "../../platform/session/passwordResetLink";
 import { AuthSubmitButton } from "./AuthSubmitButton";
+import {
+  primaryAction,
+  secondaryAction,
+  SignedInInterstitial,
+  SuccessResult,
+  useRetryAvailable,
+  waitText,
+  WarningResult,
+} from "./LinkFlowParts";
 import { NewPasswordForm, useNewPasswordCheck } from "./NewPasswordFields";
 
 type MessageDescriptor = (typeof messages)[keyof typeof messages];
-
-const primaryAction =
-  "rounded-md bg-indigo-600 px-3 py-2 text-sm font-semibold text-white shadow-xs hover:bg-indigo-500 focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-indigo-600";
-const secondaryAction =
-  "rounded-md bg-white px-3 py-2 text-sm font-semibold text-gray-900 shadow-xs inset-ring inset-ring-gray-300 hover:bg-gray-50 focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-indigo-600";
 
 export default function PasswordResetEntryRoute({
   passwordResetLink,
@@ -76,7 +71,7 @@ export default function PasswordResetEntryRoute({
     if (announcement === null) return;
     const text = [announcement.message, ...(announcement.detail ?? [])]
       .map((message) => intl.formatMessage(message))
-      .concat(waitText(intl, flow))
+      .concat(waitText(intl, retryAfter(flow)))
       .filter((part) => part !== "")
       .join(" ");
     announce(text, announcement.priority);
@@ -89,7 +84,8 @@ export default function PasswordResetEntryRoute({
       return (
         <SignedInInterstitial
           signingOut={surface.signingOut}
-          passwordResetLink={passwordResetLink}
+          introduction={messages.resetSignedInIntroduction}
+          link={passwordResetLink}
         />
       );
     case "form":
@@ -107,59 +103,16 @@ export default function PasswordResetEntryRoute({
     case "outcome unknown":
       return <OutcomeUnknown error={surface.error} takeFocus={takeFocus} />;
     case "password changed":
-      return <PasswordChanged takeFocus={takeFocus} />;
+      return (
+        <SuccessResult
+          heading={messages.resetChangedHeading}
+          body={[messages.resetChangedMfa, messages.resetChangedOtherBrowsers]}
+          takeFocus={takeFocus}
+        />
+      );
     default:
       return assertNever(surface);
   }
-}
-
-function SignedInInterstitial({
-  signingOut,
-  passwordResetLink,
-}: {
-  readonly signingOut: boolean;
-  readonly passwordResetLink: PasswordResetLink;
-}) {
-  const intl = useIntl();
-  const { beginResetLinkLogout, continueDeferredAccess } = useSessionActions();
-  return (
-    <>
-      <p className="text-center text-sm/6 text-gray-600">
-        {intl.formatMessage(
-          signingOut
-            ? messages.logoutIntroduction
-            : messages.resetSignedInIntroduction,
-        )}
-      </p>
-      <div className="mt-8 flex flex-wrap justify-center gap-3">
-        {/* Sign out stays mounted and unavailable while logout runs, so focus stays. */}
-        <button
-          type="button"
-          aria-disabled={signingOut}
-          className={primaryAction}
-          onClick={() => {
-            if (!signingOut && beginResetLinkLogout())
-              passwordResetLink.beginSignOut();
-          }}
-        >
-          {intl.formatMessage(messages.resetSignOutAndContinue)}
-        </button>
-        {signingOut ? null : (
-          <button
-            type="button"
-            className={secondaryAction}
-            onClick={() => {
-              // Only a deliberate return runs the deferred capability gate.
-              void continueDeferredAccess();
-              passwordResetLink.goBack();
-            }}
-          >
-            {intl.formatMessage(messages.resetGoBack)}
-          </button>
-        )}
-      </div>
-    </>
-  );
 }
 
 function ResetForm({
@@ -175,23 +128,7 @@ function ResetForm({
   const { resetPassword } = useSessionActions();
   const check = useNewPasswordCheck();
   const { problems, passwordRef, confirmationRef } = check;
-  const retryAfter =
-    state.kind === "Throttled" ? state.error.retryAfterSeconds : null;
-  const [retryAvailable, setRetryAvailable] = useState(
-    retryAfter === null || retryAfter === 0,
-  );
-  useLayoutEffect(() => {
-    if (retryAfter === null || retryAfter === 0) {
-      setRetryAvailable(true);
-      return;
-    }
-    setRetryAvailable(false);
-    const timeout = window.setTimeout(
-      () => setRetryAvailable(true),
-      retryAfter * 1000,
-    );
-    return () => window.clearTimeout(timeout);
-  }, [retryAfter]);
+  const retryAvailable = useRetryAvailable(retryAfter(state));
   const enabled = state.kind !== "Submitting" && retryAvailable;
 
   // A form that replaces the signed-in interstitial takes focus once.
@@ -244,7 +181,7 @@ function ResetForm({
           <p id="password-reset-status" className="text-sm/6 text-gray-900">
             {status === null
               ? null
-              : [intl.formatMessage(status), waitText(intl, state)]
+              : [intl.formatMessage(status), waitText(intl, retryAfter(state))]
                   .filter((text) => text !== "")
                   .join(" ")}
           </p>
@@ -358,106 +295,6 @@ function OutcomeUnknown({
   );
 }
 
-// Alerts > With description: a terminal reset result with a focusable heading
-// (omitted when the page heading names the result), followed by its actions.
-function WarningResult({
-  heading,
-  body,
-  takeFocus,
-  disclosure,
-  children,
-}: {
-  readonly heading: MessageDescriptor | null;
-  readonly body: MessageDescriptor;
-  readonly takeFocus: boolean;
-  readonly disclosure: ReactNode;
-  readonly children: ReactNode;
-}) {
-  const intl = useIntl();
-  const headingRef = useFocusedOnMount(takeFocus);
-  return (
-    <>
-      <div className="mt-8 rounded-md bg-yellow-50 p-4">
-        <div className="flex">
-          <div className="shrink-0">
-            <ExclamationTriangleIcon
-              aria-hidden="true"
-              className="size-5 text-yellow-400"
-            />
-          </div>
-          <div className="ml-3 min-w-0">
-            {heading === null ? null : (
-              <h2
-                ref={headingRef}
-                tabIndex={-1}
-                className="mb-2 text-sm font-medium text-yellow-800 focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-indigo-600"
-              >
-                {intl.formatMessage(heading)}
-              </h2>
-            )}
-            <div className="text-sm text-yellow-700">
-              <p>{intl.formatMessage(body)}</p>
-              {disclosure}
-            </div>
-          </div>
-        </div>
-      </div>
-      <div className="mt-8 flex flex-wrap justify-center gap-3">{children}</div>
-    </>
-  );
-}
-
-function PasswordChanged({ takeFocus }: { readonly takeFocus: boolean }) {
-  const intl = useIntl();
-  const headingRef = useFocusedOnMount(takeFocus);
-  return (
-    <div className="mt-8 rounded-md bg-green-50 p-4">
-      <div className="flex">
-        <div className="shrink-0">
-          <CheckCircleIcon
-            aria-hidden="true"
-            className="size-5 text-green-400"
-          />
-        </div>
-        <div className="ml-3 min-w-0">
-          <h2
-            ref={headingRef}
-            tabIndex={-1}
-            className="text-sm font-medium text-green-800 focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-green-600"
-          >
-            {intl.formatMessage(messages.resetChangedHeading)}
-          </h2>
-          <div className="mt-2 space-y-2 text-sm text-green-700">
-            <p>{intl.formatMessage(messages.resetChangedMfa)}</p>
-            <p>{intl.formatMessage(messages.resetChangedOtherBrowsers)}</p>
-          </div>
-          <div className="mt-4">
-            <div className="-mx-2 -my-1.5 flex">
-              {/* A document navigation, so sign-in starts from cold discovery. */}
-              <a
-                href="/login"
-                className="rounded-md bg-green-50 px-2 py-1.5 text-sm font-medium text-green-800 hover:bg-green-100 focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-green-600"
-              >
-                {intl.formatMessage(messages.loginSubmit)}
-              </a>
-            </div>
-          </div>
-        </div>
-      </div>
-    </div>
-  );
-}
-
-// A result that replaces the form moves focus to its heading when it mounts.
-function useFocusedOnMount(takeFocus: boolean) {
-  const ref = useRef<HTMLHeadingElement>(null);
-  const [focusAtMount] = useState(takeFocus);
-  useLayoutEffect(() => {
-    if (focusAtMount) ref.current?.focus();
-  }, [focusAtMount]);
-  return ref;
-}
-
 function formStatus(state: PasswordResetFormState): MessageDescriptor | null {
   switch (state.kind) {
     case "Form ready":
@@ -535,15 +372,8 @@ function flowAnnouncement(
   }
 }
 
-function waitText(
-  intl: ReturnType<typeof useIntl>,
-  state: PasswordResetState,
-): string {
-  return state.kind === "Throttled" && state.error.retryAfterSeconds !== null
-    ? intl.formatMessage(messages.passwordChangeWait, {
-        seconds: state.error.retryAfterSeconds,
-      })
-    : "";
+function retryAfter(state: PasswordResetState): number | null {
+  return state.kind === "Throttled" ? state.error.retryAfterSeconds : null;
 }
 
 function assertNever(value: never): never {

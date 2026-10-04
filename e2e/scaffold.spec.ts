@@ -1810,6 +1810,528 @@ async function expectFocusedAndUnobscured(
   expect(geometry.unobscured).toBe(true);
 }
 
+type InvitationMock = {
+  stage: "anonymous" | "authenticated";
+  preview: "valid" | "invalid" | "throttle" | "lost";
+  acceptance: "created" | "taken" | "registered" | "unknown";
+  previews: number;
+  acceptances: number;
+};
+
+// One mutable protocol fake for every invitation state.
+async function installInvitationMocks(page: Page): Promise<InvitationMock> {
+  const mock: InvitationMock = {
+    stage: "anonymous",
+    preview: "valid",
+    acceptance: "created",
+    previews: 0,
+    acceptances: 0,
+  };
+  await page
+    .context()
+    .addCookies([
+      { name: "mia_csrf", value: crypto.randomUUID(), url: appUrl },
+    ]);
+  const error = (status: number, code: string, retryAfter?: string) => ({
+    status,
+    contentType: mediaType,
+    headers: retryAfter === undefined ? {} : { "Retry-After": retryAfter },
+    body: JSON.stringify({ errors: [{ status: String(status), code }] }),
+  });
+  await page.route("**/api/v1/auth/session", async (route) => {
+    await route.fulfill({
+      status: 200,
+      contentType: mediaType,
+      body: JSON.stringify(
+        mock.stage === "anonymous"
+          ? { data: null, meta: { stage: "anonymous" } }
+          : {
+              data: {
+                type: "auth-sessions",
+                id: "account-id",
+                attributes: {
+                  stage: mock.stage,
+                  idle_expires_at: "2026-10-03T10:30:00.000000Z",
+                  absolute_expires_at: "2026-10-03T22:00:00.000000Z",
+                },
+              },
+            },
+      ),
+    });
+  });
+  await page.route("**/api/v1/auth/logout", async (route) => {
+    mock.stage = "anonymous";
+    await route.fulfill({ status: 204 });
+  });
+  await page.route("**/api/v1/invitation-previews", async (route) => {
+    mock.previews++;
+    switch (mock.preview) {
+      case "valid":
+        return route.fulfill({
+          status: 200,
+          contentType: mediaType,
+          body: JSON.stringify({
+            data: {
+              type: "invitation-previews",
+              id: "preview",
+              attributes: { platform: "mia", role: "supervisor" },
+            },
+          }),
+        });
+      case "invalid":
+        return route.fulfill(error(422, "invitation_invalid"));
+      case "throttle":
+        return route.fulfill(error(429, "rate_limited", "0"));
+      case "lost":
+        return route.abort("connectionfailed");
+    }
+  });
+  await page.route("**/api/v1/invitation-acceptances", async (route) => {
+    mock.acceptances++;
+    switch (mock.acceptance) {
+      case "created":
+        return route.fulfill({
+          status: 201,
+          contentType: mediaType,
+          body: JSON.stringify({
+            data: { type: "users", id: "user-id", attributes: {} },
+          }),
+        });
+      case "taken":
+        return route.fulfill(error(409, "username_taken"));
+      case "registered":
+        return route.fulfill(error(409, "invitation_email_registered"));
+      case "unknown":
+        return route.abort("connectionfailed");
+    }
+  });
+  return mock;
+}
+
+async function openInvitationLink(
+  page: Page,
+  token = crypto.randomUUID(),
+): Promise<void> {
+  // A fresh document runs the bootstrap capture for each new link.
+  await page.goto("about:blank");
+  await page.goto(`/invitation#token=${token}`);
+}
+
+// Moves focus with Tab only, proving the control is keyboard reachable.
+async function tabTo(page: Page, control: Locator): Promise<void> {
+  for (let step = 0; step < 30; step++) {
+    if (await control.evaluate((element) => element === document.activeElement))
+      return;
+    await page.keyboard.press("Tab");
+  }
+  throw new Error("The control is not reachable with Tab.");
+}
+
+async function acceptByKeyboard(page: Page, password: string): Promise<void> {
+  await tabTo(page, page.getByRole("link", { name: "Accept invitation" }));
+  await page.keyboard.press("Enter");
+  await expect(
+    page.getByRole("heading", { level: 1, name: "Create your MIA account" }),
+  ).toBeFocused();
+  await tabTo(page, page.locator("#username"));
+  await page.keyboard.type("example.supervisor");
+  await tabTo(page, page.locator("#new-password"));
+  await page.keyboard.type(password);
+  await tabTo(page, page.locator("#password-confirmation"));
+  await page.keyboard.type(password);
+  await tabTo(page, page.locator("#country"));
+  await page.keyboard.type("Germany");
+  await expect(page.locator("#country")).toHaveValue("DE");
+  await tabTo(page, page.locator("button[type=submit]"));
+  await page.keyboard.press("Enter");
+}
+
+async function expectNoApplicationNavigation(page: Page): Promise<void> {
+  await expect(page.getByRole("navigation")).toHaveCount(0);
+  await expect(page.locator("main")).toHaveCount(1);
+  await expect(page.locator("h1")).toHaveCount(1);
+}
+
+test.describe("invitation preview and acceptance", () => {
+  test("strips the invitation fragment before any render or request and accepts once", async ({
+    page,
+  }) => {
+    const token = crypto.randomUUID();
+    const password = ` ${crypto.randomUUID()} é `;
+    const mock = await installInvitationMocks(page);
+    await page.goto("/login");
+    const timeZone = await page.evaluate(
+      () => Intl.DateTimeFormat().resolvedOptions().timeZone,
+    );
+    await page.addInitScript(() => {
+      const observed: string[] = [];
+      Object.defineProperty(window, "__miaObservedHashes", { value: observed });
+      const originalFetch = window.fetch.bind(window);
+      window.fetch = (...args) => {
+        observed.push(location.hash);
+        return originalFetch(...args);
+      };
+      new MutationObserver((_, observer) => {
+        if (document.getElementById("root")?.firstChild) {
+          observed.push(location.hash);
+          observer.disconnect();
+        }
+      }).observe(document, { childList: true, subtree: true });
+    });
+    let exactWire = false;
+    await page.route("**/api/v1/invitation-acceptances", async (route) => {
+      mock.acceptances++;
+      exactWire =
+        fingerprint(route.request().postData() ?? "") ===
+        fingerprint(
+          JSON.stringify({
+            data: {
+              type: "invitation-acceptances",
+              attributes: {
+                token,
+                username: "example.supervisor",
+                password,
+                password_confirmation: password,
+                language: "en-US",
+                country: "DE",
+                time_zone: timeZone,
+              },
+            },
+          }),
+        );
+      await route.fulfill({
+        status: 201,
+        contentType: mediaType,
+        body: JSON.stringify({
+          data: { type: "users", id: "user-id", attributes: {} },
+        }),
+      });
+    });
+
+    await openInvitationLink(page, token);
+    await expect(
+      page.locator("main").getByText("Invited role: Supervisor"),
+    ).toBeVisible();
+    await expect(
+      page.getByRole("heading", { level: 1, name: "Your MIA invitation" }),
+    ).toBeFocused();
+    await expect(page).toHaveTitle("Invitation | MIA");
+    await expectNoApplicationNavigation(page);
+    await acceptByKeyboard(page, password);
+    await expect(
+      page.getByRole("heading", {
+        level: 2,
+        name: "Your account has been created.",
+      }),
+    ).toBeFocused();
+    await expect(page).toHaveURL(/\/invitation\/accept$/u);
+    const clean = await page.evaluate((secret) => {
+      const observed = (window as unknown as { __miaObservedHashes: string[] })
+        .__miaObservedHashes;
+      const exposed = JSON.stringify({
+        href: location.href,
+        history: history.state,
+        local: Object.entries(localStorage),
+        session: Object.entries(sessionStorage),
+        title: document.title,
+        body: document.body.innerHTML,
+      });
+      return {
+        observedClean:
+          observed.length > 0 && observed.every((hash) => hash === ""),
+        tokenAbsent: !exposed.includes(secret),
+      };
+    }, token);
+    expect(clean).toEqual({ observedClean: true, tokenAbsent: true });
+    expect({
+      previews: mock.previews,
+      acceptances: mock.acceptances,
+      exactWire,
+    }).toEqual({ previews: 1, acceptances: 1, exactWire: true });
+  });
+
+  test("a fragment added to a running invitation page is captured by a fresh bootstrap", async ({
+    page,
+  }) => {
+    const mock = await installInvitationMocks(page);
+    await page.goto("/invitation");
+    await expect(
+      page.getByRole("heading", {
+        level: 1,
+        name: "This invitation link is invalid or no longer usable",
+      }),
+    ).toBeVisible();
+    expect(mock.previews).toBe(0);
+    const token = crypto.randomUUID();
+    await page.evaluate((fragmentToken) => {
+      location.hash = `token=${fragmentToken}`;
+    }, token);
+    await expect(
+      page.locator("main").getByText("Invited role: Supervisor"),
+    ).toBeVisible();
+    const exposure = await page.evaluate(
+      (secret) => ({
+        hashRemoved: location.hash === "",
+        tokenAbsent: !JSON.stringify({
+          href: location.href,
+          history: history.state,
+          title: document.title,
+          body: document.body.innerHTML,
+        }).includes(secret),
+      }),
+      token,
+    );
+    expect(exposure).toEqual({ hashRemoved: true, tokenAbsent: true });
+    await page.waitForTimeout(200);
+    expect(mock.previews).toBe(1);
+  });
+
+  test("never replays an acceptance after connection loss", async ({
+    page,
+  }) => {
+    const mock = await installInvitationMocks(page);
+    mock.acceptance = "unknown";
+    await openInvitationLink(page);
+    await acceptByKeyboard(page, crypto.randomUUID());
+    await expect(
+      page.getByRole("heading", {
+        level: 2,
+        name: "Account creation not confirmed",
+      }),
+    ).toBeFocused();
+    await expect(page.locator("button[type=submit]")).toHaveCount(0);
+    await page.waitForTimeout(200);
+    expect(mock.acceptances).toBe(1);
+  });
+
+  for (const textSize of textSizes) {
+    test(`keyboard-only invitation states reflow at 320 CSS pixels in ${textSize} text`, async ({
+      page,
+    }) => {
+      test.setTimeout(180_000);
+      await page.setViewportSize({ width: 320, height: 900 });
+      const mock = await installInvitationMocks(page);
+      await page.goto("/login");
+      await page.evaluate((nextTextSize) => {
+        localStorage.setItem("mia.interface.locale", "en-US");
+        localStorage.setItem("mia.interface.text-size", nextTextSize);
+      }, textSize);
+      const check = () =>
+        checkRecoveryResetState(page, { axe: textSize === "standard" });
+
+      // Preview, the acceptance form, a correctable rejection, and success.
+      await openInvitationLink(page);
+      await expect(
+        page.locator("main").getByText("Invited role: Supervisor"),
+      ).toBeVisible();
+      await expectNoApplicationNavigation(page);
+      await check();
+      mock.acceptance = "taken";
+      await acceptByKeyboard(page, crypto.randomUUID());
+      await expect(page.locator("#invitation-status")).toHaveText(
+        /already taken/u,
+      );
+      await expect(page.locator("#new-password")).toHaveValue("");
+      await expectNoApplicationNavigation(page);
+      await check();
+      mock.acceptance = "created";
+      const password = crypto.randomUUID();
+      await page.locator("#new-password").fill(password);
+      await page.locator("#password-confirmation").fill(password);
+      await tabTo(page, page.locator("button[type=submit]"));
+      await page.keyboard.press("Enter");
+      await expect(page.locator("main h2[tabindex='-1']")).toBeFocused();
+      await check();
+
+      // Terminal acceptance results, each from a fresh link.
+      for (const mode of ["registered", "unknown"] as const) {
+        mock.acceptance = mode;
+        await openInvitationLink(page);
+        await acceptByKeyboard(page, crypto.randomUUID());
+        await expect(page.locator("main h2[tabindex='-1']")).toBeFocused();
+        await expect(page.locator("#new-password")).toHaveCount(0);
+        await check();
+      }
+      mock.acceptance = "created";
+
+      // Preview results: retryable, lost, and the uniform invalid result.
+      for (const [mode, shown] of [
+        ["throttle", page.getByRole("button", { name: "Try again" })],
+        [
+          "lost",
+          page.getByRole("heading", {
+            level: 2,
+            name: "Invitation could not be checked",
+          }),
+        ],
+        [
+          "invalid",
+          page.getByRole("heading", {
+            level: 1,
+            name: "This invitation link is invalid or no longer usable",
+          }),
+        ],
+      ] as const) {
+        mock.preview = mode;
+        await openInvitationLink(page);
+        await expect(shown).toBeVisible();
+        await expectNoApplicationNavigation(page);
+        await check();
+      }
+      mock.preview = "valid";
+      await page.goto("/invitation/accept");
+      await expect(
+        page.getByRole("heading", {
+          level: 1,
+          name: "This invitation link is invalid or no longer usable",
+        }),
+      ).toBeFocused();
+      await expect(page.locator("main a[href='/login']")).toBeVisible();
+      await check();
+
+      // The signed-in interstitial, then the preview after confirmed sign-out.
+      mock.stage = "authenticated";
+      await openInvitationLink(page);
+      await expect(page.locator("main button")).toHaveCount(2);
+      await expectNoApplicationNavigation(page);
+      await check();
+      await tabTo(
+        page,
+        page.getByRole("button", { name: "Sign out and continue" }),
+      );
+      await page.keyboard.press("Enter");
+      await expect(
+        page.getByRole("link", { name: "Accept invitation" }),
+      ).toBeFocused();
+      // The link is the last control; the shared check tabs forward from the
+      // page heading to it.
+      await page.locator("h1").focus();
+      await check();
+    });
+  }
+
+  for (const locale of locales) {
+    test(`the localized invitation form reflows at 320 CSS pixels in ${locale}`, async ({
+      page,
+    }) => {
+      test.setTimeout(120_000);
+      await page.setViewportSize({ width: 320, height: 900 });
+      await installInvitationMocks(page);
+      await page.goto("/login");
+      for (const textSize of textSizes) {
+        await page.evaluate(
+          ([nextLocale, nextTextSize]) => {
+            localStorage.setItem("mia.interface.locale", nextLocale);
+            localStorage.setItem("mia.interface.text-size", nextTextSize);
+          },
+          [locale, textSize] as const,
+        );
+        await openInvitationLink(page);
+        await expect(page.locator("html")).toHaveAttribute("lang", locale);
+        await page.locator("main a[href='/invitation/accept']").click();
+        await expect(page.locator("#username")).toBeVisible();
+        await expect(page.locator("#language")).toHaveValue(locale);
+        await applyWcagTextSpacing(page);
+        await expectNoPageOverflow(page);
+        for (const control of await page
+          .locator("main a, main button, main input, main select")
+          .all())
+          await expectMinimumPointerTarget(control);
+      }
+    });
+  }
+});
+
+for (const zoomFactor of [2, 4] as const) {
+  test(`invitation preview, form, validation, and results reflow at actual ${zoomFactor * 100}% browser zoom`, async () => {
+    test.setTimeout(300_000);
+    const { context, userDataDirectory } = await launchBrowserZoomContext();
+    try {
+      const page = await context.newPage();
+      const mock = await installInvitationMocks(page);
+      await page.goto("/login");
+      await setActualBrowserZoom(page, zoomFactor);
+      expect(await page.evaluate(() => window.innerWidth)).toBe(
+        1280 / zoomFactor,
+      );
+      for (const textSize of textSizes) {
+        await page.evaluate((nextTextSize) => {
+          localStorage.setItem("mia.interface.locale", "en-US");
+          localStorage.setItem("mia.interface.text-size", nextTextSize);
+        }, textSize);
+        const check = () =>
+          checkRecoveryResetState(page, { axe: textSize === "standard" });
+
+        // Preview.
+        mock.acceptance = "taken";
+        await openInvitationLink(page);
+        await expect(
+          page.locator("main").getByText("Invited role: Supervisor"),
+        ).toBeVisible();
+        await check();
+
+        // Form and local validation: a short password and no country.
+        await page.locator("h1").focus();
+        await tabTo(
+          page,
+          page.getByRole("link", { name: "Accept invitation" }),
+        );
+        await page.keyboard.press("Enter");
+        await expect(page.locator("#username")).toBeVisible();
+        await check();
+        await page.locator("#username").fill("example.supervisor");
+        await page.locator("#new-password").fill("short");
+        await page.locator("#password-confirmation").fill("short");
+        await tabTo(page, page.locator("button[type=submit]"));
+        await page.keyboard.press("Enter");
+        await expect(page.locator("#country-error")).toBeVisible();
+        await expect(page.locator("#new-password")).toBeFocused();
+        await check();
+
+        // A correctable rejection, then the created result.
+        const password = crypto.randomUUID();
+        await page.locator("#new-password").fill(password);
+        await page.locator("#password-confirmation").fill(password);
+        await page.locator("#country").selectOption("DE");
+        await tabTo(page, page.locator("button[type=submit]"));
+        await page.keyboard.press("Enter");
+        await expect(page.locator("#invitation-status")).toHaveText(
+          /already taken/u,
+        );
+        await check();
+        mock.acceptance = "created";
+        await page.locator("#new-password").fill(password);
+        await page.locator("#password-confirmation").fill(password);
+        await tabTo(page, page.locator("button[type=submit]"));
+        await page.keyboard.press("Enter");
+        await expect(page.locator("main h2[tabindex='-1']")).toBeFocused();
+        await check();
+
+        // The outcome-unknown result and the uniform invalid result.
+        mock.acceptance = "unknown";
+        await openInvitationLink(page);
+        await acceptByKeyboard(page, crypto.randomUUID());
+        await expect(page.locator("main h2[tabindex='-1']")).toBeFocused();
+        await check();
+        mock.acceptance = "created";
+        await page.goto("/invitation/accept");
+        await expect(page).toHaveURL(/\/invitation$/u);
+        await expect(
+          page.getByRole("heading", {
+            level: 1,
+            name: "This invitation link is invalid or no longer usable",
+          }),
+        ).toBeFocused();
+        await expect(page.locator("main a[href='/login']")).toBeVisible();
+        await check();
+      }
+    } finally {
+      await context.close();
+      await rm(userDataDirectory, { force: true, recursive: true });
+    }
+  });
+}
+
 test.describe("browser locale negotiation", () => {
   test.use({ locale: "pt-BR" });
 
