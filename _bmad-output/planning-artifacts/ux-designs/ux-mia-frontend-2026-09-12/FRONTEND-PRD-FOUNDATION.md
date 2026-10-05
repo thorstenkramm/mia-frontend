@@ -384,12 +384,9 @@ request. Partial and queued content remain distinct. A terminal event causes an 
 Client-generated request IDs remain stable across transport retries exactly as OpenAPI defines, and a stable request ID
 never authorizes an automatic replay.
 
-Opening an SSE connection is an authenticated request, so under the current backend rule it resets the server-side idle
-timer while server-sent heartbeats and background provider work do not
-(`mia/docs/product-requirements.md:530-532`; `mia/docs/api.md:122`). The frontend's per-tab idle baseline is
-deliberately more conservative and counts only user-initiated authenticated requests, so a local warning can fire
-against a server deadline that has already moved. The frontend must not narrow that gap by inferring a server deadline
-from stream activity. `BCG-001` owns the reconciliation: it must define an explicit SSE reconnect that reauthorizes and
+Ordinary requests and SSE never refresh server idle expiry. Only explicit Continue working may do so;
+the frontend never infers a deadline from activity. `BCG-001` still owns the missing SSE transport obligations:
+it must define an explicit SSE reconnect that reauthorizes and
 opens one replacement EventSource without extending idle expiry, and state whether Continue working may open that
 replacement.
 
@@ -515,14 +512,15 @@ terminated contexts. The former universal no-pre-logout-response guarantee is wi
 quiescence, independent tab confirmation, and explicit reconciliation after a late transition; `BCG-001` remains open
 for its remaining transport and evidence gaps and must close before dependent behavior ships.
 
-Each tab's idle-warning baseline is its own last successful user-initiated authenticated request. Other-tab activity
-does not reset it. The non-modal warning says local inactivity was detected, sign-in status must be checked, and unsaved
-input may be lost; it neither moves focus nor states any remaining time. Continue working makes one explicit
-auth-session request. `BCG-001` must supply a Continue-working operation whose success returns the refreshed
-authoritative idle deadline and the unchanged absolute deadline in one response, so that no second automatic deadline
-read follows; until it does, the frontend has no authoritative deadline to warn against and the behavior in this
-paragraph is blocked rather than approximated. Outcome unknown keeps the privacy shield and permits only explicit
-Refresh reconciliation or Retry Continue working; denial clears protected state. Passive activity never makes a
+Owner decision, 2026-10-05 (Story 1-8): lifecycle work for existing auth/Home surfaces is approved under
+`mia/docs/api-authentication-and-user-invitation.md` §Session lifecycle and §Error handling. Broader BCG-001 closure,
+SSE transport/header obligations, and composite release evidence remain open. Each tab warns from the server-authored
+deadlines it last observed; ordinary activity never extends them. The persistent non-modal warning neither moves focus
+nor displays a countdown. Only deliberate Continue working sends one bodyless continuation POST. Its response supplies
+the renewed idle and unchanged absolute deadline, with no second automatic deadline read. Any unknown outcome,
+including undeclared `5xx`, shields immediately and allows only explicit recovery without replay. On observed expiry,
+explicit Refresh discovers the current stage and runs the complete ordered gate before protected reveal; renewal in
+another tab does not inherently require fresh credentials. Denial clears protected state. Passive activity never makes a
 keepalive request. The ordinary warning appears five minutes before the earlier authoritative deadline, or immediately
 when a new deadline is already inside that threshold, and uses polite status semantics. The five-minute threshold is a
 frontend-owned choice; the deadlines it is measured against are backend-authored and are never computed locally.

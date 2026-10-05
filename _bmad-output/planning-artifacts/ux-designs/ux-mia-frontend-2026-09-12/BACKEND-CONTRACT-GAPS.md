@@ -59,7 +59,13 @@ The separate 2026-10-03 Story 1-7 decision resolves only public invitation previ
 
 #### BCG-001 authoritative product requirement
 
-- Browser authentication uses expiring stateless cookies and must require reauthentication after idle or absolute expiry
+Owner decision, 2026-10-05: Story 1-8 may implement lifecycle warning, continuation, shielding, explicit recovery,
+and logout for existing auth/Home surfaces. `FRONTEND-PRD-FOUNDATION.md` records the approved semantics aligned with
+`mia/docs/api-authentication-and-user-invitation.md` §Session lifecycle and §Error handling. This does not close BCG-001:
+missing SSE/header obligations and composite release evidence remain open.
+
+- Browser authentication uses expiring stateless cookies. Observed expiry requires shielding and explicit discovery;
+  the discovered stage determines whether fresh credentials are needed after a shared-session renewal
   (`mia/docs/product-requirements.md:583-607`).
 - Restricted `mfa` and `password-change` stages permit only their named actions and logout, expire after 30 minutes, and
   rotate on successful transitions (`mia/docs/product-requirements.md:627-642`).
@@ -140,12 +146,10 @@ These are requirement-level findings, not partial closure or permission to bypas
    does not settle whether the frontend may subsequently open one replacement after the non-refreshing ordered checks
    required by `FRONTEND-STATE-MACHINES.md:176-185`. Publish that transport guarantee and sequence rather than infer it
    from implementation. Lifecycle no-request behavior remains a frontend evidence obligation.
-3. **Historical frontend lifetime wording.** `FRONTEND-PRD-FOUNDATION.md:387-394` still describes SSE opening as refreshing
-   under the former backend rule; that factual premise no longer matches maintained backend behavior. The frontend's
-   local baseline wording (`EXPERIENCE.md:279-295`, `SECURITY-PRIVACY-ACCEPTANCE.md:184-209`) must not be used to extend a
-   server deadline after an ordinary user request: backend policy permits refresh only through Continue working.
-   `.memlog.md:77` already names Continue working as the sole activity-refresh operation. This assessment records the
-   stale wording without silently rewriting the binding artifacts or inventing automatic continuation requests.
+3. **Historical frontend lifetime wording resolved, 2026-10-05.** The owner approved correcting the affected frontend
+   contracts: only Continue working refreshes idle expiry; ordinary requests and SSE never do. Warnings follow returned
+   deadlines, unknown continuation outcomes shield immediately, and expiry permits explicit discovery/full-gate recovery.
+   This resolves the wording conflict only, not the remaining transport or release-evidence gaps.
 The 2026-09-27 backend correction at `b83102114802b981a022c237c0746023c0aa6b79` aligned CSRF replacement wording,
 declared duplicate-cookie `403` responses, conditionally requires the MFA challenge identity, and supplies all four
 session examples. Those corrections authorize only the partial cold-entry slice above.

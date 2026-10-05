@@ -137,7 +137,7 @@ State and integration contract (PRD, unnumbered — line references preserved):
 - NFR-4: `pagehide` installs a content-free privacy shield before a protected document can enter BFCache; persisted `pageshow` revalidates behind the retained shield (L358-360).
 - NFR-5: No automatic unsafe replay — after timeout, network loss, abort, 401, 403, `csrf_invalid`, tab return, or token rotation; request-ID idempotency creates no exception (L368-371).
 - NFR-6: SSE: 1/2/4 s reconnect-availability delays but never an auto-opened replacement EventSource; snapshot before events; no duplicated provider request; stream health derives from the backend heartbeat contract, not local timing (L377-386).
-- NFR-7: Per-tab idle baseline counts only user-initiated authenticated requests; never infer a server deadline from stream activity (L388-394).
+- NFR-7: Per-tab warnings follow observed server-authored deadlines. Only explicit Continue working refreshes idle expiry; ordinary requests and SSE do not (2026-10-05 owner decision, FRONTEND-PRD-FOUNDATION.md).
 - NFR-8: Every backend error shows a localized explanation plus collapsed, selectable, never-live-announced technical details with exact HTTP status and complete verbatim escaped raw body; copy carries a review-before-sharing warning (L401-413).
 - NFR-9: OpenAPI owns all transport; absent operations block the story; no cookie inspection, guessed route, denial probing, enumeration, null-state inference, protected prefetch, or trial request (L434-443).
 

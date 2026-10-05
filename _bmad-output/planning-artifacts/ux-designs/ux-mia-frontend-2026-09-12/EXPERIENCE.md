@@ -257,8 +257,9 @@ and reconciles it only when the user resumes. `ACCESSIBILITY-ACCEPTANCE.md` owns
 - Destructive mutations update the interface only after backend success. Optimistic deletion is forbidden.
 - Surface entry and mutation completion may start their required reads. Tab return, online, focus, visibility,
   `pageshow`, and transport loss only coalesce and mark revalidation needed; they issue no authenticated request.
-- Explicit Continue working, Refresh, or Try now starts the applicable ordered cycle. Try now opens at most one
-  replacement EventSource after the non-refreshing access checks succeed.
+- A privacy shield offers explicit Refresh and Sign out, with no Sign out for an anonymous-origin shield.
+  Continue working exists only in the visible idle-governed warning. Refresh or Try now starts the applicable ordered
+  cycle. Try now opens at most one replacement EventSource after the non-refreshing access checks succeed.
 - There is no continuous global polling. Background activity must not keep the backend idle session alive.
 - Tutoring uses SSE. Reconnection starts from the authoritative snapshot and must not create a duplicate response.
 - Session and message request IDs remain stable across transport retry according to OpenAPI.
@@ -276,15 +277,21 @@ unsafe mutations.
 
 ## Shared-Device Sessions
 
-Assume a school desktop may be shared. Logout is always visible and ends only the current browser session. Each tab's
-`idle-warning` baseline is its own last successful user-initiated authenticated request. Other-tab activity never resets
-it. The non-modal warning says local inactivity was detected, sign-in status must be checked, and unsaved input may be
-lost; it neither moves focus nor predicts expiry. Continue working makes one explicit auth-session request. Success
-returns the refreshed authoritative idle deadline and unchanged absolute deadline in that same response and resets only
-that tab's baseline. No second automatic deadline read follows. A definitive pre-dispatch failure permits explicit
+Assume a school desktop may be shared. Logout is visible for signed-in stages and ends only the current browser session. Each tab's
+`idle-warning` follows its last observed server-authored deadlines, never ordinary request activity. The 2026-10-05
+decision in `FRONTEND-PRD-FOUNDATION.md` approves the existing auth/Home lifecycle slice. The non-modal warning
+neither moves focus nor displays a countdown. Continue working exists only in the visible idle-governed warning.
+An absolute-governed warning offers Sign out only and explains that sign-in cannot be extended and will end soon.
+The shield permits Refresh and Sign out (Refresh only for anonymous-origin shielding). Only deliberate Continue working
+refreshes idle expiry. Success returns the refreshed authoritative idle deadline and unchanged absolute deadline in
+that same response and updates only that tab's observed deadlines. No second automatic deadline read follows. A definitive pre-dispatch failure permits explicit
 retry;
-an outcome-unknown response keeps the privacy shield and permits only explicit Refresh reconciliation or Retry Continue
-working. Denial clears protected state. Passive activity never sends a keepalive.
+an outcome-unknown response (including `5xx`) immediately shields and permits only explicit recovery without replay.
+Denial clears protected state. Passive activity never sends a keepalive.
+
+Focus, online, visibility, and supported network changes shield authenticated protected content. Other stages only
+recheck their observed deadlines locally, preserving typed credentials while switching to an authenticator or password
+manager. Pagehide still synchronously shields and clears mounted credentials and ephemeral link tokens in every stage.
 
 The ordinary polite warning appears five minutes before the earlier authoritative idle or absolute deadline, or
 immediately when newly returned deadlines are already inside that threshold. At or beyond the deadline, the privacy
@@ -293,7 +300,9 @@ shielding and corrective focus.
 
 Once authoritative idle and absolute deadlines are available, the earlier deadline applies a local `privacy-screen`.
 Clock rollback, sleep, wake, suspended timers, and delayed callbacks lock rather than extend it. Protected content
-returns only after fresh session and complete access discovery; `BACKEND-CONTRACT-GAPS.md` owns the required contract.
+returns only after explicit Refresh and fresh session and complete access discovery. The discovered stage determines
+whether credentials are needed; another tab may have renewed the shared session. `BACKEND-CONTRACT-GAPS.md` owns
+the remaining transport and release evidence obligations.
 
 A content-free cross-tab security epoch signals logout start, login completion, restricted-stage transition, and
 detected account change. It carries no account, route, resource, or scope data. Every receiving tab immediately applies

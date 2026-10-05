@@ -10,6 +10,7 @@ import {
 } from "./client";
 import {
   changeTemporaryPassword,
+  continueSession,
   discoverSession,
   consumeMfaRecoveryCode,
   getCurrentAccountCapabilities,
@@ -24,12 +25,57 @@ import {
   type PasswordResetToken,
 } from "./entry";
 
-function jsonApiResponse(body: unknown): HttpResponse {
+function jsonApiResponse(body: JsonBodyType): HttpResponse<JsonBodyType> {
   return HttpResponse.json(body, {
     headers: { "Content-Type": jsonApiMediaType },
     status: 200,
   });
 }
+
+describe("continuation transport", () => {
+  it.each([
+    [
+      "authenticated",
+      "2026-02-30T10:30:00.000000Z",
+      "2026-09-30T22:00:00.000000Z",
+    ],
+    [
+      "authenticated",
+      "2026-09-30T10:30:00.000000Z",
+      "2026-09-30T10:00:00.000000Z",
+    ],
+    [
+      "password-change",
+      "2026-09-30T10:30:00.000000Z",
+      "2026-09-30T22:00:00.000000Z",
+    ],
+  ])(
+    "rejects invalid continuation stage or deadlines (%s, %s)",
+    async (stage, idle, absolute) => {
+      let posts = 0;
+      server.use(
+        http.post("/api/v1/auth/session-continuations", () => {
+          posts++;
+          return jsonApiResponse({
+            data: {
+              type: "auth-sessions",
+              id: "account-id",
+              attributes: {
+                stage,
+                idle_expires_at: idle,
+                absolute_expires_at: absolute,
+              },
+            },
+          });
+        }),
+      );
+      await expect(continueSession(crypto.randomUUID())).rejects.toBeInstanceOf(
+        ApiProtocolError,
+      );
+      expect(posts).toBe(1);
+    },
+  );
+});
 
 async function authoritativeChallenge() {
   server.use(
@@ -279,6 +325,8 @@ describe("entry API boundary", () => {
     expect(await changeTemporaryPassword(password, password, csrf)).toEqual({
       kind: "authenticated",
       accountId: "account-id",
+      idleExpiresAt: Date.parse("2026-10-01T10:30:00.000000Z"),
+      absoluteExpiresAt: Date.parse("2026-10-01T22:00:00.000000Z"),
     });
     expect({ exactWire, posts }).toEqual({ exactWire: true, posts: 1 });
   });

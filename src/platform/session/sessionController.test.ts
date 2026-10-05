@@ -9,6 +9,674 @@ import { SessionController } from "./sessionController";
 
 const mediaType = "application/vnd.api+json";
 
+function lifecycleGate() {
+  const pending: { release?: () => void } = {};
+  const promise = new Promise<void>((resolve) => {
+    pending.release = resolve;
+  });
+  return {
+    promise,
+    resolve: () => {
+      if (!pending.release)
+        throw new Error("Missing lifecycle fixture release");
+      pending.release();
+    },
+  };
+}
+
+function deadlineSession(
+  idle: number,
+  absolute: number,
+  stage = "authenticated",
+  accountId = "account-id",
+) {
+  const instant = (value: number) =>
+    new Date(value).toISOString().replace("Z", "000Z");
+  return HttpResponse.json(
+    {
+      data: {
+        type: "auth-sessions",
+        id: accountId,
+        attributes: {
+          stage,
+          idle_expires_at: instant(idle),
+          absolute_expires_at: instant(absolute),
+        },
+      },
+    },
+    { headers: { "Content-Type": mediaType } },
+  );
+}
+
+describe("authoritative session lifecycle", () => {
+  it("recovery with authenticated discovery and failed capabilities remains pending behind the shield", async () => {
+    const now = Date.now();
+    let failCapabilities = false;
+    server.use(
+      http.get("/api/v1/auth/session", () =>
+        deadlineSession(now + 4 * 60_000, now + 60 * 60_000),
+      ),
+      http.get("/api/v1/users/me/capabilities", () =>
+        failCapabilities
+          ? errorDocument(503, "unavailable")
+          : capabilitiesFor(),
+      ),
+    );
+    const controller = new SessionController();
+    controller.start();
+    await waitFor(() =>
+      expect(controller.getSnapshot().kind).toBe("Authenticated"),
+    );
+    controller.shield();
+    failCapabilities = true;
+    await controller.refreshSession();
+    expect(controller.getSnapshot()).toMatchObject({
+      kind: "Privacy shield",
+      phase: "pending",
+      reason: "recovery failed",
+    });
+    controller.stop();
+  });
+
+  it("absolute-governed warnings cannot dispatch continuation", async () => {
+    const now = Date.now();
+    let posts = 0;
+    server.use(
+      http.get("/api/v1/auth/session", () =>
+        deadlineSession(now + 4 * 60_000, now + 4 * 60_000),
+      ),
+      http.get("/api/v1/users/me/capabilities", () => capabilitiesFor()),
+      http.post("/api/v1/auth/session-continuations", () => {
+        posts++;
+        return deadlineSession(now + 4 * 60_000, now + 4 * 60_000);
+      }),
+    );
+    const controller = new SessionController();
+    controller.start();
+    await waitFor(() =>
+      expect(controller.getSnapshot()).toMatchObject({
+        kind: "Authenticated",
+        lifecycle: "Warning due",
+        absoluteWarning: true,
+      }),
+    );
+    await controller.continueWorking();
+    expect(posts).toBe(0);
+    controller.stop();
+  });
+
+  it("a receiving authenticated tab retries unconfirmed logout with authenticated discovery", async () => {
+    vi.stubGlobal("BroadcastChannel", TestBroadcastChannel);
+    const now = Date.now();
+    let posts = 0;
+    let anonymous = false;
+    server.use(
+      http.get("/api/v1/auth/session", () =>
+        anonymous
+          ? anonymousSession()
+          : deadlineSession(now + 30 * 60_000, now + 60 * 60_000),
+      ),
+      http.get("/api/v1/users/me/capabilities", () => capabilitiesFor()),
+      http.post("/api/v1/auth/logout", () => {
+        posts++;
+        if (posts === 1) return errorDocument(503, "unavailable");
+        anonymous = true;
+        return new HttpResponse(null, { status: 204 });
+      }),
+    );
+    document.cookie = `mia_csrf=${crypto.randomUUID()}; Path=/`;
+    const initiator = new SessionController();
+    const receiver = new SessionController();
+    initiator.start();
+    receiver.start();
+    await waitFor(() =>
+      expect([
+        initiator.getSnapshot().kind,
+        receiver.getSnapshot().kind,
+      ]).toEqual(["Authenticated", "Authenticated"]),
+    );
+    initiator.beginAuthenticatedLogout();
+    await waitFor(() =>
+      expect(receiver.getSnapshot().kind).toBe("Logout unconfirmed"),
+    );
+    expect(posts).toBe(1);
+    receiver.retryRestrictedLogout();
+    await waitFor(() =>
+      expect(receiver.getSnapshot().kind).toBe("Logout confirmed"),
+    );
+    expect(posts).toBe(2);
+    initiator.stop();
+    receiver.stop();
+  });
+
+  it("shield during delayed logout does not fence confirmation", async () => {
+    const now = Date.now();
+    const gate = lifecycleGate();
+    let posts = 0;
+    let anonymous = false;
+    server.use(
+      http.get("/api/v1/auth/session", () =>
+        anonymous
+          ? anonymousSession()
+          : deadlineSession(now + 30 * 60_000, now + 60 * 60_000),
+      ),
+      http.get("/api/v1/users/me/capabilities", () => capabilitiesFor()),
+      http.post("/api/v1/auth/logout", async () => {
+        posts++;
+        await gate.promise;
+        anonymous = true;
+        return new HttpResponse(null, { status: 204 });
+      }),
+    );
+    document.cookie = `mia_csrf=${crypto.randomUUID()}; Path=/`;
+    const controller = new SessionController();
+    controller.start();
+    await waitFor(() =>
+      expect(controller.getSnapshot().kind).toBe("Authenticated"),
+    );
+    controller.beginAuthenticatedLogout();
+    await waitFor(() => expect(posts).toBe(1));
+    controller.shield();
+    expect(controller.getSnapshot().kind).toBe("Logout dispatch");
+    gate.resolve();
+    await waitFor(() =>
+      expect(controller.getSnapshot().kind).toBe("Logout confirmed"),
+    );
+    controller.stop();
+  });
+
+  it("retains a proven not-sent warning and admits only an explicit retry with fresh CSRF", async () => {
+    const now = Date.now();
+    let posts = 0;
+    server.use(
+      http.get("/api/v1/auth/session", () =>
+        deadlineSession(now + 4 * 60_000, now + 60 * 60_000),
+      ),
+      http.get("/api/v1/users/me/capabilities", () => capabilitiesFor()),
+      http.post("/api/v1/auth/session-continuations", () => {
+        posts++;
+        return deadlineSession(now + 30 * 60_000, now + 60 * 60_000);
+      }),
+    );
+    const controller = new SessionController();
+    controller.start();
+    await waitFor(() =>
+      expect(controller.getSnapshot().kind).toBe("Authenticated"),
+    );
+    document.cookie = "mia_csrf=; Max-Age=0; Path=/";
+    await controller.continueWorking();
+    expect(controller.getSnapshot()).toMatchObject({
+      kind: "Authenticated",
+      lifecycle: "Continue retryable",
+      error: { kind: "protocol" },
+    });
+    expect(posts).toBe(0);
+    document.cookie = `mia_csrf=${crypto.randomUUID()}; Path=/`;
+    await controller.continueWorking();
+    expect(controller.getSnapshot()).toEqual({ kind: "Authenticated" });
+    expect(posts).toBe(1);
+    controller.stop();
+  });
+
+  it.each(["queued", "dispatched"])(
+    "Stop waiting fences a %s continuation without bypassing logout quiescence",
+    async (phase) => {
+      const now = Date.now();
+      const gate = lifecycleGate();
+      let posts = 0;
+      let logouts = 0;
+      let anonymous = false;
+      server.use(
+        http.get("/api/v1/auth/session", () =>
+          anonymous
+            ? anonymousSession()
+            : deadlineSession(now + 4 * 60_000, now + 60 * 60_000),
+        ),
+        http.get("/api/v1/users/me/capabilities", () => capabilitiesFor()),
+        http.post("/api/v1/auth/session-continuations", async () => {
+          posts++;
+          await gate.promise;
+          return deadlineSession(now + 30 * 60_000, now + 60 * 60_000);
+        }),
+        http.post("/api/v1/auth/logout", () => {
+          logouts++;
+          anonymous = true;
+          return new HttpResponse(null, { status: 204 });
+        }),
+      );
+      document.cookie = `mia_csrf=${crypto.randomUUID()}; Path=/`;
+      const controller = new SessionController();
+      controller.start();
+      await waitFor(() =>
+        expect(controller.getSnapshot().kind).toBe("Authenticated"),
+      );
+      const lease =
+        phase === "queued"
+          ? navigator.locks.request(
+              "mia-authenticated-requests-v1",
+              { mode: "exclusive" },
+              () => gate.promise,
+            )
+          : Promise.resolve();
+      const continuation = controller.continueWorking();
+      if (phase === "dispatched") await waitFor(() => expect(posts).toBe(1));
+      controller.stopLifecycleWaiting();
+      expect(controller.getSnapshot()).toMatchObject({
+        kind: "Privacy shield",
+        reason: "continuation unknown",
+      });
+      await controller.continueWorking();
+      controller.beginAuthenticatedLogout();
+      expect(controller.getSnapshot().kind).toBe("Logout quiescing");
+      expect(logouts).toBe(0);
+      gate.resolve();
+      await lease;
+      await continuation;
+      await waitFor(() =>
+        expect(controller.getSnapshot().kind).toBe("Logout confirmed"),
+      );
+      expect({ posts, logouts }).toEqual({
+        posts: phase === "queued" ? 0 : 1,
+        logouts: 1,
+      });
+      controller.stop();
+    },
+  );
+
+  it.each(["session", "capabilities"])(
+    "Stop waiting fences late %s recovery results",
+    async (pending) => {
+      const now = Date.now();
+      const gate = lifecycleGate();
+      let recovering = false;
+      let waiting = false;
+      server.use(
+        http.get("/api/v1/auth/session", async () => {
+          if (recovering && pending === "session") {
+            waiting = true;
+            await gate.promise;
+          }
+          return deadlineSession(now + 4 * 60_000, now + 60 * 60_000);
+        }),
+        http.get("/api/v1/users/me/capabilities", async () => {
+          if (recovering && pending === "capabilities") {
+            waiting = true;
+            await gate.promise;
+          }
+          return capabilitiesFor();
+        }),
+      );
+      const controller = new SessionController();
+      controller.start();
+      await waitFor(() =>
+        expect(controller.getSnapshot().kind).toBe("Authenticated"),
+      );
+      controller.shield();
+      recovering = true;
+      const recovery = controller.refreshSession();
+      await waitFor(() => expect(waiting).toBe(true));
+      expect(controller.getSnapshot()).toMatchObject({
+        kind: "Privacy shield",
+        phase: "checking",
+      });
+      controller.stopLifecycleWaiting();
+      gate.resolve();
+      await recovery;
+      expect(controller.getSnapshot()).toMatchObject({
+        kind: "Privacy shield",
+        phase: "pending",
+        reason: "stopped",
+      });
+      controller.stop();
+    },
+  );
+
+  it("cumulative monotonic elapsed time prevents incremental backward wall adjustments extending the deadline", async () => {
+    const now = Date.now();
+    server.use(
+      http.get("/api/v1/auth/session", () =>
+        deadlineSession(now + 10_000, now + 60_000),
+      ),
+      http.get("/api/v1/users/me/capabilities", () => capabilitiesFor()),
+    );
+    const controller = new SessionController();
+    controller.start();
+    await waitFor(() =>
+      expect(controller.getSnapshot().kind).toBe("Authenticated"),
+    );
+    vi.useFakeTimers({
+      toFake: ["Date", "performance", "setTimeout", "clearTimeout"],
+    });
+    controller.shield();
+    await controller.refreshSession();
+    for (let step = 0; step < 10; step++) {
+      // The next sampled wall clock still advances by 500ms; successive wall
+      // comparisons alone miss the cumulative rollback of five seconds.
+      vi.setSystemTime(Date.now() - 500);
+      await vi.advanceTimersByTimeAsync(1000);
+    }
+    expect(Date.now()).toBe(now + 5000);
+    expect(controller.getSnapshot()).toMatchObject({
+      kind: "Privacy shield",
+      reason: "deadline",
+    });
+    // Even explicit discovery of the same deadline cannot forget already
+    // observed elapsed time while the wall clock remains behind.
+    await controller.refreshSession();
+    expect(controller.getSnapshot()).toMatchObject({
+      kind: "Privacy shield",
+      reason: "deadline",
+    });
+    controller.stop();
+  });
+
+  it.each(["auth_password_change_required", "csrf_invalid"])(
+    "denial %s shields until explicit authoritative reconciliation",
+    async (code) => {
+      const now = Date.now();
+      let reads = 0;
+      let posts = 0;
+      server.use(
+        http.get("/api/v1/auth/session", () => {
+          reads++;
+          return deadlineSession(now + 4 * 60_000, now + 60 * 60_000);
+        }),
+        http.get("/api/v1/users/me/capabilities", () => capabilitiesFor()),
+        http.post("/api/v1/auth/session-continuations", () => {
+          posts++;
+          return errorDocument(403, code);
+        }),
+      );
+      document.cookie = `mia_csrf=${crypto.randomUUID()}; Path=/`;
+      const controller = new SessionController();
+      controller.start();
+      await waitFor(() =>
+        expect(controller.getSnapshot().kind).toBe("Authenticated"),
+      );
+      await controller.continueWorking();
+      expect(controller.getSnapshot()).toMatchObject({
+        kind: "Privacy shield",
+        reason: "continuation denied",
+      });
+      expect({ reads, posts }).toEqual({ reads: 1, posts: 1 });
+      await controller.refreshSession();
+      expect(controller.getSnapshot().kind).toBe("Authenticated");
+      expect({ reads, posts }).toEqual({ reads: 2, posts: 1 });
+      controller.stop();
+    },
+  );
+
+  it("fences a delayed continuation behind logout and confirms anonymous state only after settlement", async () => {
+    const now = Date.now();
+    let anonymous = false;
+    let posts = 0;
+    let logouts = 0;
+    const pending: { release?: () => void } = {};
+    const response = new Promise<void>((resolve) => {
+      pending.release = resolve;
+    });
+    server.use(
+      http.get("/api/v1/auth/session", () =>
+        anonymous
+          ? anonymousSession()
+          : deadlineSession(now + 4 * 60_000, now + 60 * 60_000),
+      ),
+      http.get("/api/v1/users/me/capabilities", () => capabilitiesFor()),
+      http.post("/api/v1/auth/session-continuations", async () => {
+        posts++;
+        await response;
+        return deadlineSession(now + 30 * 60_000, now + 60 * 60_000);
+      }),
+      http.post("/api/v1/auth/logout", () => {
+        logouts++;
+        anonymous = true;
+        return new HttpResponse(null, { status: 204 });
+      }),
+    );
+    document.cookie = `mia_csrf=${crypto.randomUUID()}; Path=/`;
+    const controller = new SessionController();
+    controller.start();
+    await waitFor(() =>
+      expect(controller.getSnapshot().kind).toBe("Authenticated"),
+    );
+    const continuation = controller.continueWorking();
+    await waitFor(() => expect(posts).toBe(1));
+    controller.beginAuthenticatedLogout();
+    expect(controller.getSnapshot().kind).toBe("Logout quiescing");
+    expect(logouts).toBe(0);
+    if (!pending.release)
+      throw new Error("Missing continuation fixture release");
+    pending.release();
+    await continuation;
+    await waitFor(() =>
+      expect(controller.getSnapshot().kind).toBe("Logout confirmed"),
+    );
+    expect({ posts, logouts }).toEqual({ posts: 1, logouts: 1 });
+    controller.stop();
+  });
+
+  it("never reveals an expired discovery result and keeps failed recovery shielded", async () => {
+    const now = Date.now();
+    let fail = false;
+    let capabilities = 0;
+    server.use(
+      http.get("/api/v1/auth/session", () =>
+        fail
+          ? errorDocument(503, "unavailable")
+          : deadlineSession(now, now + 60_000),
+      ),
+      http.get("/api/v1/users/me/capabilities", () => {
+        capabilities++;
+        return capabilitiesFor();
+      }),
+    );
+    const controller = new SessionController();
+    controller.start();
+    await waitFor(() =>
+      expect(controller.getSnapshot().kind).toBe("Privacy shield"),
+    );
+    expect(capabilities).toBe(0);
+    fail = true;
+    await controller.refreshSession();
+    expect(controller.getSnapshot()).toMatchObject({
+      kind: "Privacy shield",
+      phase: "pending",
+      error: { kind: "http" },
+    });
+    controller.stop();
+  });
+  it("warns without requests, continues once with fresh CSRF, and keeps the absolute boundary", async () => {
+    const start = Date.now();
+    const absolute = start + 12 * 60 * 60_000;
+    let reads = 0;
+    let posts = 0;
+    let bodyless = false;
+    let currentCsrf = false;
+    const csrf = crypto.randomUUID();
+    server.use(
+      http.get("/api/v1/auth/session", () => {
+        reads++;
+        return deadlineSession(start + 30 * 60_000, absolute);
+      }),
+      http.get("/api/v1/users/me/capabilities", () => capabilitiesFor()),
+      http.post("/api/v1/auth/session-continuations", async ({ request }) => {
+        posts++;
+        bodyless = (await request.text()) === "";
+        currentCsrf = request.headers.get("X-CSRF-Token") === csrf;
+        return deadlineSession(Date.now() + 30 * 60_000, absolute);
+      }),
+    );
+    const controller = new SessionController();
+    controller.start();
+    await waitFor(() =>
+      expect(controller.getSnapshot().kind).toBe("Authenticated"),
+    );
+    vi.useFakeTimers({
+      toFake: ["Date", "setTimeout", "clearTimeout", "performance"],
+    });
+    // Reinstall through explicit recovery so the watchdog belongs to this clock.
+    controller.shield();
+    await controller.refreshSession();
+    await vi.advanceTimersByTimeAsync(25 * 60_000);
+    expect(controller.getSnapshot()).toEqual({
+      kind: "Authenticated",
+      lifecycle: "Warning due",
+    });
+    expect(reads).toBe(2);
+    expect(posts).toBe(0);
+    document.cookie = `mia_csrf=${csrf}; Path=/`;
+    await controller.continueWorking();
+    expect(controller.getSnapshot()).toEqual({ kind: "Authenticated" });
+    expect({ posts, bodyless, currentCsrf, reads }).toEqual({
+      posts: 1,
+      bodyless: true,
+      currentCsrf: true,
+      reads: 2,
+    });
+    await vi.advanceTimersByTimeAsync(30 * 60_000);
+    expect(controller.getSnapshot().kind).toBe("Privacy shield");
+    expect(posts).toBe(1);
+    // Another tab may have renewed the cookie while this tab retained its old
+    // deadline. Only the user's explicit discovery may reveal the renewed stage.
+    server.use(
+      http.get("/api/v1/auth/session", () => {
+        reads++;
+        return deadlineSession(Date.now() + 30 * 60_000, absolute);
+      }),
+    );
+    await controller.refreshSession();
+    expect(controller.getSnapshot()).toEqual({ kind: "Authenticated" });
+    expect({ reads, posts }).toEqual({ reads: 3, posts: 1 });
+    controller.stop();
+  });
+
+  it.each([
+    "lost",
+    "server",
+    "absolute changed",
+    "account changed",
+    "429",
+    "404",
+  ])(
+    "shields immediately after continuation %s without replay or automatic discovery",
+    async (outcome) => {
+      const now = Date.now();
+      let reads = 0;
+      let posts = 0;
+      server.use(
+        http.get("/api/v1/auth/session", () => {
+          reads++;
+          return deadlineSession(now + 4 * 60_000, now + 60 * 60_000);
+        }),
+        http.get("/api/v1/users/me/capabilities", () => capabilitiesFor()),
+        http.post("/api/v1/auth/session-continuations", () => {
+          posts++;
+          if (outcome === "lost") return HttpResponse.error();
+          if (outcome === "server") return errorDocument(503, "unavailable");
+          if (outcome === "429" || outcome === "404")
+            return errorDocument(Number(outcome), "unexpected");
+          if (outcome === "account changed")
+            return deadlineSession(
+              now + 30 * 60_000,
+              now + 60 * 60_000,
+              "authenticated",
+              "other-account",
+            );
+          return deadlineSession(now + 30 * 60_000, now + 2 * 60 * 60_000);
+        }),
+      );
+      document.cookie = `mia_csrf=${crypto.randomUUID()}; Path=/`;
+      const controller = new SessionController();
+      controller.start();
+      await waitFor(() =>
+        expect(controller.getSnapshot().kind).toBe("Authenticated"),
+      );
+      await controller.continueWorking();
+      expect(controller.getSnapshot()).toMatchObject({
+        kind: "Privacy shield",
+        reason: "continuation unknown",
+      });
+      await controller.continueWorking();
+      expect({ reads, posts }).toEqual({ reads: 1, posts: 1 });
+      controller.stop();
+    },
+  );
+
+  it("purges before notification, stays silent behind the shield, and explicitly reauthorizes another tab's renewal", async () => {
+    const now = Date.now();
+    let reads = 0;
+    let capabilities = 0;
+    const order: string[] = [];
+    const controller = new SessionController();
+    server.use(
+      http.get("/api/v1/auth/session", () => {
+        reads++;
+        return deadlineSession(now + 60_000, now + 60 * 60_000);
+      }),
+      http.get("/api/v1/users/me/capabilities", () => {
+        capabilities++;
+        return capabilitiesFor();
+      }),
+    );
+    controller.start();
+    await waitFor(() =>
+      expect(controller.getSnapshot().kind).toBe("Authenticated"),
+    );
+    controller.registerSecurityTeardown(() => order.push("purge"));
+    controller.subscribe(() => order.push("notify"));
+    controller.shield();
+    controller.shield();
+    expect(order).toEqual(["purge", "notify"]);
+    expect({ reads, capabilities }).toEqual({ reads: 1, capabilities: 1 });
+    await controller.refreshSession();
+    expect(controller.getSnapshot().kind).toBe("Authenticated");
+    expect({ reads, capabilities }).toEqual({ reads: 2, capabilities: 2 });
+    controller.stop();
+  });
+
+  it.each(["rollback", "suspension", "restricted expiry"])(
+    "shields on %s without making a request",
+    async (reason) => {
+      const now = Date.now();
+      let reads = 0;
+      server.use(
+        http.get("/api/v1/auth/session", () => {
+          reads++;
+          return deadlineSession(
+            now + 60_000,
+            now + 60_000,
+            reason === "restricted expiry"
+              ? "password-change"
+              : "authenticated",
+          );
+        }),
+        http.get("/api/v1/users/me/capabilities", () => capabilitiesFor()),
+      );
+      const controller = new SessionController();
+      controller.start();
+      await waitFor(() =>
+        expect(["Authenticated", "Password change"]).toContain(
+          controller.getSnapshot().kind,
+        ),
+      );
+      vi.setSystemTime(
+        now +
+          (reason === "rollback"
+            ? -60_000
+            : reason === "suspension"
+              ? 5000
+              : 60_000),
+      );
+      await waitFor(
+        () => expect(controller.getSnapshot().kind).toBe("Privacy shield"),
+        { timeout: 2000 },
+      );
+      expect(reads).toBe(1);
+      controller.stop();
+    },
+  );
+});
+
 function anonymousSession() {
   return HttpResponse.json(
     { data: null, meta: { stage: "anonymous" } },

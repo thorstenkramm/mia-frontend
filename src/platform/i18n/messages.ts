@@ -1,6 +1,81 @@
 import { defineMessages } from "react-intl";
 
 export const messages = defineMessages({
+  lifecycleAbsoluteWarning: {
+    id: "session.absoluteWarning",
+    defaultMessage: "Your sign-in cannot be extended and will end soon.",
+  },
+  lifecycleAbsoluteHelp: {
+    id: "session.absoluteHelp",
+    defaultMessage:
+      "Sign out. Sign-in expiry does not end your tutoring session.",
+  },
+  lifecycleRetryContinue: {
+    id: "session.retryContinue",
+    defaultMessage: "Retry Continue working",
+  },
+  lifecycleStopWaiting: {
+    id: "session.stopWaiting",
+    defaultMessage: "Stop waiting",
+  },
+  lifecycleNotSent: {
+    id: "session.notSent",
+    defaultMessage:
+      "Continue working was not sent. You can try again before sign-in expires.",
+  },
+  lifecycleUnknown: {
+    id: "session.unknown",
+    defaultMessage:
+      "We cannot confirm whether Continue working succeeded. Content is hidden. Refresh to check your sign-in.",
+  },
+  lifecycleDenied: {
+    id: "session.denied",
+    defaultMessage:
+      "Continue working was not accepted. Content is hidden. Refresh to check your sign-in.",
+  },
+  lifecycleRecoveryFailed: {
+    id: "session.recoveryFailed",
+    defaultMessage:
+      "We could not check your sign-in and access. Content remains hidden. Try Refresh again.",
+  },
+  lifecycleStopped: {
+    id: "session.stopped",
+    defaultMessage:
+      "You stopped waiting. Content remains hidden. Refresh to check again.",
+  },
+  lifecycleSucceeded: {
+    id: "session.succeeded",
+    defaultMessage: "Continue working succeeded.",
+  },
+  lifecycleDeadlineReached: {
+    id: "session.deadlineReached",
+    defaultMessage:
+      "Your observed sign-in deadline has been reached. Content is hidden. Refresh to check your sign-in.",
+  },
+  lifecycleRefresh: { id: "session.refresh", defaultMessage: "Refresh" },
+  lifecycleWarning: {
+    id: "session.warning",
+    defaultMessage: "Your sign-in is nearing expiry.",
+  },
+  lifecycleWarningHelp: {
+    id: "session.warningHelp",
+    defaultMessage:
+      "Continue working or sign out. Sign-in expiry does not end your tutoring session.",
+  },
+  lifecycleContinue: {
+    id: "session.continue",
+    defaultMessage: "Continue working",
+  },
+  lifecycleShieldTitle: { id: "session.shieldTitle", defaultMessage: "MIA" },
+  lifecycleShieldHeading: {
+    id: "session.shieldHeading",
+    defaultMessage: "Content hidden",
+  },
+  lifecycleShieldHelp: {
+    id: "session.shieldHelp",
+    defaultMessage:
+      "Refresh to check your sign-in and access before showing content again.",
+  },
   loginUsername: {
     id: "login.username",
     defaultMessage: "Username (required)",

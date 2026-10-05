@@ -131,9 +131,10 @@ graph TD
 - **Prevents:** idle/absolute timers scattered through component effects; multiple `BroadcastChannel` protocols;
   accidental keepalives from background traffic.
 - **Rule:** `platform/session` holds the singleton framework-independent controller: session-stage machine, per-tab
-  idle baseline, absolute deadline, warning countdown, clock-rollback locks, cross-tab protocol, logout phase machine.
+  observed authoritative deadlines, non-countdown warning, clock-rollback locks, cross-tab protocol, logout phase machine.
   React reads it via one `useSyncExternalStore` adapter; the warning/shield/logout UI lives in `app`. The client core
-  requires `initiator: 'user' | 'background'` on every request; only `'user'` resets the idle baseline, and all
+  requires `initiator: 'user' | 'background'` on every request. Neither provenance extends deadlines locally;
+  only explicit Continue working refreshes backend idle expiry under the 2026-10-05 owner decision. All
   data-layer revalidation is hard-wired `'background'`. The controller is also the single security-epoch fan-out
   point: on epoch loss it invokes, in fixed order, transfer aborts (AD-14), the cache purge funnel (AD-1), then UI
   notification — subscribers never wire each other. Deadline shapes that depend on BCG-001 remain blocked, not
@@ -225,7 +226,7 @@ graph TD
 | --- | --- |
 | Long-lived stateful machinery | Plain-TS controller + one `useSyncExternalStore` adapter (AD-7, AD-8 set the pattern); never timer/effect chains in components |
 | Cache identity | Only the `platform/data` key factory builds keys; account ID + operation + full scope discriminators, always |
-| Request provenance | Every client-core call declares `initiator: 'user' \| 'background'`; nothing else may touch the idle baseline |
+| Request provenance | Every client-core call declares `initiator: 'user' \| 'background'`; only explicit Continue working refreshes backend idle expiry |
 | View models | Boundary zod schemas emit minimized camelCase view models; components never see wire shapes (owned by `.agents/rules/api-client.md`, mechanized by AD-2) |
 | Untrusted text | Only `ModelMarkdown` / `UserText` from `platform/markdown` (AD-6) |
 | Message IDs | Explicit, stable, dot-namespaced by surface (e.g. `tutoring.composer.send`) |

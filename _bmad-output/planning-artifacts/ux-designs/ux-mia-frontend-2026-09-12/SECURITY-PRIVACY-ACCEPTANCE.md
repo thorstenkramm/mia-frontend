@@ -189,10 +189,10 @@ the explicit frontend retry rule above.
 
 ## Session Expiry and Lifecycle Revalidation
 
-Once `BCG-001` supplies the authoritative authenticated idle and absolute expiry instants, schedule a local privacy
-shield at the earlier deadline. Each tab owns its idle-warning baseline: only that tab's last successful,
-user-initiated authenticated request may reset it. Activity in another tab, pointer movement, typing without dispatch,
-timer callbacks, SSE traffic, and automatic reads do not reset that baseline. An idle warning is informational, never a
+For the 2026-10-05 approved auth/Home lifecycle slice in `FRONTEND-PRD-FOUNDATION.md`, schedule a local privacy
+shield at the earlier authoritative deadline. Each tab warns from its own last observed deadlines. Only deliberate
+Continue working refreshes idle expiry; ordinary requests, other-tab activity, pointer movement, typing,
+timer callbacks, SSE traffic, and automatic reads never extend a deadline locally. An idle warning is informational, never a
 privacy boundary and never permission to leave protected content visible after either authoritative deadline. It is a
 non-modal persistent banner that does not move focus or obscure the focused item; its Continue and Sign out actions are
 included in reading and keyboard order.
@@ -201,13 +201,14 @@ At the deadline, and conservatively after clock rollback, sleep, wake, timer sus
 have crossed it, synchronously install the privacy shield, abort protected work, and block mutation. Protected content
 returns only after fresh session and complete access discovery. A client clock must never extend a server-authored
 deadline. The absolute deadline never moves; an authoritative idle deadline may move only after the backend accepts a
-qualifying deliberate user request.
+deliberate Continue working operation. After observed expiry, explicit Refresh discovers the actual stage and
+reauthorizes through the complete ordered gate; another tab's renewal does not inherently require fresh credentials.
 
 The ordinary polite warning threshold is five minutes before the earlier authoritative deadline. A deadline returned
 inside that threshold shows the warning immediately; a reached deadline shields immediately. Continue working is one
 user-initiated operation whose definitive success returns the refreshed authoritative idle deadline and unchanged
-absolute deadline together. It requires no second automatic deadline read. Outcome unknown retains the shield and
-permits only explicit non-refreshing Refresh reconciliation or an explicit new Continue working attempt.
+absolute deadline together. It requires no second automatic deadline read. Outcome unknown, including undeclared
+`5xx`, immediately installs the shield and permits only explicit recovery without replay.
 
 `online`, focus, visibility-return, persisted-`pageshow`, network-change, and SSE transport loss only coalesce and mark
 revalidation needed. They send no authenticated request and never open a replacement EventSource. Explicit Refresh and

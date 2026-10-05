@@ -1,5 +1,6 @@
 import {
   discoverSession,
+  continueSession,
   getCurrentAccountCapabilities,
   logoutCurrentBrowser,
   loginWithPassword,
@@ -12,6 +13,7 @@ import {
   acceptInvitation,
   type EntryApiFailure,
   type EntrySession,
+  type SessionDeadlines,
   type AccountId,
   type MfaChallengeId,
   type PasswordResetToken,
@@ -48,10 +50,32 @@ export type AuthenticationBootstrapState =
       readonly phase: "failed";
       readonly error: EntryApiFailure;
     }
-  | { readonly kind: "Authenticated" }
+  | {
+      readonly kind: "Authenticated";
+      readonly absoluteWarning?: boolean;
+      readonly lifecycle?:
+        "Warning due" | "Continue dispatching" | "Continue retryable";
+      readonly error?: EntryApiFailure;
+    }
+  | {
+      readonly kind: "Privacy shield";
+      readonly anonymousOrigin?: boolean;
+      readonly phase: "pending" | "checking";
+      readonly reason?:
+        | "lifecycle"
+        | "deadline"
+        | "continuation unknown"
+        | "continuation denied"
+        | "recovery failed"
+        | "stopped";
+      readonly error?: EntryApiFailure;
+    }
   // Stories 1-6 and 1-7: cold discovery found `authenticated` while a captured link
   // waits for its interstitial. No capability or other protected read runs.
-  | { readonly kind: "Access deferred"; readonly accountId: AccountId }
+  | (SessionDeadlines & {
+      readonly kind: "Access deferred";
+      readonly accountId: AccountId;
+    })
   | {
       readonly kind: "Rotating";
       readonly origin: "login";
@@ -236,6 +260,265 @@ export class SessionController {
   private loginRecoveryOrigin: LoginRecoveryOrigin = "none";
   private channel: BroadcastChannel | null = null;
   private readonly receivedEventNonces = new Set<string>();
+  private deadlines: Exclude<EntrySession, { kind: "anonymous" }> | null = null;
+  private deadlineTimer: ReturnType<typeof setTimeout> | null = null;
+  private clockSample = Date.now();
+  private monotonicSample = performance.now();
+  private clockAnchor = this.clockSample;
+  private monotonicAnchor = this.monotonicSample;
+  private readonly securityTeardowns = new Set<Listener>();
+
+  registerSecurityTeardown(teardown: Listener): () => void {
+    this.securityTeardowns.add(teardown);
+    return () => this.securityTeardowns.delete(teardown);
+  }
+
+  observeLifecycle(): void {
+    if (this.state.kind === "Authenticated") this.shield();
+    else this.checkDeadline();
+  }
+
+  // Lifecycle observation is notification only. The React owner flushes the
+  // resulting unmount synchronously on pagehide before BFCache capture.
+  shield(
+    reason: Extract<
+      AuthenticationBootstrapState,
+      { kind: "Privacy shield" }
+    >["reason"] = "lifecycle",
+    includeAnonymous = false,
+  ): void {
+    if (
+      (this.state.kind.startsWith("Logout") &&
+        this.state.kind !== "Logout confirmed") ||
+      (!includeAnonymous &&
+        isAnonymousState(this.state) &&
+        this.deadlines === null) ||
+      this.state.kind === "Cold" ||
+      (this.state.kind === "Privacy shield" &&
+        this.state.phase === "pending" &&
+        this.deadlines === null)
+    )
+      return;
+    this.sequence++;
+    this.activeRead?.abort();
+    this.setState({
+      kind: "Privacy shield",
+      phase: "pending",
+      reason,
+      anonymousOrigin:
+        isAnonymousState(this.state) ||
+        (this.state.kind === "Privacy shield" &&
+          this.state.anonymousOrigin === true),
+    });
+  }
+
+  stopLifecycleWaiting(): void {
+    if (!(
+      (this.state.kind === "Authenticated" &&
+        this.state.lifecycle === "Continue dispatching") ||
+      (this.state.kind === "Privacy shield" && this.state.phase === "checking")
+    ))
+      return;
+    const continuing = this.state.kind === "Authenticated";
+    this.sequence++;
+    this.activeRead?.abort();
+    // A dispatched continuation keeps its shared lease until settlement. Stopping
+    // the UI wait must not let logout pass the origin-wide quiescence barrier.
+    this.setState({
+      kind: "Privacy shield",
+      phase: "pending",
+      reason: continuing ? "continuation unknown" : "stopped",
+      anonymousOrigin:
+        this.state.kind === "Privacy shield" &&
+        this.state.anonymousOrigin === true,
+    });
+  }
+
+  refreshSession(): Promise<void> {
+    if (this.state.kind !== "Privacy shield" || this.state.phase === "checking")
+      return Promise.resolve();
+    const work = this.recoverLifecycle(++this.sequence);
+    this.trackSettlement(work);
+    return work;
+  }
+
+  private async recoverLifecycle(sequence: number): Promise<void> {
+    const anonymousOrigin =
+      this.state.kind === "Privacy shield" &&
+      this.state.anonymousOrigin === true;
+    this.setState({
+      kind: "Privacy shield",
+      phase: "checking",
+      anonymousOrigin,
+    });
+    const controller = new AbortController();
+    this.activeRead = controller;
+    try {
+      await withCoordinatorLock("shared", async () => {
+        if (sequence !== this.sequence) return;
+        const session = await discoverSession(controller.signal);
+        if (sequence !== this.sequence) return;
+        await this.applySession(session, sequence, controller.signal);
+      });
+    } catch (error) {
+      if (sequence === this.sequence)
+        this.setState({
+          kind: "Privacy shield",
+          phase: "pending",
+          reason: "recovery failed",
+          anonymousOrigin,
+          error: toEntryFailure(error),
+        });
+    } finally {
+      if (this.activeRead === controller) this.activeRead = null;
+    }
+  }
+
+  continueWorking(): Promise<void> {
+    if (
+      this.state.kind !== "Authenticated" ||
+      this.state.lifecycle === undefined ||
+      this.state.lifecycle === "Continue dispatching"
+    )
+      return Promise.resolve();
+    this.checkDeadline();
+    if (this.state.kind !== "Authenticated" || this.deadlines === null)
+      return Promise.resolve();
+    if (this.deadlines.absoluteExpiresAt <= this.deadlines.idleExpiresAt)
+      return Promise.resolve();
+    const sequence = this.sequence;
+    const absoluteExpiresAt = this.deadlines.absoluteExpiresAt;
+    this.setState({ kind: "Authenticated", lifecycle: "Continue dispatching" });
+    const work = this.runContinuation(sequence, absoluteExpiresAt);
+    this.trackSettlement(work);
+    return work;
+  }
+
+  private async runContinuation(
+    sequence: number,
+    absoluteExpiresAt: number,
+  ): Promise<void> {
+    let dispatched = false;
+    try {
+      await withCoordinatorLock("shared", async () => {
+        if (sequence !== this.sequence) return;
+        this.checkDeadline();
+        if (sequence !== this.sequence) return;
+        const csrf = readCurrentCsrfCookie();
+        if (csrf === null) throw new ApiProtocolError();
+        dispatched = true;
+        const session = await continueSession(csrf);
+        if (sequence !== this.sequence) return;
+        if (
+          session.absoluteExpiresAt !== absoluteExpiresAt ||
+          session.accountId !== this.deadlines?.accountId
+        )
+          throw new ApiProtocolError();
+        // No second deadline read. The successful operation supplies both.
+        this.deadlines = session;
+        this.checkDeadline();
+        if (sequence !== this.sequence) return;
+        this.setState({ kind: "Authenticated" });
+        this.checkDeadline();
+      });
+    } catch (error) {
+      if (sequence === this.sequence) {
+        this.checkDeadline();
+        if (sequence !== this.sequence) return;
+        const failure = toEntryFailure(error);
+        if (!dispatched) {
+          this.setState({
+            kind: "Authenticated",
+            lifecycle: "Continue retryable",
+            error: failure,
+          });
+          return;
+        }
+        this.shield();
+        this.setState({
+          kind: "Privacy shield",
+          phase: "pending",
+          reason:
+            failure.kind === "http" &&
+            [401, 403, 406].includes(failure.disclosure.status)
+              ? "continuation denied"
+              : "continuation unknown",
+          error: failure,
+        });
+      }
+    }
+  }
+
+  beginAuthenticatedLogout(): void {
+    if (
+      this.state.kind === "Authenticated" ||
+      (this.state.kind === "Privacy shield" && !this.state.anonymousOrigin)
+    )
+      this.startLogout("link");
+  }
+
+  private clearDeadlineTimer(): void {
+    if (this.deadlineTimer !== null) clearTimeout(this.deadlineTimer);
+    this.deadlineTimer = null;
+  }
+
+  private checkDeadline = (): void => {
+    this.clearDeadlineTimer();
+    if (this.deadlines === null) return;
+    const now = Date.now();
+    const monotonic = performance.now();
+    // Carry cumulative elapsed time across watchdog samples and Continue.
+    // Repeated small wall-clock rollbacks cannot accumulate extra lifetime.
+    const effectiveNow = Math.max(
+      now,
+      this.clockAnchor + monotonic - this.monotonicAnchor,
+    );
+    const deadline = Math.min(
+      this.deadlines.idleExpiresAt,
+      this.deadlines.absoluteExpiresAt,
+    );
+    // Both clocks are checked: sleep/late callbacks and wall-clock rollback
+    // cannot grant a longer lifetime. The one-second watchdog does no I/O.
+    if (
+      now < this.clockSample ||
+      now - this.clockSample > 2000 ||
+      monotonic - this.monotonicSample > 2000 ||
+      monotonic < this.monotonicSample ||
+      effectiveNow >= deadline
+    ) {
+      this.shield(effectiveNow >= deadline ? "deadline" : "lifecycle");
+      return;
+    }
+    this.clockSample = now;
+    this.monotonicSample = monotonic;
+    this.clockAnchor = effectiveNow;
+    this.monotonicAnchor = monotonic;
+    if (
+      this.state.kind === "Authenticated" &&
+      this.state.lifecycle !== "Continue dispatching" &&
+      this.state.lifecycle !== "Continue retryable"
+    ) {
+      const warning = deadline - effectiveNow <= 5 * 60_000;
+      if (warning !== (this.state.lifecycle === "Warning due"))
+        this.setState(
+          warning
+            ? {
+                kind: "Authenticated",
+                lifecycle: "Warning due",
+                ...(this.deadlines.absoluteExpiresAt <=
+                this.deadlines.idleExpiresAt
+                  ? { absoluteWarning: true }
+                  : {}),
+              }
+            : { kind: "Authenticated" },
+        );
+    }
+    const warningIn = deadline - effectiveNow - 5 * 60_000;
+    this.deadlineTimer = setTimeout(
+      this.checkDeadline,
+      Math.min(1000, warningIn > 0 ? warningIn : deadline - effectiveNow),
+    );
+  };
 
   getSnapshot = (): AuthenticationBootstrapState => this.state;
 
@@ -253,6 +536,8 @@ export class SessionController {
   }
 
   stop(): void {
+    this.clearDeadlineTimer();
+    this.deadlines = null;
     this.sequence += 1;
     this.activeRead?.abort();
     this.activeRead = null;
@@ -288,6 +573,8 @@ export class SessionController {
     const work = this.applyDiscoveredStage({
       kind: "authenticated",
       accountId: this.state.accountId,
+      idleExpiresAt: this.state.idleExpiresAt,
+      absoluteExpiresAt: this.state.absoluteExpiresAt,
     });
     this.trackSettlement(work);
     return work;
@@ -356,8 +643,8 @@ export class SessionController {
     this.reconciliationNeeded = false;
     this.loginRecoveryOrigin = "none";
     this.sequence += 1;
-    this.setState({ kind: "Logout start" });
     this.activeRead?.abort();
+    this.setState({ kind: "Logout start" });
     this.broadcast("logout-start");
     void this.runLogoutAttempt(false);
   }
@@ -815,6 +1102,8 @@ export class SessionController {
         const session = await discoverSession();
         if (sequence !== this.sequence) return;
         if (context.isCurrent(session)) {
+          this.installDeadlines(session);
+          if (sequence !== this.sequence) return;
           this.setState(context.restored(error));
           return;
         }
@@ -878,9 +1167,13 @@ export class SessionController {
           return;
         }
         if (this.deferCapabilityGate && session.kind === "authenticated") {
+          this.installDeadlines(session);
+          if (sequence !== this.sequence) return;
           this.setState({
             kind: "Access deferred",
             accountId: session.accountId,
+            idleExpiresAt: session.idleExpiresAt,
+            absoluteExpiresAt: session.absoluteExpiresAt,
           });
           return;
         }
@@ -906,6 +1199,8 @@ export class SessionController {
     sequence: number,
     signal: AbortSignal,
   ): Promise<void> {
+    this.installDeadlines(session);
+    if (sequence !== this.sequence) return;
     switch (session.kind) {
       case "anonymous":
         this.setState({ kind: "Signed out" });
@@ -932,7 +1227,9 @@ export class SessionController {
         });
         return;
       case "authenticated": {
-        this.setState({ kind: "Access checking", phase: "loading" });
+        const recovering = this.state.kind === "Privacy shield";
+        if (!recovering)
+          this.setState({ kind: "Access checking", phase: "loading" });
         try {
           const capabilities = await getCurrentAccountCapabilities(signal);
           if (sequence !== this.sequence) {
@@ -941,14 +1238,26 @@ export class SessionController {
           if (capabilities.accountId !== session.accountId) {
             throw new ApiProtocolError();
           }
+          this.checkDeadline();
+          if (sequence !== this.sequence) return;
           this.setState({ kind: "Authenticated" });
+          this.checkDeadline();
         } catch (error) {
           if (sequence === this.sequence && !signal.aborted) {
-            this.setState({
-              kind: "Access checking",
-              phase: "failed",
-              error: toEntryFailure(error),
-            });
+            this.setState(
+              recovering
+                ? {
+                    kind: "Privacy shield",
+                    phase: "pending",
+                    reason: "recovery failed",
+                    error: toEntryFailure(error),
+                  }
+                : {
+                    kind: "Access checking",
+                    phase: "failed",
+                    error: toEntryFailure(error),
+                  },
+            );
           }
         }
         return;
@@ -1156,6 +1465,9 @@ export class SessionController {
         }
         this.sequence += 1;
         this.activeRead?.abort();
+        this.logoutScope = isRestrictedState(this.state)
+          ? "restricted"
+          : "link";
         this.logoutNonce = message.logoutNonce ?? null;
         this.recordedLogoutSuccess = false;
         this.reconciliationNeeded = false;
@@ -1223,10 +1535,37 @@ export class SessionController {
   }
 
   private setState(state: AuthenticationBootstrapState): void {
+    if (
+      state.kind === "Privacy shield" ||
+      state.kind.startsWith("Logout") ||
+      state.kind === "Signed out" ||
+      state.kind === "Restricted expired"
+    ) {
+      this.clearDeadlineTimer();
+      this.deadlines = null;
+      document.title = "MIA";
+      for (const teardown of this.securityTeardowns) teardown();
+    }
     this.state = state;
     for (const listener of this.listeners) {
       listener();
     }
+  }
+
+  private installDeadlines(session: EntrySession): void {
+    this.clearDeadlineTimer();
+    this.deadlines = session.kind === "anonymous" ? null : session;
+    this.clockSample = Date.now();
+    this.monotonicSample = performance.now();
+    // Explicit discovery is authoritative about deadlines, not permission to
+    // forget elapsed time already observed before a wall-clock adjustment.
+    this.clockAnchor = Math.max(
+      this.clockSample,
+      this.clockAnchor +
+        Math.max(0, this.monotonicSample - this.monotonicAnchor),
+    );
+    this.monotonicAnchor = this.monotonicSample;
+    this.checkDeadline();
   }
 }
 

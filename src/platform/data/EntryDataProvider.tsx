@@ -1,5 +1,5 @@
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
-import { useState, type ReactNode } from "react";
+import { useCallback, useState, type ReactNode } from "react";
 import type { EntryApiFailure } from "../api/entry";
 import { SessionProvider } from "../session/SessionProvider";
 import type { SessionController } from "../session/sessionController";
@@ -38,9 +38,12 @@ export function EntryDataProvider({
 }: EntryDataProviderProps) {
   const [ownedQueryClient] = useState(createEntryQueryClient);
   const queryClient = suppliedQueryClient ?? ownedQueryClient;
+  // Stable subscription identity prevents restarting session discovery on renders.
+  const purge = useCallback(() => queryClient.clear(), [queryClient]);
   return (
     <QueryClientProvider client={queryClient}>
       <SessionProvider
+        onSecurityTeardown={purge}
         deferCapabilityGate={deferCapabilityGate}
         {...(sessionController ? { controller: sessionController } : {})}
       >

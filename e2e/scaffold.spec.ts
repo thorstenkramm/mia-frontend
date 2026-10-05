@@ -73,6 +73,9 @@ function recoveryCodeFixture(): string {
 }
 
 test.use({ trace: "off", screenshot: "off", video: "off" });
+test.beforeEach(async ({ page }) => {
+  await page.clock.setFixedTime(new Date("2026-09-27T10:00:00.000Z"));
+});
 
 test.describe("password sign-in", () => {
   test("successful login produces the epoch that tears down another page's credentials without discovery", async ({
@@ -1339,6 +1342,7 @@ type RecoveryResetMock = {
 async function installRecoveryResetMocks(
   page: Page,
 ): Promise<RecoveryResetMock> {
+  await page.clock.setFixedTime(new Date("2026-09-27T10:00:00.000Z"));
   const mock: RecoveryResetMock = {
     stage: "anonymous",
     recovery: "accept",
@@ -1611,6 +1615,7 @@ async function mockSession(
   stage:
     "anonymous" | "authenticated" | "mfa" | "password-change" = "anonymous",
 ): Promise<void> {
+  await page.clock.setFixedTime(new Date("2026-09-27T10:00:00.000Z"));
   await page.route("**/api/v1/auth/session", async (route) => {
     const body =
       stage === "anonymous"
@@ -1820,6 +1825,7 @@ type InvitationMock = {
 
 // One mutable protocol fake for every invitation state.
 async function installInvitationMocks(page: Page): Promise<InvitationMock> {
+  await page.clock.setFixedTime(new Date("2026-09-27T10:00:00.000Z"));
   const mock: InvitationMock = {
     stage: "anonymous",
     preview: "valid",
@@ -2568,6 +2574,7 @@ for (const zoomFactor of [2, 4] as const) {
     try {
       const page = await context.newPage();
       let outcome: "none" | "expired" | "reconciliation-failed" = "none";
+      await page.clock.setFixedTime(new Date("2026-09-27T10:00:00.000Z"));
       let failDiscovery = false;
       await context.addCookies([
         { name: "mia_csrf", value: crypto.randomUUID(), url: appUrl },

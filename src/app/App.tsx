@@ -32,6 +32,7 @@ import {
 } from "../platform/session/passwordResetLink";
 import { entryRoutes, type EntryRouteKey } from "./routes/entryRoutes";
 import { SimpleEntrySurface } from "./routes/SimpleEntrySurface";
+import { SessionPrivacyShield, SessionWarning } from "./SessionLifecycle";
 
 type AppProps = {
   initialTextSize: TextSize;
@@ -80,6 +81,7 @@ function routeKey(
   resetSurface: PasswordResetSurface | null,
   invitation: InvitationSurface | null,
 ): EntryRouteKey | null {
+  if (state.kind === "Privacy shield") return null;
   // A captured reset or invitation link owns its paths until the flow ends;
   // otherwise the public recovery and link routes exist only for anonymous
   // sessions.
@@ -169,6 +171,17 @@ function CanonicalEntry({
   );
   const key = routeKey(state, location.pathname, resetSurface, invitation);
 
+  // These route-local owners exist outside the mounted form. Drop their tokens
+  // synchronously before BFCache capture, including cold/anonymous entry.
+  useEffect(() => {
+    const depart = () => {
+      passwordResetLink.depart();
+      invitationLink.depart();
+    };
+    window.addEventListener("pagehide", depart);
+    return () => window.removeEventListener("pagehide", depart);
+  }, [passwordResetLink, invitationLink]);
+
   // The stores live outside React: each link flow follows session changes and
   // drops its token as soon as its paths are left. Back and Forward between
   // the two invitation paths keep the invitation token.
@@ -232,6 +245,7 @@ function CanonicalEntry({
                 : route.headingMessage
       }
     >
+      <SessionWarning />
       <Suspense fallback={null}>
         <RouteContent
           initialTextSize={initialTextSize}
@@ -248,6 +262,8 @@ function CanonicalEntry({
 
 function EntryStateSurface({ state }: { state: AuthenticationBootstrapState }) {
   switch (state.kind) {
+    case "Privacy shield":
+      return <SessionPrivacyShield />;
     case "Cold":
       return <CheckingAccess />;
     case "Checking":

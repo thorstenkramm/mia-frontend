@@ -331,26 +331,27 @@ This is `BLOCKED` on `BCG-012: Authoritative tutoring work and action eligibilit
 | State | Trigger | UI | Permitted action | Authoritative recovery |
 | --- | --- | --- | --- | --- |
 | Entering | Protected route entry | Neutral shell | Safe exit | Ordered access cycle |
-| Visible stale | Tab becomes visible | Protected content covered | Continue working; Refresh | Revalidation needed |
-| BFCache restored | Persisted `pageshow` | Neutral shell | Continue working; Refresh | Revalidation needed |
+| Visible stale | Tab becomes visible | Protected content covered | Refresh; Sign out | Revalidation needed |
+| BFCache restored | Persisted `pageshow` | Neutral shell | Refresh; Sign out if not anonymous-origin | Revalidation needed |
 | Page hiding | Protected `pagehide` | Install privacy shield | Abort or suspend work | Shield enters BFCache |
-| Focus pending | Focus without covered signal | Protected content covered | Continue working; Refresh | No request |
+| Focus pending | Focus without covered signal | Protected content covered | Refresh; Sign out | No request |
 | Signal coalesced | Cycle pending or active | Keep cover | No duplicate request | Latest state |
-| Security epoch changed | Content-free tab signal | Immediate privacy shield | Continue working; Refresh | No request |
+| Security epoch changed | Content-free tab signal | Immediate privacy shield | Refresh; Sign out | No request |
 | Read in flight | Explicit cycle active | Checking access | Coalesce signals | Highest sequence wins |
 | Superseded read | New cycle starts | No regression | None | Abort or ignore old read |
 | Fresh | Latest cycle succeeds | Reveal authorized state | Normal actions | Set last-checked time |
 | Access lost | Any gate denies | Clear before route | Sign in or safe exit | Authorize parent/Home |
 
 The ordered cycle is session stage, account capability/scope, route resource, then dependent state. Lifecycle events
-only mark revalidation needed and retain the cover. Explicit Refresh starts non-refreshing reads; Continue working uses
-its one activity-refresh response before non-refreshing dependent reads. This is `BLOCKED` on
+only mark protected content as needing revalidation and retain the cover. Other stages locally recheck deadlines without
+discarding credentials. Pagehide still synchronously clears credentials in every stage. Explicit Refresh starts
+non-refreshing reads; Continue working exists only in the visible idle-governed warning. Broader behavior is `BLOCKED` on
 `BCG-001: Anonymous CSRF and authentication-session discovery` and
 `BCG-003: Server-authored current-account capabilities and scope`.
 
 The shield is installed synchronously on `pagehide`, before BFCache eligibility. Persisted `pageshow`, visibility,
 focus, and security-epoch signals coalesce behind it without sending a request. That boundary prevents duplicate reads
-but is never authorization; only explicit Continue working or Refresh starts a new cycle.
+but is never authorization; only explicit Refresh starts a new access cycle behind the shield.
 
 Logout start, login completion, stage transition, and detected account change broadcast a content-free security epoch.
 Every live tab shields immediately, aborts work, and marks revalidation needed without issuing a request. The signal
@@ -722,29 +723,30 @@ permitted read. Summary status follows its blocker topic.
 
 | State | Trigger | UI | Permitted action | Authoritative recovery |
 | --- | --- | --- | --- | --- |
-| Baseline current | Explicit activity request succeeds | No warning | Continue | Returned authoritative deadlines |
-| Warning due | Five-minute threshold passes | Non-modal status | Continue working or sign out | No request |
+| Observed deadlines current | Authoritative deadlines received | No warning | Normal actions | Returned authoritative deadlines |
+| Warning due | Five-minute threshold passes | Non-modal status | Continue working or Sign out; Sign out only when absolute deadline governs | No request |
 | Continue dispatching | Continue working activated | Banner disabled | Stop waiting | One activity-refresh response |
 | Continue succeeded | Idle and absolute deadlines returned | Banner removed | Continue | Install both deadlines |
 | Continue retryable | Pre-dispatch failure | Warning retained | Retry Continue | New explicit dispatch |
-| Continue outcome unknown | Response lost | Privacy shield; no claim | Refresh; Retry Continue | Explicit action |
-| Continue reconciling | User activates Refresh | Checking behind shield | Stop waiting | Non-refreshing session read |
-| Continue denied | Session response is anonymous/denied | Clear protected state | Sign in | Auth machine |
-| Continue error | Explicit read fails | Shield; warning unavailable | Refresh; Retry Continue | Explicit action only |
-| Lifecycle pending | Automatic return trigger | Privacy cover | Continue working; Refresh | No request |
-| Idle deadline reached | Idle expiry reached | Privacy shield | Reauthenticate | Fresh access cycle |
-| Absolute deadline reached | Absolute expiry reached | Privacy shield | Reauthenticate | Fresh access cycle |
-| Wake deadline uncertain | Sleep, late timer, rollback | Privacy shield | Continue; Refresh | Explicit access cycle |
-| Security epoch changed | Security signal | Privacy shield | Continue working; Refresh | Machine 9 explicit cycle |
-| Other-tab activity unknown | No activity signal | Keep local baseline | Check explicitly | Session response |
-| Offline | Explicit check loses network | Shield; unsaved work may be lost | Retry explicitly | Explicit access cycle |
+| Continue outcome unknown | Response lost or undeclared status | Immediate privacy shield; no claim | Refresh; Sign out | Explicit recovery; no replay |
+| Continue reconciling | User activates Refresh | Checking behind shield | Stop waiting; Sign out if not anonymous-origin | Non-refreshing session read |
+| Continue denied | Declared 401/403/406 denial | Clear protected state | Refresh; Sign out | Discover actual stage; never infer it from a denial |
+| Continue error | Explicit read fails | Shield; warning unavailable | Refresh; Sign out if not anonymous-origin | Explicit recovery only; no continuation replay |
+| Lifecycle pending | Automatic return trigger | Privacy cover | Refresh; Sign out if not anonymous-origin | No request |
+| Idle deadline reached | Idle expiry reached | Privacy shield | Refresh; Sign out | Discover current stage; full access cycle |
+| Absolute deadline reached | Absolute expiry reached | Privacy shield | Refresh; Sign out | Discover current stage; full access cycle |
+| Wake deadline uncertain | Sleep, late timer, rollback | Privacy shield | Refresh; Sign out | Explicit access cycle |
+| Security epoch changed | Security signal | Privacy shield | Refresh; Sign out | Machine 9 explicit cycle |
+| Other-tab activity unknown | No activity signal | Keep observed server deadlines | Check explicitly | Session response |
+| Offline | Explicit check loses network | Shield; unsaved work may be lost | Refresh; Sign out if not anonymous-origin | Explicit access cycle |
 | Sign-in lost | Check reports anonymous/expired | Clear sensitive input | Sign in | Auth machine |
 
-Each tab owns one local baseline and never broadcasts an activity pulse. Continue working is one explicit
+Each tab keeps its observed server deadlines and never broadcasts an activity pulse. Continue working is one explicit
 user-initiated operation. Its definitive success must return the refreshed authoritative idle deadline and unchanged
 absolute deadline together; no second automatic deadline read follows. If its outcome is unknown, retain the privacy
-shield at the existing deadline and make no refresh claim. Explicit Refresh reconciles with a BCG-001 non-refreshing
-session read; explicit Retry Continue starts a new activity-refresh attempt. The absolute deadline never moves.
+shield immediately (including undeclared `5xx`) and make no refresh claim. Explicit Refresh reconciles with a
+non-refreshing session read and full ordered gate. The discovered stage determines whether fresh credentials are
+required; another tab may have renewed the shared session. The absolute deadline never moves during continuation.
 
 Schedule the ordinary polite warning five minutes before the earlier authoritative idle or absolute deadline. If the
 deadlines arrive inside that threshold, show it immediately; at or beyond the earlier deadline, skip the warning and
@@ -753,13 +755,15 @@ rollback, sleep, suspension, or a late callback shields immediately rather than 
 protected content requires an explicit fresh session and complete access cycle.
 
 The advance warning is a persistent non-modal banner that does not obscure focus. It uses status/polite semantics with
-reachable `Continue working` and `Sign out` actions; appearance does not move focus or trap Tab. Alert/assertive
+reachable `Continue working` and `Sign out` actions when idle governs; when absolute expiry governs, show only `Sign out`
+and explain that sign-in cannot be extended and will end soon. Appearance does not move focus or trap Tab. Alert/assertive
 semantics are reserved for the separate urgent transition where a deadline correction requires immediate shielding.
 
 Cross-tab security messages contain only the fixed version, event kind, and random nonce. They contain no activity
-timestamp. Activity in another tab does not alter this tab's local baseline; explicit Refresh or Continue working may
-correct a stale warning. Background work, SSE events, typing, and polling do not update the baseline. Deadlines remain
-`BLOCKED` on `BCG-001: Anonymous CSRF and authentication-session discovery`.
+timestamp. Activity in another tab does not alter this tab's observed deadlines; explicit Refresh or Continue working may
+correct a stale warning. Background work, SSE events, typing, and polling do not update observed deadlines. Deadlines remain
+approved for existing auth/Home surfaces by the 2026-10-05 decision in `FRONTEND-PRD-FOUNDATION.md`;
+broader BCG-001 closure remains blocked on missing transport and composite release evidence.
 
 ## 25. Optional Provider State Distinctions
 

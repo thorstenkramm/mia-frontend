@@ -35,6 +35,380 @@ import {
 
 const mediaType = "application/vnd.api+json";
 
+function lifecycleResponse(absolute = false, renewed = false) {
+  return HttpResponse.json(
+    {
+      data: {
+        type: "auth-sessions",
+        id: "account-id",
+        attributes: {
+          stage: "authenticated",
+          idle_expires_at: renewed
+            ? "2026-09-27T11:00:00.000000Z"
+            : "2026-09-27T10:30:00.000000Z",
+          absolute_expires_at: absolute
+            ? "2026-09-27T10:30:00.000000Z"
+            : "2026-09-27T22:00:00.000000Z",
+        },
+      },
+    },
+    { headers: { "Content-Type": mediaType } },
+  );
+}
+
+function lifecycleCapabilities() {
+  return http.get("/api/v1/users/me/capabilities", () =>
+    HttpResponse.json(capabilityDocument(), {
+      headers: { "Content-Type": mediaType },
+    }),
+  );
+}
+
+describe("lifecycle privacy rendering", () => {
+  it.each(["mfa", "anonymous"])(
+    "focus preserves typed %s credentials without requests",
+    async (stage) => {
+      let reads = 0;
+      renderEntry(
+        stage === "mfa"
+          ? sessionHandler("mfa", () => {
+              reads++;
+            })
+          : http.get("/api/v1/auth/session", () => {
+              reads++;
+              return HttpResponse.json(
+                { data: null, meta: { stage: "anonymous" } },
+                { headers: { "Content-Type": mediaType } },
+              );
+            }),
+      );
+      const field = await screen.findByLabelText<HTMLInputElement>(
+        stage === "mfa" ? "Six-digit code (required)" : "Password (required)",
+      );
+      const value = stage === "mfa" ? mfaCodeFixture() : crypto.randomUUID();
+      await userEvent.setup().type(field, value);
+      act(() => window.dispatchEvent(new Event("focus")));
+      expect(field.isConnected && field.value === value).toBe(true);
+      expect(reads).toBe(1);
+    },
+  );
+
+  it("focus during rotating login does not fence the admitted transition", async () => {
+    const gate = deferredVoid();
+    let posts = 0;
+    renderEntry(
+      anonymousHandler(),
+      lifecycleCapabilities(),
+      http.post("/api/v1/auth/login", async () => {
+        posts++;
+        await gate.promise;
+        return lifecycleResponse();
+      }),
+    );
+    document.cookie = `mia_csrf=${crypto.randomUUID()}; Path=/`;
+    const user = userEvent.setup();
+    await user.type(
+      await screen.findByLabelText("Username (required)"),
+      "learner",
+    );
+    await user.type(
+      screen.getByLabelText("Password (required)"),
+      crypto.randomUUID(),
+    );
+    await user.click(screen.getByRole("button", { name: "Sign in" }));
+    await waitFor(() => expect(posts).toBe(1));
+    act(() => window.dispatchEvent(new Event("focus")));
+    gate.resolve();
+    await screen.findByRole("heading", { name: "Home", level: 1 });
+    expect(posts).toBe(1);
+  });
+
+  it.each([false, true])(
+    "warning actions match absolute-governed=%s",
+    async (absolute) => {
+      vi.setSystemTime(new Date("2026-09-27T10:26:00.000Z"));
+      renderEntry(
+        http.get("/api/v1/auth/session", () => lifecycleResponse(absolute)),
+        lifecycleCapabilities(),
+      );
+      await screen.findByRole("heading", { name: "Home", level: 1 });
+      expect(
+        screen.queryByRole("button", { name: "Continue working" }) !== null,
+      ).toBe(!absolute);
+      expect(
+        screen.getAllByRole("button", { name: "Sign out" }).length,
+      ).toBeGreaterThan(0);
+      expect(screen.getByRole("heading", { level: 2 })).toHaveTextContent(
+        absolute ? "cannot be extended and will end soon" : "nearing expiry",
+      );
+    },
+  );
+
+  it("anonymous pagehide offers Refresh without Sign out", async () => {
+    renderEntry();
+    await screen.findByLabelText("Password (required)");
+    act(() => window.dispatchEvent(new Event("pagehide")));
+    expect(screen.getByRole("button", { name: "Refresh" })).toBeVisible();
+    expect(
+      screen.queryByRole("button", { name: "Sign out" }),
+    ).not.toBeInTheDocument();
+  });
+
+  it.each([false, true])(
+    "continuation settlement restores focus from Stop waiting; renewed=%s",
+    async (renewed) => {
+      vi.setSystemTime(new Date("2026-09-27T10:26:00.000Z"));
+      const gate = deferredVoid();
+      renderEntry(
+        http.get("/api/v1/auth/session", () => lifecycleResponse()),
+        lifecycleCapabilities(),
+        http.post("/api/v1/auth/session-continuations", async () => {
+          await gate.promise;
+          return lifecycleResponse(false, renewed);
+        }),
+      );
+      document.cookie = `mia_csrf=${crypto.randomUUID()}; Path=/`;
+      const button = await screen.findByRole("button", {
+        name: "Continue working",
+      });
+      await waitFor(() =>
+        expect(announcementRegion("polite")).toHaveTextContent(
+          "nearing expiry",
+        ),
+      );
+      const announcement = announcementRegion("polite").firstChild;
+      await userEvent.setup().click(button);
+      expect(announcementRegion("polite").firstChild).toBe(announcement);
+      screen.getByRole("button", { name: "Stop waiting" }).focus();
+      gate.resolve();
+      await waitFor(() =>
+        expect(
+          renewed
+            ? screen.getByRole("heading", { name: "Home", level: 1 })
+            : screen.getByRole("button", { name: "Continue working" }),
+        ).toHaveFocus(),
+      );
+    },
+  );
+
+  it("failed recovery capabilities retain the shield, feedback, and Refresh focus", async () => {
+    const gate = deferredVoid();
+    renderEntry(
+      http.get("/api/v1/auth/session", () => lifecycleResponse()),
+      lifecycleCapabilities(),
+    );
+    await screen.findByRole("heading", { name: "Home", level: 1 });
+    act(() => window.dispatchEvent(new Event("focus")));
+    server.use(
+      http.get("/api/v1/users/me/capabilities", async () => {
+        await gate.promise;
+        return HttpResponse.error();
+      }),
+    );
+    await userEvent
+      .setup()
+      .click(screen.getByRole("button", { name: "Refresh" }));
+    screen.getByRole("button", { name: "Stop waiting" }).focus();
+    gate.resolve();
+    await waitFor(() =>
+      expect(screen.getByRole("button", { name: "Refresh" })).toHaveFocus(),
+    );
+    expect(
+      screen.getByText(/could not check your sign-in and access/u, {
+        selector: "p",
+      }),
+    ).toBeVisible();
+    expect(
+      screen.getByRole("heading", { name: "Content hidden" }),
+    ).toBeVisible();
+  });
+
+  it("Home Sign out sends one fresh-CSRF logout, shows Signing out, then confirms", async () => {
+    const gate = deferredVoid();
+    const csrf = crypto.randomUUID();
+    let anonymous = false;
+    let posts = 0;
+    let validCsrf = false;
+    renderEntry(
+      http.get("/api/v1/auth/session", () =>
+        anonymous
+          ? HttpResponse.json(
+              { data: null, meta: { stage: "anonymous" } },
+              { headers: { "Content-Type": mediaType } },
+            )
+          : lifecycleResponse(),
+      ),
+      lifecycleCapabilities(),
+      http.post("/api/v1/auth/logout", async ({ request }) => {
+        posts++;
+        validCsrf = request.headers.get("X-CSRF-Token") === csrf;
+        await gate.promise;
+        anonymous = true;
+        return new HttpResponse(null, { status: 204 });
+      }),
+    );
+    await screen.findByRole("heading", { name: "Home", level: 1 });
+    document.cookie = `mia_csrf=${csrf}; Path=/`;
+    await userEvent
+      .setup()
+      .click(screen.getByRole("button", { name: "Sign out" }));
+    await screen.findByRole("heading", { name: "Signing out" });
+    await waitFor(() => expect(posts).toBe(1));
+    gate.resolve();
+    await screen.findByLabelText("Password (required)");
+    expect({ posts, validCsrf }).toEqual({ posts: 1, validCsrf: true });
+    expect(
+      screen.getByText(/Signed out at the last check/u, { selector: "p" }),
+    ).toBeVisible();
+    act(() => window.dispatchEvent(new Event("pagehide")));
+    expect(
+      screen.queryByRole("button", { name: "Sign out" }),
+    ).not.toBeInTheDocument();
+  });
+
+  it("observes supported network changes without requests and removes its listener on unmount", async () => {
+    const connection = new EventTarget();
+    const original = Object.getOwnPropertyDescriptor(navigator, "connection");
+    Object.defineProperty(navigator, "connection", {
+      configurable: true,
+      value: connection,
+    });
+    const remove = vi.spyOn(connection, "removeEventListener");
+    let reads = 0;
+    try {
+      const view = renderEntry(
+        sessionHandler("authenticated", () => {
+          reads++;
+        }),
+        http.get("/api/v1/users/me/capabilities", () =>
+          HttpResponse.json(capabilityDocument(), {
+            headers: { "Content-Type": mediaType },
+          }),
+        ),
+      );
+      await screen.findByRole("heading", { name: "Home", level: 1 });
+      act(() => connection.dispatchEvent(new Event("change")));
+      expect(
+        screen.getByRole("heading", { name: "Content hidden" }),
+      ).toHaveFocus();
+      expect(reads).toBe(1);
+      view.unmount();
+      expect(remove).toHaveBeenCalledWith("change", expect.any(Function));
+    } finally {
+      if (original) Object.defineProperty(navigator, "connection", original);
+      else Reflect.deleteProperty(navigator, "connection");
+    }
+  });
+
+  it.each(["transport", "protocol", "http"])(
+    "visibly explains and announces %s continuation and recovery failures",
+    async (kind) => {
+      vi.setSystemTime(new Date("2026-09-27T10:26:00.000Z"));
+      let reads = 0;
+      let posts = 0;
+      const failure = () =>
+        kind === "transport"
+          ? HttpResponse.error()
+          : new HttpResponse("unavailable", {
+              status: kind === "http" ? 503 : 200,
+              headers: { "Content-Type": mediaType },
+            });
+      renderEntry(
+        sessionHandler("authenticated", () => {
+          reads++;
+        }),
+        http.get("/api/v1/users/me/capabilities", () =>
+          HttpResponse.json(capabilityDocument(), {
+            headers: { "Content-Type": mediaType },
+          }),
+        ),
+        http.post("/api/v1/auth/session-continuations", () => {
+          posts++;
+          return failure();
+        }),
+      );
+      document.cookie = `mia_csrf=${crypto.randomUUID()}; Path=/`;
+      const user = userEvent.setup();
+      await user.click(
+        await screen.findByRole("button", { name: "Continue working" }),
+      );
+      await screen.findByRole("heading", { name: "Content hidden" });
+      expect(
+        screen.getByText(/cannot confirm whether Continue working succeeded/u, {
+          selector: "p",
+        }),
+      ).toBeVisible();
+      await waitFor(() =>
+        expect(announcementRegion("polite")).toHaveTextContent(
+          "cannot confirm whether Continue working succeeded",
+        ),
+      );
+      expect(announcementRegion("assertive")).toBeEmptyDOMElement();
+      server.use(
+        http.get("/api/v1/auth/session", () => {
+          reads++;
+          return failure();
+        }),
+      );
+      await user.click(screen.getByRole("button", { name: "Refresh" }));
+      await waitFor(() =>
+        expect(announcementRegion("polite")).toHaveTextContent(
+          "could not check your sign-in and access",
+        ),
+      );
+      expect(
+        screen.getByText(/could not check your sign-in and access/u, {
+          selector: "p",
+        }),
+      ).toBeVisible();
+      expect(announcementRegion("polite")).not.toHaveTextContent("unavailable");
+      expect({ reads, posts }).toEqual({ reads: 2, posts: 1 });
+    },
+  );
+
+  it.each(["pagehide", "focus", "online", "visibilitychange"])(
+    "synchronously shields on %s and sends no request until Refresh",
+    async (event) => {
+      let reads = 0;
+      let capabilities = 0;
+      const cache = createEntryQueryClient();
+      renderEntryWithQueryClient(
+        cache,
+        sessionHandler("authenticated", () => {
+          reads++;
+        }),
+        http.get("/api/v1/users/me/capabilities", () => {
+          capabilities++;
+          return HttpResponse.json(capabilityDocument(), {
+            headers: { "Content-Type": mediaType },
+          });
+        }),
+      );
+      await screen.findByRole("heading", { name: "Home", level: 1 });
+      cache.setQueryData(["protected-fixture"], { present: true });
+      act(() => {
+        (event === "visibilitychange" ? document : window).dispatchEvent(
+          new Event(event),
+        );
+        expect(
+          screen.queryByRole("heading", { name: "Home", level: 1 }),
+        ).not.toBeInTheDocument();
+        expect(document.title).toBe("MIA");
+        expect(cache.getQueryCache().getAll()).toHaveLength(0);
+      });
+      expect(
+        screen.getByRole("heading", { name: "Content hidden" }),
+      ).toHaveFocus();
+      expect({ reads, capabilities }).toEqual({ reads: 1, capabilities: 1 });
+      await userEvent
+        .setup()
+        .click(screen.getByRole("button", { name: "Refresh" }));
+      await screen.findByRole("heading", { name: "Home", level: 1 });
+      expect({ reads, capabilities }).toEqual({ reads: 2, capabilities: 2 });
+    },
+  );
+});
+
 function fingerprint(value: string): string {
   return createHash("sha256").update(value).digest("hex");
 }

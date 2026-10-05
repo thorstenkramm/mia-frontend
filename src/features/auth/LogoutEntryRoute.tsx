@@ -54,6 +54,7 @@ export default function LogoutEntryRoute() {
       );
     }
     case "Cold":
+    case "Privacy shield":
     case "Checking":
     case "Signed out":
     case "MFA required":

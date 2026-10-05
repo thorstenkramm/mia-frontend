@@ -496,9 +496,9 @@ essential rationale, visible expiry result, safe value-retention rule, and keybo
 
 | Timer | Confirmed behavior | Accessible expiry or continuation |
 | --- | --- | --- |
-| Browser idle | 30 minutes; activity may reset | Local warning; explicit Continue; sign in after expiry |
-| Browser absolute | 12 hours; never extends | Sign in again; no false exact countdown |
-| Restricted login stage | 30 minutes; non-refreshing | Explain expiry; restart login |
+| Browser idle | 30 minutes; only Continue working refreshes | Server-deadline warning; explicit Refresh after observed expiry |
+| Browser absolute | 12 hours; never extends | Shield; explicit Refresh discovers stage; no countdown |
+| Restricted login stage | 30 minutes; non-refreshing | Shield; explicit Refresh discovers stage or restart |
 | Password-reset link | 30 minutes; single use | Uniform invalid link; request recovery again |
 | Login MFA challenge | 30 minutes; non-refreshing; method-neutral | Explain expiry or invalidation; restart login |
 | Pending MFA enrollment | 30 minutes | Explain expiry; start a new enrollment |

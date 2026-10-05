@@ -12,7 +12,12 @@ import {
 
 const utcInstant = z
   .string()
-  .regex(/^\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2}\.\d{6}Z$/u);
+  .regex(/^\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2}\.\d{6}Z$/u)
+  .refine(
+    (value) =>
+      Number.isFinite(Date.parse(value)) &&
+      new Date(value).toISOString() === value.replace(/\d{3}Z$/u, "Z"),
+  );
 const resourceId = z.string().min(1);
 
 type SessionDocument =
@@ -128,13 +133,24 @@ export type MfaChallengeId = string & {
 
 export type EntrySession =
   | { readonly kind: "anonymous" }
-  | {
+  | (SessionDeadlines & {
       readonly kind: "mfa";
       readonly accountId: AccountId;
       readonly challengeId: MfaChallengeId;
-    }
-  | { readonly kind: "password-change"; readonly accountId: AccountId }
-  | { readonly kind: "authenticated"; readonly accountId: AccountId };
+    })
+  | (SessionDeadlines & {
+      readonly kind: "password-change";
+      readonly accountId: AccountId;
+    })
+  | (SessionDeadlines & {
+      readonly kind: "authenticated";
+      readonly accountId: AccountId;
+    });
+
+export type SessionDeadlines = {
+  readonly idleExpiresAt: number;
+  readonly absoluteExpiresAt: number;
+};
 
 export type AccountCapabilities = { readonly accountId: AccountId };
 
@@ -146,15 +162,24 @@ function toMfaChallengeId(id: string): MfaChallengeId {
   return id as MfaChallengeId;
 }
 
-function toEntrySession(document: SessionDocument): EntrySession {
+function toEntrySession(
+  document: z.infer<typeof sessionDocumentSchema>,
+): EntrySession {
   if (document.data === null) {
     return { kind: "anonymous" };
   }
+  const deadlines = {
+    idleExpiresAt: Date.parse(document.data.attributes.idle_expires_at),
+    absoluteExpiresAt: Date.parse(document.data.attributes.absolute_expires_at),
+  };
+  if (deadlines.idleExpiresAt > deadlines.absoluteExpiresAt)
+    throw new ApiProtocolError();
 
   switch (document.data.attributes.stage) {
     case "mfa":
       return {
         kind: "mfa",
+        ...deadlines,
         accountId: toAccountId(document.data.id),
         challengeId: toMfaChallengeId(
           document.data.attributes.mfa_challenge_id,
@@ -163,11 +188,13 @@ function toEntrySession(document: SessionDocument): EntrySession {
     case "password-change":
       return {
         kind: "password-change",
+        ...deadlines,
         accountId: toAccountId(document.data.id),
       };
     case "authenticated":
       return {
         kind: "authenticated",
+        ...deadlines,
         accountId: toAccountId(document.data.id),
       };
   }
@@ -183,6 +210,20 @@ export async function discoverSession(
     ...(signal === undefined ? {} : { signal }),
   });
   return toEntrySession(document);
+}
+
+export async function continueSession(
+  csrfToken: string,
+): Promise<Extract<EntrySession, { kind: "authenticated" }>> {
+  const response = await sendUnsafeRequest({
+    path: "/api/v1/auth/session-continuations",
+    csrfToken,
+  });
+  const session = toEntrySession(
+    await parseJsonApiResponse(response, sessionDocumentSchema),
+  );
+  if (session.kind !== "authenticated") throw new ApiProtocolError();
+  return session;
 }
 
 export function loginWithPassword(

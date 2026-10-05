@@ -6,6 +6,7 @@ import {
   useSyncExternalStore,
   type ReactNode,
 } from "react";
+import { flushSync } from "react-dom";
 import {
   SessionController,
   type AuthenticationBootstrapState,
@@ -25,19 +26,50 @@ export function SessionProvider({
   children,
   controller: suppliedController,
   deferCapabilityGate = false,
+  onSecurityTeardown,
 }: {
   readonly children: ReactNode;
   readonly controller?: SessionController;
   readonly deferCapabilityGate?: boolean;
+  readonly onSecurityTeardown: () => void;
 }) {
   const [ownedController] = useState(
     () => new SessionController({ deferCapabilityGate }),
   );
   const controller = suppliedController ?? ownedController;
   useEffect(() => {
+    const unregister = controller.registerSecurityTeardown(onSecurityTeardown);
+    const shield = () => flushSync(() => controller.shield());
+    const observe = () => flushSync(() => controller.observeLifecycle());
+    const pageHide = () =>
+      flushSync(() => controller.shield("lifecycle", true));
+    const pageShow = (event: PageTransitionEvent) => {
+      if (event.persisted) shield();
+    };
+    window.addEventListener("pagehide", pageHide);
+    window.addEventListener("pageshow", pageShow);
+    window.addEventListener("focus", observe);
+    window.addEventListener("online", observe);
+    document.addEventListener("visibilitychange", observe);
+    // Network Information is optional (not available in every supported browser).
+    const connection =
+      "connection" in navigator && navigator.connection instanceof EventTarget
+        ? navigator.connection
+        : null;
+    connection?.addEventListener("change", observe);
     controller.start();
-    return () => controller.stop();
-  }, [controller]);
+    return () => {
+      window.removeEventListener("pagehide", pageHide);
+      window.removeEventListener("pageshow", pageShow);
+      window.removeEventListener("focus", observe);
+      window.removeEventListener("online", observe);
+      document.removeEventListener("visibilitychange", observe);
+      connection?.removeEventListener("change", observe);
+      controller.stop();
+      onSecurityTeardown();
+      unregister();
+    };
+  }, [controller, onSecurityTeardown]);
 
   return <SessionContext value={controller}>{children}</SessionContext>;
 }
@@ -60,6 +92,10 @@ export function useAuthenticationBootstrapState(): AuthenticationBootstrapState 
 }
 
 export function useSessionActions(): {
+  readonly stopLifecycleWaiting: () => void;
+  readonly continueWorking: () => Promise<void>;
+  readonly refreshSession: () => Promise<void>;
+  readonly beginAuthenticatedLogout: () => void;
   readonly beginRestrictedLogout: () => void;
   readonly retryRestrictedLogout: () => void;
   readonly refreshLogoutStatus: () => void;
@@ -100,6 +136,10 @@ export function useSessionActions(): {
 } {
   const controller = useSessionController();
   return {
+    stopLifecycleWaiting: () => controller.stopLifecycleWaiting(),
+    continueWorking: () => controller.continueWorking(),
+    refreshSession: () => controller.refreshSession(),
+    beginAuthenticatedLogout: () => controller.beginAuthenticatedLogout(),
     previewInvitation: (token, isCurrent, signal) =>
       controller.previewInvitation(token, isCurrent, signal),
     acceptInvitation: (token, fields, isCurrent, signal) =>
