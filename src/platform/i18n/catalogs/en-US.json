@@ -51,7 +51,7 @@
   "entry.error.technicalDetails": "Technical details",
   "entry.heading": "Sign in to MIA",
   "entry.home.heading": "Home",
-  "entry.home.introduction": "Access checks are complete.",
+  "entry.home.introduction": "Choose an area from the navigation to continue.",
   "entry.home.pageTitle": "Home | MIA",
   "entry.introduction": "Choose your language and text size before signing in.",
   "entry.language.changed": "Interface language changed.",
@@ -207,7 +207,6 @@
   "entry.invitation.unknown.heading": "Account creation not confirmed",
   "entry.invitation.unknown": "We couldn't confirm whether your account was created. Try signing in with the username and password you chose, or open the link in your invitation email again. Neither step proves whether the account was created.",
   "session.accessLost": "MIA could not confirm your sign-in or access. Content is hidden. Refresh to check your sign-in.",
-  "entry.home.mfaLink": "Multi-factor authentication",
   "mfa.overview.pageTitle": "Multi-factor authentication | MIA",
   "mfa.overview.heading": "Multi-factor authentication",
   "mfa.enroll.pageTitle": "Set up multi-factor authentication | MIA",
@@ -298,5 +297,12 @@
   "mfa.codes.hidden": "Recovery codes are hidden",
   "mfa.codes.hiddenHelp": "Your recovery codes were hidden while you were away. Show them again when no one else can see your screen.",
   "mfa.codes.reveal": "Show recovery codes",
-  "mfa.codes.unavailable": "Recovery codes are no longer available. They are shown only once and cannot be retrieved. Only a future replacement of this factor issues new codes."
+  "mfa.codes.unavailable": "Recovery codes are no longer available. They are shown only once and cannot be retrieved. Only a future replacement of this factor issues new codes.",
+  "shell.navigation.label": "Application",
+  "shell.navigation.open": "Open navigation",
+  "shell.navigation.close": "Close navigation",
+  "shell.navigation.home": "Home",
+  "shell.navigation.profileSecurity": "Profile and security",
+  "shell.navigation.mfa": "Multi-factor authentication",
+  "shell.productName": "MIA"
 }

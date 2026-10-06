@@ -51,7 +51,7 @@
   "entry.error.technicalDetails": "Détails techniques",
   "entry.heading": "Se connecter à MIA",
   "entry.home.heading": "Accueil",
-  "entry.home.introduction": "Les vérifications d’accès sont terminées.",
+  "entry.home.introduction": "Choisissez une rubrique dans la navigation pour continuer.",
   "entry.home.pageTitle": "Accueil | MIA",
   "entry.introduction": "Choisissez votre langue et la taille du texte avant de vous connecter.",
   "entry.language.changed": "La langue de l’interface a été modifiée.",
@@ -207,7 +207,6 @@
   "entry.invitation.unknown.heading": "Création du compte non confirmée",
   "entry.invitation.unknown": "Nous n’avons pas pu confirmer la création de votre compte. Essayez de vous connecter avec le nom d’utilisateur et le mot de passe choisis, ou ouvrez à nouveau le lien de votre e-mail d’invitation. Aucune de ces étapes ne prouve que le compte a été créé.",
   "session.accessLost": "MIA n’a pas pu confirmer votre connexion ou votre accès. Le contenu est masqué. Actualisez pour vérifier votre connexion.",
-  "entry.home.mfaLink": "Authentification multifacteur",
   "mfa.overview.pageTitle": "Authentification multifacteur | MIA",
   "mfa.overview.heading": "Authentification multifacteur",
   "mfa.enroll.pageTitle": "Configurer l’authentification multifacteur | MIA",
@@ -298,5 +297,12 @@
   "mfa.codes.hidden": "Les codes de récupération sont masqués",
   "mfa.codes.hiddenHelp": "Vos codes de récupération ont été masqués pendant votre absence. Affichez-les à nouveau quand personne d’autre ne peut voir votre écran.",
   "mfa.codes.reveal": "Afficher les codes de récupération",
-  "mfa.codes.unavailable": "Les codes de récupération ne sont plus disponibles. Ils ne sont affichés qu’une fois et ne peuvent pas être récupérés. Seul un futur remplacement de ce facteur génère de nouveaux codes."
+  "mfa.codes.unavailable": "Les codes de récupération ne sont plus disponibles. Ils ne sont affichés qu’une fois et ne peuvent pas être récupérés. Seul un futur remplacement de ce facteur génère de nouveaux codes.",
+  "shell.navigation.label": "Application",
+  "shell.navigation.open": "Ouvrir la navigation",
+  "shell.navigation.close": "Fermer la navigation",
+  "shell.navigation.home": "Accueil",
+  "shell.navigation.profileSecurity": "Profil et sécurité",
+  "shell.navigation.mfa": "Authentification multifacteur",
+  "shell.productName": "MIA"
 }

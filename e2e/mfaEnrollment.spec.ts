@@ -227,6 +227,63 @@ async function reachVerify(page: Page) {
 }
 
 test(
+  "the 320px drawer refuses departure from unacknowledged codes, then leaves with a replaced entry",
+  secretBearing(async (page) => {
+    const fixture = fixtures();
+    await mockBackend(page, fixture);
+    await page.setViewportSize({ width: 320, height: 900 });
+    // Start from an application entry so Back stays within MIA.
+    await page.goto("/");
+    await expect(
+      page.getByRole("heading", { level: 1, name: "Home" }),
+    ).toBeFocused();
+    await reachVerify(page);
+    await page
+      .getByLabel("Six-digit code from your authenticator app (required)")
+      .fill(fixture.code);
+    await page.keyboard.press("Enter");
+    const codesPath = "/profile/security/mfa/recovery-codes";
+    await page.getByRole("button", { name: "Show recovery codes" }).click();
+    await expect(page.locator("main ol li")).toHaveCount(10);
+
+    const open = page.getByRole("button", { name: "Open navigation" });
+    const drawerHome = page
+      .getByRole("dialog", { name: "Application" })
+      .getByRole("link", { name: "Home" });
+    await open.focus();
+    await page.keyboard.press("Enter");
+    await drawerHome.focus();
+    await page.keyboard.press("Enter");
+    await expect(page.getByRole("dialog")).toHaveCount(0);
+    const acknowledgement = page.getByLabel("I have saved my recovery codes");
+    await expect(acknowledgement).toBeFocused();
+    // Still focused after the drawer's close transition and focus restoration.
+    await page.waitForTimeout(400);
+    await expect(acknowledgement).toBeFocused();
+    expect(new URL(page.url()).pathname).toBe(codesPath);
+    await expect(page.locator("main ol li")).toHaveCount(10);
+
+    await page.keyboard.press("Space");
+    await open.focus();
+    await page.keyboard.press("Enter");
+    await drawerHome.focus();
+    await page.keyboard.press("Enter");
+    await expect(
+      page.getByRole("heading", { level: 1, name: "Home" }),
+    ).toBeFocused();
+    expect(
+      await pageContains(page, [...fixture.codes, ...fixture.grouped]),
+    ).toBe(false);
+    await page.goBack();
+    await expect.poll(() => new URL(page.url()).pathname).not.toBe(codesPath);
+    await expect(page.locator("main ol li")).toHaveCount(0);
+    expect(
+      await pageContains(page, [...fixture.codes, ...fixture.grouped]),
+    ).toBe(false);
+  }),
+);
+
+test(
   "keyboard enrollment renders a local QR, shows codes once, prints only codes, and tears them down",
   secretBearing(async (page) => {
     const fixture = fixtures();

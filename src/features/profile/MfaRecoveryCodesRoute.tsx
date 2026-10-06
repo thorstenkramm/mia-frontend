@@ -8,6 +8,7 @@ import { useMfaEnrollment } from "../../platform/data/EntryDataProvider";
 import { messages } from "../../platform/i18n/messages";
 import { mfaPaths } from "../../platform/session/mfaEnrollment";
 import { formatRecoveryCode } from "../../platform/ui/mfaCodes";
+import { useRouteDepartureGuard } from "../../platform/ui/routeDeparture";
 import {
   MfaStatusPanel,
   PrimaryButton,
@@ -18,28 +19,12 @@ import { useMfaSnapshot } from "./mfaOutcome";
 
 export default function MfaRecoveryCodesRoute() {
   const intl = useIntl();
-  const mfa = useMfaEnrollment();
   const { codes } = useMfaSnapshot();
   switch (codes.kind) {
     case "Visible":
       return <RecoveryCodes codes={codes.codes.map(formatRecoveryCode)} />;
     case "Masked":
-      return (
-        <MfaStatusPanel
-          heading={messages.mfaCodesHidden}
-          {...(codes.confirmed
-            ? {
-                actions: (
-                  <PrimaryButton disabled={false} onClick={() => mfa.reveal()}>
-                    {intl.formatMessage(messages.mfaRevealCodes)}
-                  </PrimaryButton>
-                ),
-              }
-            : {})}
-        >
-          <p>{intl.formatMessage(messages.mfaCodesWarning)}</p>
-        </MfaStatusPanel>
-      );
+      return <MaskedCodes confirmed={codes.confirmed} />;
     case "None":
       return (
         <>
@@ -54,6 +39,42 @@ export default function MfaRecoveryCodesRoute() {
     default:
       return assertNever(codes);
   }
+}
+
+// Held codes need an explicit reveal and the safe-storage acknowledgement
+// before an intentional departure, so shell navigation is refused here.
+function MaskedCodes({ confirmed }: { readonly confirmed: boolean }) {
+  const intl = useIntl();
+  const mfa = useMfaEnrollment();
+  const { announce } = useAnnouncer();
+  const reveal = useRef<HTMLButtonElement>(null);
+  useRouteDepartureGuard(() => ({
+    kind: "refuse",
+    explain: () => {
+      announce(intl.formatMessage(messages.mfaCodesAcknowledgeFirst), "urgent");
+      reveal.current?.focus();
+    },
+  }));
+  return (
+    <MfaStatusPanel
+      heading={messages.mfaCodesHidden}
+      {...(confirmed
+        ? {
+            actions: (
+              <PrimaryButton
+                ref={reveal}
+                disabled={false}
+                onClick={() => mfa.reveal()}
+              >
+                {intl.formatMessage(messages.mfaRevealCodes)}
+              </PrimaryButton>
+            ),
+          }
+        : {})}
+    >
+      <p>{intl.formatMessage(messages.mfaCodesWarning)}</p>
+    </MfaStatusPanel>
+  );
 }
 
 type CopyResult = "idle" | "copied" | "failed";
@@ -105,6 +126,14 @@ function RecoveryCodes({ codes }: { readonly codes: readonly string[] }) {
     navigate(mfaPaths.overview, { replace: true });
     mfa.finishCodes();
   }
+
+  // Shell navigation follows the same rule as Done: refused until the
+  // acknowledgement, then a replacing departure that drops the codes.
+  useRouteDepartureGuard(() =>
+    acknowledged
+      ? { kind: "leave", replace: true, release: () => mfa.finishCodes() }
+      : { kind: "refuse", explain: refuseDone },
+  );
 
   return (
     <>

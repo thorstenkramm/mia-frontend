@@ -2,10 +2,14 @@ import { ExclamationTriangleIcon } from "@heroicons/react/20/solid";
 import { Suspense, useEffect } from "react";
 import { useIntl } from "react-intl";
 import { useLocation } from "react-router";
+import { useAnnouncer } from "../../platform/announcer/AnnouncementRegion";
 import { TechnicalErrorDisclosure } from "../../platform/api/TechnicalErrorDisclosure";
 import { useMfaEnrollment } from "../../platform/data/EntryDataProvider";
 import { messages } from "../../platform/i18n/messages";
+import { mfaPaths } from "../../platform/session/mfaEnrollment";
+import type { RouteDeparture } from "../../platform/ui/routeDeparture";
 import { useMfaSnapshot } from "../../features/profile/mfaOutcome";
+import { ApplicationShell } from "../ApplicationShell";
 import { SessionWarning } from "../SessionLifecycle";
 import { CheckingAccess } from "./CheckingAccess";
 import type { ProfileMfaEntryRoute } from "./entryRoutes";
@@ -21,8 +25,9 @@ export function ProfileMfaRoute({
 }) {
   const intl = useIntl();
   const mfa = useMfaEnrollment();
-  const { read } = useMfaSnapshot();
+  const { read, codes } = useMfaSnapshot();
   const { pathname } = useLocation();
+  const { announce } = useAnnouncer();
 
   useEffect(() => {
     void mfa.check(pathname);
@@ -78,16 +83,31 @@ export function ProfileMfaRoute({
       </SimpleEntrySurface>
     );
 
+  // Every gate step passed in this epoch: only now does the shared shell mount.
   const RouteContent = route.component;
+  // Held recovery codes refuse shell departure even before the lazily loaded
+  // codes route has registered its own reveal/acknowledgement guard.
+  const departureFallback =
+    route.path === mfaPaths.recoveryCodes && codes.kind !== "None"
+      ? (): RouteDeparture => ({
+          kind: "refuse",
+          explain: () =>
+            announce(
+              intl.formatMessage(messages.mfaCodesAcknowledgeFirst),
+              "urgent",
+            ),
+        })
+      : undefined;
   return (
-    <SimpleEntrySurface
+    <ApplicationShell
       titleMessage={route.titleMessage}
       headingMessage={route.headingMessage}
+      {...(departureFallback ? { departureFallback } : {})}
     >
       <SessionWarning />
       <Suspense fallback={null}>
         <RouteContent state={read.state} />
       </Suspense>
-    </SimpleEntrySurface>
+    </ApplicationShell>
   );
 }

@@ -274,9 +274,15 @@ describe("lifecycle privacy rendering", () => {
     );
     await screen.findByRole("heading", { name: "Home", level: 1 });
     document.cookie = `mia_csrf=${csrf}; Path=/`;
+    // The shell's desktop navigation holds Sign out; jsdom also renders the
+    // mobile top bar's copy because no breakpoint CSS applies.
     await userEvent
       .setup()
-      .click(screen.getByRole("button", { name: "Sign out" }));
+      .click(
+        within(
+          screen.getByRole("navigation", { name: "Application" }),
+        ).getByRole("button", { name: "Sign out" }),
+      );
     await screen.findByRole("heading", { name: "Signing out" });
     await waitFor(() => expect(posts).toBe(1));
     gate.resolve();
@@ -4769,6 +4775,111 @@ describe("TOTP enrollment and recovery codes", () => {
     for (const code of grouped)
       expectSecretAbsent(documentText(), code, "Document after Done");
     expect(counts.verifies).toBe(1);
+  });
+
+  it("refuses shell departure from held codes until acknowledged, then replaces the entry and drops them", async () => {
+    beginAt("/profile/security/mfa/enroll");
+    const codes = recoveryCodesFixture();
+    renderEntry(
+      ...mfaHandlers({
+        verify: () => {
+          mfaState = { active: "totp" };
+          return recoveryCodesResponse(pendingId, codes);
+        },
+      }),
+    );
+    const user = userEvent.setup();
+    await startSetup(user);
+    await user.type(
+      screen.getByLabelText(
+        "Six-digit code from your authenticator app (required)",
+      ),
+      mfaCodeFixture(),
+    );
+    await user.click(screen.getByRole("button", { name: "Verify code" }));
+    const codesPath = "/profile/security/mfa/recovery-codes";
+    const reveal = await screen.findByRole("button", {
+      name: "Show recovery codes",
+    });
+    const shellLink = (name: string) =>
+      within(screen.getByRole("navigation", { name: "Application" })).getByRole(
+        "link",
+        { name },
+      );
+
+    // Masked codes: neither shell link leaves before Reveal.
+    for (const name of ["Home", "Multi-factor authentication"]) {
+      await user.click(shellLink(name));
+      expect(window.location.pathname).toBe(codesPath);
+      expect(reveal).toHaveFocus();
+    }
+    await waitFor(() =>
+      expect(announcementRegion("assertive")).toHaveTextContent(
+        "Confirm that you saved your recovery codes first.",
+      ),
+    );
+
+    await user.click(reveal);
+    const acknowledgement = await screen.findByLabelText(
+      "I have saved my recovery codes",
+    );
+    const grouped = codes.map((code) => code.replace(/(.{4})(?=.)/gu, "$1-"));
+    // Revealed but unacknowledged: desktop links and the drawer both refuse.
+    for (const name of ["Home", "Multi-factor authentication"]) {
+      await user.click(shellLink(name));
+      expect(window.location.pathname).toBe(codesPath);
+      expect(acknowledgement).toHaveFocus();
+      acknowledgement.blur();
+    }
+    for (const name of ["Home", "Multi-factor authentication"]) {
+      await user.click(screen.getByRole("button", { name: "Open navigation" }));
+      const drawer = await screen.findByRole("dialog", {
+        name: "Application",
+      });
+      await user.click(within(drawer).getByRole("link", { name }));
+      await waitFor(() => expect(screen.queryByRole("dialog")).toBeNull());
+      await waitFor(() => expect(acknowledgement).toHaveFocus());
+      expect(window.location.pathname).toBe(codesPath);
+      acknowledgement.blur();
+    }
+    expect(
+      screen.getByText("Confirm that you saved your recovery codes first.", {
+        selector: "p",
+      }),
+    ).toBeVisible();
+    expectSameSecret(
+      within(
+        within(screen.getByRole("main")).getByRole("list", {
+          name: "Recovery codes",
+        }),
+      )
+        .getAllByRole("listitem")
+        .map((item) => item.textContent)
+        .join("\n"),
+      grouped.join("\n"),
+      "Codes retained after refused departures",
+    );
+
+    await user.click(acknowledgement);
+    const entries = window.history.length;
+    await user.click(shellLink("Home"));
+    expect(
+      await screen.findByRole("heading", { level: 1, name: "Home" }),
+    ).toHaveFocus();
+    expect(window.location.pathname).toBe("/");
+    expect(window.history.length).toBe(entries);
+    for (const code of grouped)
+      expectSecretAbsent(documentText(), code, "Document after departure");
+    // Back cannot return to the replaced code entry.
+    const popped = new Promise((resolve) =>
+      window.addEventListener("popstate", resolve, { once: true }),
+    );
+    window.history.back();
+    await popped;
+    expect(window.location.pathname).not.toBe(codesPath);
+    await delay(20);
+    for (const code of grouped)
+      expectSecretAbsent(documentText(), code, "Document after Back");
   });
 
   it("announces a copy failure and leaves the codes selectable", async () => {

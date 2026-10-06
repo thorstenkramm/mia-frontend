@@ -51,7 +51,7 @@
   "entry.error.technicalDetails": "Detalles técnicos",
   "entry.heading": "Iniciar sesión en MIA",
   "entry.home.heading": "Inicio",
-  "entry.home.introduction": "Las comprobaciones de acceso finalizaron.",
+  "entry.home.introduction": "Elija un área en la navegación para continuar.",
   "entry.home.pageTitle": "Inicio | MIA",
   "entry.introduction": "Elija el idioma y el tamaño del texto antes de iniciar sesión.",
   "entry.language.changed": "Se cambió el idioma de la interfaz.",
@@ -207,7 +207,6 @@
   "entry.invitation.unknown.heading": "Creación de la cuenta no confirmada",
   "entry.invitation.unknown": "No pudimos confirmar si se creó tu cuenta. Probá iniciar sesión con el nombre de usuario y la contraseña que elegiste, o abrí de nuevo el enlace de tu correo de invitación. Ninguno de los dos pasos demuestra si la cuenta se creó.",
   "session.accessLost": "MIA no pudo confirmar tu inicio de sesión o tu acceso. El contenido está oculto. Actualizá para comprobar tu inicio de sesión.",
-  "entry.home.mfaLink": "Autenticación multifactor",
   "mfa.overview.pageTitle": "Autenticación multifactor | MIA",
   "mfa.overview.heading": "Autenticación multifactor",
   "mfa.enroll.pageTitle": "Configurar la autenticación multifactor | MIA",
@@ -298,5 +297,12 @@
   "mfa.codes.hidden": "Los códigos de recuperación están ocultos",
   "mfa.codes.hiddenHelp": "Tus códigos de recuperación se ocultaron mientras no estabas. Volvé a mostrarlos cuando nadie más pueda ver tu pantalla.",
   "mfa.codes.reveal": "Mostrar los códigos de recuperación",
-  "mfa.codes.unavailable": "Los códigos de recuperación ya no están disponibles. Solo se muestran una vez y no se pueden recuperar. Solo un futuro reemplazo de este factor genera códigos nuevos."
+  "mfa.codes.unavailable": "Los códigos de recuperación ya no están disponibles. Solo se muestran una vez y no se pueden recuperar. Solo un futuro reemplazo de este factor genera códigos nuevos.",
+  "shell.navigation.label": "Aplicación",
+  "shell.navigation.open": "Abrir navegación",
+  "shell.navigation.close": "Cerrar navegación",
+  "shell.navigation.home": "Inicio",
+  "shell.navigation.profileSecurity": "Perfil y seguridad",
+  "shell.navigation.mfa": "Autenticación multifactor",
+  "shell.productName": "MIA"
 }

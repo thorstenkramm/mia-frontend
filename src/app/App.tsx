@@ -32,6 +32,7 @@ import {
   type PasswordResetLink,
   type PasswordResetSurface,
 } from "../platform/session/passwordResetLink";
+import { ApplicationShell } from "./ApplicationShell";
 import { CheckingAccess } from "./routes/CheckingAccess";
 import {
   authenticatedRouteKey,
@@ -237,6 +238,31 @@ function CanonicalEntry({
     return <ProfileMfaRoute route={route} />;
 
   const RouteContent = route.component;
+  const content = (
+    <Suspense fallback={null}>
+      <RouteContent
+        initialTextSize={initialTextSize}
+        passwordResetLink={passwordResetLink}
+        invitationLink={invitationLink}
+        {...(state.kind === "Logout confirmed"
+          ? { logoutConfirmed: true }
+          : {})}
+      />
+    </Suspense>
+  );
+  // Home's complete gate is stage plus capabilities; only then does the shared
+  // application shell (and its navigation) mount.
+  if (route.gate === "Authenticated")
+    return (
+      <ApplicationShell
+        titleMessage={route.titleMessage}
+        headingMessage={route.headingMessage}
+      >
+        <SessionWarning />
+        {content}
+      </ApplicationShell>
+    );
+
   const mfaExpired =
     state.kind === "MFA required" && state.outcome?.kind === "expired";
   // The uniform invalid invitation result has one title and heading on both
@@ -268,16 +294,7 @@ function CanonicalEntry({
       }
     >
       <SessionWarning />
-      <Suspense fallback={null}>
-        <RouteContent
-          initialTextSize={initialTextSize}
-          passwordResetLink={passwordResetLink}
-          invitationLink={invitationLink}
-          {...(state.kind === "Logout confirmed"
-            ? { logoutConfirmed: true }
-            : {})}
-        />
-      </Suspense>
+      {content}
     </SimpleEntrySurface>
   );
 }

@@ -1,7 +1,11 @@
-import { useEffect, useRef, type ReactNode } from "react";
+import { useRef, type ReactNode } from "react";
 import { useIntl } from "react-intl";
-import { useLocation } from "react-router";
 import { messages } from "../../platform/i18n/messages";
+import {
+  BuildIdentifier,
+  BypassLink,
+  useRouteHeadingFocus,
+} from "./routeFrame";
 
 type MessageDescriptor = (typeof messages)[keyof typeof messages];
 
@@ -15,35 +19,13 @@ export function SimpleEntrySurface({
   children: ReactNode;
 }) {
   const intl = useIntl();
-  const headingRef = useRef<HTMLHeadingElement>(null);
+  const headingRef = useRouteHeadingFocus(headingMessage.id);
   const mainRef = useRef<HTMLElement>(null);
-  const location = useLocation();
-
-  useEffect(() => {
-    const heading = headingRef.current;
-    if (heading === null) return;
-    heading.focus({ preventScroll: true });
-    // A heading that changes in place (a result replacing a form) may sit above
-    // the scrolled viewport; reveal it so focus is never off-screen.
-    if (heading.getBoundingClientRect().bottom < 0)
-      heading.scrollIntoView({ block: "nearest" });
-  }, [location.pathname, headingMessage.id]);
 
   return (
     <>
       <title>{intl.formatMessage(titleMessage)}</title>
-      <a
-        className="sr-only focus:absolute focus:top-4 focus:left-4 focus:z-10 focus:rounded-md focus:bg-white focus:px-3 focus:py-2 focus:text-sm focus:font-semibold focus:text-gray-900 focus:shadow-xs focus:outline-2 focus:outline-offset-2 focus:outline-indigo-600"
-        href="#main-content"
-        onClick={(event) => {
-          // Move focus without a fragment: no history entry, and a reset page
-          // never mistakes the bypass for a newly pasted link.
-          event.preventDefault();
-          mainRef.current?.focus();
-        }}
-      >
-        {intl.formatMessage(messages.skipLink)}
-      </a>
+      <BypassLink target={mainRef} />
       <main
         ref={mainRef}
         id="main-content"
@@ -66,14 +48,7 @@ export function SimpleEntrySurface({
           <div className="mt-10 sm:mx-auto sm:w-full sm:max-w-[480px]">
             {children}
           </div>
-          <p
-            className="mt-8 break-all text-center text-sm/6 text-gray-500"
-            data-testid="build-identifier"
-          >
-            {intl.formatMessage(messages.buildIdentifier, {
-              buildId: __MIA_BUILD_ID__,
-            })}
-          </p>
+          <BuildIdentifier className="mt-8 break-all text-center text-sm/6 text-gray-500" />
         </div>
       </main>
     </>

@@ -33,13 +33,13 @@
 # - Epic 1 remains in-progress for recorded acceptance follow-up; do not restart its done stories.
 # - Unstarted story IDs were replaced; planning-artifacts/sprint-change-proposal-2026-10-06.md owns the map.
 generated: 09-19-2026 13:57
-last_updated: 10-06-2026 12:00
+last_updated: 10-06-2026 17:00
 project: mia-frontend
 project_key: NOKEY
 tracking_system: file-system
 delivery_plan: _bmad-output/planning-artifacts/epics.md
 current_milestone: student-tutoring-mvp
-next_story: 2-1-basic-capability-driven-navigation
+next_story: 2-2-working-routes-and-parent-navigation
 story_location: |
   /Users/thorsten/projects/thorsten/mia-frontend/_bmad-output/implementation-artifacts
 development_status:
@@ -55,8 +55,8 @@ development_status:
   1-9-totp-enrollment-and-recovery-codes: done
   epic-1-retrospective: done
 
-  epic-2: backlog
-  2-1-basic-capability-driven-navigation: backlog
+  epic-2: in-progress
+  2-1-basic-capability-driven-navigation: done
   2-2-working-routes-and-parent-navigation: backlog
   epic-2-retrospective: optional
 

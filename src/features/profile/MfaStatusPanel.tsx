@@ -1,4 +1,4 @@
-import type { ReactNode } from "react";
+import type { ReactNode, Ref } from "react";
 import { useIntl } from "react-intl";
 import { Link } from "react-router";
 import type { MfaState } from "../../platform/api/mfa";
@@ -124,11 +124,13 @@ export function PrimaryLink({
 }
 
 export function PrimaryButton({
+  ref,
   disabled,
   onClick,
   onUnavailable,
   children,
 }: {
+  readonly ref?: Ref<HTMLButtonElement>;
   readonly disabled: boolean;
   readonly onClick: () => void;
   // Explains why an unavailable activation was refused.
@@ -137,6 +139,7 @@ export function PrimaryButton({
 }) {
   return (
     <button
+      ref={ref}
       type="button"
       aria-disabled={disabled}
       onClick={() => {

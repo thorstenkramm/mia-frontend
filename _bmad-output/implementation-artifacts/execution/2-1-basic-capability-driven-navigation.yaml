@@ -1,0 +1,122 @@
+story: 2-1-basic-capability-driven-navigation
+phase: commit-pending
+spec: _bmad-output/implementation-artifacts/spec-2-1-basic-capability-driven-navigation.md
+baseline_commit: b8909dbaacd7eb3e6eb2c85a650a0f3fc9ba4a7e
+pre_existing_changes:
+  - ".opencode/agents/epic-solver.md (approved parent bookkeeping; exclude from story commits)"
+  - ".opencode/story-execution.md (approved parent bookkeeping; preserve and exclude from story commits)"
+files:
+  - _bmad-output/implementation-artifacts/spec-2-1-basic-capability-driven-navigation.md
+  - _bmad-output/implementation-artifacts/execution/2-1-basic-capability-driven-navigation.yaml
+  - _bmad-output/implementation-artifacts/sprint-status.yaml
+  - src/platform/session/sessionController.ts
+  - src/platform/session/sessionController.test.ts
+  - src/app/App.tsx
+  - src/app/routes/ProfileMfaRoute.tsx
+  - src/app/routes/SimpleEntrySurface.tsx
+  - src/features/home/HomeEntryRoute.tsx
+  - src/platform/i18n/messages.ts
+  - src/platform/i18n/catalogs/de-DE.json
+  - src/platform/i18n/catalogs/en-US.json
+  - src/platform/i18n/catalogs/es-AR.json
+  - src/platform/i18n/catalogs/es-ES.json
+  - src/platform/i18n/catalogs/fr-FR.json
+  - src/platform/i18n/catalogs/pt-BR.json
+  - src/platform/i18n/catalogs/pt-PT.json
+  - src/app/App.test.tsx
+  - src/app/ApplicationShell.tsx
+  - src/app/routes/routeFrame.tsx
+  - src/platform/ui/routeDeparture.tsx
+  - src/features/profile/MfaRecoveryCodesRoute.tsx
+  - src/features/profile/MfaStatusPanel.tsx
+  - e2e/mfaEnrollment.spec.ts
+  - src/app/ApplicationShell.test.tsx
+  - src/app/recoveryCodesDeparture.test.tsx
+  - e2e/applicationShell.spec.ts
+  - e2e/scaffold.spec.ts
+worker_session: ses_eee90c265ffeVIAWyc2DlyrnYF
+reviewer_session: ses_eee72b5e1ffeBEf56fzp8klvxp
+models:
+  solver: anthropic/claude-sonnet-5-5#medium
+  prepare: anthropic/claude-opus-5-5#high
+  implement: anthropic/claude-opus-5-5#high
+  review: openai/gpt-6-astra#high
+  fallback_worker: openai/gpt-6.1-sol#high
+  fallback_reviewer: "anthropic/claude-opus-5-5#high (fresh session)"
+  current_solver: openai/gpt-6-astra
+  commit: openai/gpt-6.1-sol#high
+  catalog_confirmation: "OpenAI Astra and Sol active; high variant available. Historical phase assignments above retained."
+provider_recovery:
+  failure: "Parent reported Anthropic HTTP 429 at attempt 6 before this commit resume."
+  stopped_state: "Parent explicitly confirmed prior worker and coordinator stopped; no competing writer."
+  disposition: "Immediate OpenAI fallback for rest of batch; no Anthropic retry."
+  worker: openai/gpt-6.1-sol#high
+  solver: openai/gpt-6-astra
+completed_blocks:
+  - prepare
+  - implement-controller-c1-c3
+  - implement-shell-home-i18n
+  - implement-browser-tests
+  - fix-batch-1
+  - fix-batch-2
+  - verify
+repair_queue:
+  - finding: "R1 (High) shell links bypass recovery-code acknowledgement and history replacement"
+    root_cause: "Shell navigation had no way to ask the mounted route about departure"
+    disposition: "fixed in batch 1: platform/ui/routeDeparture.tsx guard; codes route refuses masked/unacknowledged, else replace + finishCodes; drawer refusal deferred past dialog focus restore"
+    evidence: "App.test.tsx codes departure test (fails with guard disabled); e2e/mfaEnrollment.spec.ts 320px drawer test; tmp/agent-execution/2-1-basic-capability-driven-navigation/fix-report.md"
+  - finding: "R1 recheck (batch 2) guard absent while the lazy MfaRecoveryCodesRoute module loads"
+    root_cause: "The only guard registered from inside the lazy route; the shell answered leave until then"
+    disposition: "fixed in batch 2 (last allowed R1 batch): provider fallback supplied above the lazy boundary by ProfileMfaRoute refuses while codes are held on the codes path"
+    evidence: "src/app/recoveryCodesDeparture.test.tsx (fails without the fallback); fix-report.md batch 2"
+  - finding: "R2 (Medium) bypass link invisible on focus at desktop"
+    root_cause: "sr-only clipping not reset on focus; z-10 below the lg:z-50 sidebar"
+    disposition: "fixed in batch 1: focus:not-sr-only and focus:z-60 in routeFrame BypassLink"
+    evidence: "e2e/applicationShell.spec.ts bypass visibility/occlusion tests at 1280 and 320 (fail with old classes)"
+last_verification:
+  date: "2026-10-06T14:45:51Z"
+  input_fingerprint: "sha256 ab4bd69d6771dddffd1423a5671f569cedb6cfff8299f1726e43f8aa49bb08c9 (tracked code diff + new-file blob ids, excluding _bmad-output, .opencode, tmp)"
+  commands: ["./run-all-tests.sh"]
+  result: pass
+  exit_code: 0
+  skipped_components: 0
+  counts:
+    vitest: "17 files, 551 passed"
+    playwright: "107 passed"
+    jscpd: "0 clones"
+    npm_audit: "pass at high; 4 low katex advisories (pre-existing)"
+    trivy: "ran (/opt/homebrew/bin/trivy, 0.75.0), exit 0; 1 LOW baseline KaTeX advisory and 1 MEDIUM static country-code false positive; nonblocking under authorized solver disposition below"
+    secret_hygiene: "pass (vitest + playwright canaries rejected)"
+    markdown_lint: "pass (story spec under _bmad-output exempt)"
+  logs:
+    - tmp/agent-execution/2-1-basic-capability-driven-navigation/final-gate.log
+    - tmp/agent-execution/2-1-basic-capability-driven-navigation/commit-evidence.log
+  evidence_reuse:
+    result: "Recorded input fingerprint recomputed exactly at commit resume; no application/test/script/config/dependency changes. Review cleared R1/R2 per parent. No gate or review rerun."
+    baseline: b8909dbaacd7eb3e6eb2c85a650a0f3fc9ba4a7e
+    fingerprint: ab4bd69d6771dddffd1423a5671f569cedb6cfff8299f1726e43f8aa49bb08c9
+    gate_log_sha256: d9ab354dac66b361e0975d7ed3a3cba73bcb60f406de0788e281a9cff1c93bb7
+  advisory_dispositions:
+    sendgrid_pattern:
+      result: "Confirmed static country-code false positive; authorized nonblocking. No matched bytes recorded."
+      source: "src/features/auth/countryCodes.ts:3-253 (249 unique ISO alpha-2 codes); InvitationEntryRoute.tsx:51 import, :649-656 countryOptions uses Intl.DisplayNames."
+      source_blob: 2514d4075188ac2214a2b512be345c7f760152cf
+      source_commit: 5ac8fd78b0da2a9db27c6bf4d780a99a9cf43042
+      consumer_blob: 321ac5f6dcf25fdcd7ed0375478064fda084ba6d
+      baseline_comparison: "Both source and consumer byte-identical to baseline."
+      built_provenance: "dist/assets/InvitationEntryRoute-YqALoa3q.js: all 249 codes compiled as a period-delimited list at zero-based byte range [463,1209); reported offset 1054 is inside that exact reconstructed static list."
+      chunk_sha256: a2bfbbdde726ec650a977fd1d80cfc0514329c327f9ec0206a80c78807eb2f5f
+    katex:
+      result: "Baseline LOW dependency issue; authorized nonblocking for this story, remains unresolved. No update or suppression."
+      advisory: "CVE-2026-103923 / GHSA-238p-pmpm-9mq7: prototype-pollution inheritance can bypass trust restrictions and cause cross-site scripting."
+      installed: "0.16.47 in node_modules/micromark-extension-math/node_modules/katex and node_modules/rehype-katex/node_modules/katex; root katex is 0.18.7."
+      fixed_version: "0.18.2 (Trivy); npm audit affected range 0.11.0-0.18.1."
+      audit: "4 LOW dependency-chain entries (katex, micromark-extension-math, remark-math, rehype-katex); npm audit --audit-level=high passed."
+      lockfile_blob: 3b0c45a9e4b5e4c8228d032457bc4d473451a467
+      baseline_comparison: "package-lock.json byte-identical to baseline."
+resume_attempts: 0
+commit:
+  intended_message: "feat: add capability-driven application navigation (story 2.1)"
+  sha: null
+next_action: Commit the explicit story manifest only; preserve both approved parent bookkeeping files; confirm SHA before marking execution complete.
+blocked_on: null

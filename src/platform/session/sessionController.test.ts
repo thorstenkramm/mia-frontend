@@ -677,6 +677,309 @@ describe("authoritative session lifecycle", () => {
   );
 });
 
+describe("SessionController lifecycle recovery fencing", () => {
+  it("fences a recovery whose session discovery is still pending when a lifecycle signal arrives", async () => {
+    const now = Date.now();
+    let delay: Promise<void> | null = null;
+    let capabilities = 0;
+    server.use(
+      http.get("/api/v1/auth/session", async () => {
+        if (delay) await delay;
+        return deadlineSession(now + 30 * 60_000, now + 60 * 60_000);
+      }),
+      http.get("/api/v1/users/me/capabilities", () => {
+        capabilities++;
+        return capabilitiesFor();
+      }),
+    );
+    const controller = new SessionController();
+    controller.start();
+    await waitFor(() =>
+      expect(controller.getSnapshot().kind).toBe("Authenticated"),
+    );
+    controller.shield();
+    const gate = lifecycleGate();
+    delay = gate.promise;
+    const recovery = controller.refreshSession();
+    expect(controller.getSnapshot()).toMatchObject({
+      kind: "Privacy shield",
+      phase: "checking",
+    });
+
+    controller.observeLifecycle();
+    gate.resolve();
+    await recovery;
+
+    expect(controller.getSnapshot()).toMatchObject({
+      kind: "Privacy shield",
+      phase: "pending",
+      reason: "lifecycle",
+    });
+    expect(controller.getAuthenticatedAccess()).toBeNull();
+    expect(capabilities).toBe(1);
+
+    delay = null;
+    await controller.refreshSession();
+    expect(controller.getSnapshot()).toEqual({ kind: "Authenticated" });
+    expect(capabilities).toBe(2);
+    controller.stop();
+  });
+
+  it("fences a recovery whose capability read is still pending when a lifecycle signal arrives", async () => {
+    const now = Date.now();
+    let delay: Promise<void> | null = null;
+    let capabilities = 0;
+    server.use(
+      http.get("/api/v1/auth/session", () =>
+        deadlineSession(now + 30 * 60_000, now + 60 * 60_000),
+      ),
+      http.get("/api/v1/users/me/capabilities", async () => {
+        capabilities++;
+        if (delay) await delay;
+        return capabilitiesFor();
+      }),
+    );
+    const controller = new SessionController();
+    controller.start();
+    await waitFor(() =>
+      expect(controller.getSnapshot().kind).toBe("Authenticated"),
+    );
+    controller.shield();
+    const gate = lifecycleGate();
+    delay = gate.promise;
+    const recovery = controller.refreshSession();
+    await waitFor(() => expect(capabilities).toBe(2));
+
+    controller.observeLifecycle();
+    gate.resolve();
+    await recovery;
+
+    expect(controller.getSnapshot()).toMatchObject({
+      kind: "Privacy shield",
+      phase: "pending",
+      reason: "lifecycle",
+    });
+    expect(controller.getAuthenticatedAccess()).toBeNull();
+    controller.stop();
+  });
+
+  it("keeps an anonymous-origin shield anonymous and sends nothing when it fences recovery", async () => {
+    let delay: Promise<void> | null = null;
+    let reads = 0;
+    server.use(
+      http.get("/api/v1/auth/session", async () => {
+        reads++;
+        if (delay) await delay;
+        return anonymousSession();
+      }),
+    );
+    const controller = new SessionController();
+    controller.start();
+    await waitFor(() =>
+      expect(controller.getSnapshot().kind).toBe("Signed out"),
+    );
+    controller.shield("lifecycle", true);
+    const gate = lifecycleGate();
+    delay = gate.promise;
+    const recovery = controller.refreshSession();
+    await waitFor(() => expect(reads).toBe(2));
+
+    controller.observeLifecycle();
+    controller.observeLifecycle();
+    gate.resolve();
+    await recovery;
+
+    expect(controller.getSnapshot()).toMatchObject({
+      kind: "Privacy shield",
+      phase: "pending",
+      reason: "lifecycle",
+      anonymousOrigin: true,
+    });
+    expect(reads).toBe(2);
+    controller.stop();
+  });
+});
+
+describe("SessionController logout retry after a recorded 204", () => {
+  function observeSecurityMessages(): string[] {
+    vi.stubGlobal("BroadcastChannel", TestBroadcastChannel);
+    const kinds: string[] = [];
+    new TestBroadcastChannel("mia-security-v1").addEventListener(
+      "message",
+      (event) => {
+        if (!(event instanceof MessageEvent)) return;
+        const data: unknown = event.data;
+        if (typeof data === "object" && data !== null && "kind" in data)
+          kinds.push(String(data.kind));
+      },
+    );
+    return kinds;
+  }
+
+  async function signIn(controller: SessionController) {
+    document.cookie = `mia_csrf=${crypto.randomUUID()}; Path=/`;
+    controller.start();
+    await waitFor(() =>
+      expect(controller.getSnapshot().kind).toBe("Authenticated"),
+    );
+  }
+
+  it("confirms an anonymous retry without a second logout when confirmation was unavailable", async () => {
+    const kinds = observeSecurityMessages();
+    const now = Date.now();
+    let posts = 0;
+    let confirmationReads = 0;
+    server.use(
+      http.get("/api/v1/auth/session", () => {
+        if (posts === 0)
+          return deadlineSession(now + 30 * 60_000, now + 60 * 60_000);
+        confirmationReads++;
+        return confirmationReads === 1
+          ? errorDocument(503, "unavailable")
+          : anonymousSession();
+      }),
+      http.get("/api/v1/users/me/capabilities", () => capabilitiesFor()),
+      http.post("/api/v1/auth/logout", () => {
+        posts++;
+        return new HttpResponse(null, { status: 204 });
+      }),
+    );
+    const controller = new SessionController();
+    await signIn(controller);
+
+    controller.beginAuthenticatedLogout();
+    await waitFor(() =>
+      expect(controller.getSnapshot().kind).toBe("Logout unconfirmed"),
+    );
+    expect(kinds).not.toContain("logout-confirmed");
+
+    controller.retryRestrictedLogout();
+    await waitFor(() =>
+      expect(controller.getSnapshot().kind).toBe("Logout confirmed"),
+    );
+    expect({ posts, confirmationReads }).toEqual({
+      posts: 1,
+      confirmationReads: 2,
+    });
+    expect(kinds.at(-1)).toBe("logout-confirmed");
+    controller.stop();
+  });
+
+  it("never confirms an anonymous retry when no 204 was recorded", async () => {
+    const now = Date.now();
+    let posts = 0;
+    server.use(
+      http.get("/api/v1/auth/session", () =>
+        posts === 0
+          ? deadlineSession(now + 30 * 60_000, now + 60 * 60_000)
+          : anonymousSession(),
+      ),
+      http.get("/api/v1/users/me/capabilities", () => capabilitiesFor()),
+      http.post("/api/v1/auth/logout", () => {
+        posts++;
+        return HttpResponse.error();
+      }),
+    );
+    const controller = new SessionController();
+    await signIn(controller);
+
+    controller.beginAuthenticatedLogout();
+    await waitFor(() =>
+      expect(controller.getSnapshot().kind).toBe("Logout unconfirmed"),
+    );
+    controller.retryRestrictedLogout();
+    await waitFor(() =>
+      expect(controller.getSnapshot()).toEqual({ kind: "Logout unconfirmed" }),
+    );
+    expect(posts).toBe(1);
+    controller.stop();
+  });
+
+  it("drops a recorded 204 once a retry observes the browser signed in again", async () => {
+    const now = Date.now();
+    let posts = 0;
+    const afterLogout = [
+      () => errorDocument(503, "unavailable"),
+      () => restrictedSession(),
+      () => anonymousSession(),
+    ];
+    server.use(
+      http.get("/api/v1/auth/session", () => {
+        if (posts === 0)
+          return deadlineSession(now + 30 * 60_000, now + 60 * 60_000);
+        const next = afterLogout.shift();
+        if (!next) throw new Error("Unexpected session read");
+        return next();
+      }),
+      http.get("/api/v1/users/me/capabilities", () => capabilitiesFor()),
+      http.post("/api/v1/auth/logout", () => {
+        posts++;
+        return posts === 1
+          ? new HttpResponse(null, { status: 204 })
+          : HttpResponse.error();
+      }),
+    );
+    const controller = new SessionController();
+    await signIn(controller);
+
+    controller.beginAuthenticatedLogout();
+    await waitFor(() =>
+      expect(controller.getSnapshot().kind).toBe("Logout unconfirmed"),
+    );
+    controller.retryRestrictedLogout();
+    await waitFor(() => expect(posts).toBe(2));
+    await waitFor(() =>
+      expect(controller.getSnapshot().kind).toBe("Logout unconfirmed"),
+    );
+
+    controller.retryRestrictedLogout();
+    await waitFor(() => expect(afterLogout).toHaveLength(0));
+    await waitFor(() =>
+      expect(controller.getSnapshot()).toEqual({ kind: "Logout unconfirmed" }),
+    );
+    expect(posts).toBe(2);
+    controller.stop();
+  });
+
+  it("requires a readable anonymous CSRF cookie before confirming", async () => {
+    const now = Date.now();
+    let posts = 0;
+    let anonymousReads = 0;
+    server.use(
+      http.get("/api/v1/auth/session", () => {
+        if (posts === 0)
+          return deadlineSession(now + 30 * 60_000, now + 60 * 60_000);
+        anonymousReads++;
+        // The second anonymous read issues the anonymous CSRF cookie.
+        if (anonymousReads === 2)
+          document.cookie = `mia_csrf=${crypto.randomUUID()}; Path=/`;
+        return anonymousSession();
+      }),
+      http.get("/api/v1/users/me/capabilities", () => capabilitiesFor()),
+      http.post("/api/v1/auth/logout", () => {
+        posts++;
+        document.cookie = "mia_csrf=; Max-Age=0; Path=/";
+        return new HttpResponse(null, { status: 204 });
+      }),
+    );
+    const controller = new SessionController();
+    await signIn(controller);
+
+    controller.beginAuthenticatedLogout();
+    await waitFor(() =>
+      expect(controller.getSnapshot()).toEqual({ kind: "Logout unconfirmed" }),
+    );
+    expect(anonymousReads).toBe(1);
+
+    controller.retryRestrictedLogout();
+    await waitFor(() =>
+      expect(controller.getSnapshot().kind).toBe("Logout confirmed"),
+    );
+    expect({ posts, anonymousReads }).toEqual({ posts: 1, anonymousReads: 2 });
+    controller.stop();
+  });
+});
+
 function anonymousSession() {
   return HttpResponse.json(
     { data: null, meta: { stage: "anonymous" } },

@@ -51,7 +51,7 @@
   "entry.error.technicalDetails": "Technische Details",
   "entry.heading": "Bei MIA anmelden",
   "entry.home.heading": "Startseite",
-  "entry.home.introduction": "Die Zugriffsprüfungen sind abgeschlossen.",
+  "entry.home.introduction": "Wählen Sie in der Navigation einen Bereich aus, um fortzufahren.",
   "entry.home.pageTitle": "Startseite | MIA",
   "entry.introduction": "Wählen Sie vor der Anmeldung Ihre Sprache und Textgröße.",
   "entry.language.changed": "Die Oberflächensprache wurde geändert.",
@@ -207,7 +207,6 @@
   "entry.invitation.unknown.heading": "Kontoerstellung nicht bestätigt",
   "entry.invitation.unknown": "Wir konnten nicht bestätigen, ob Ihr Konto erstellt wurde. Versuchen Sie, sich mit dem gewählten Benutzernamen und Passwort anzumelden, oder öffnen Sie den Link in Ihrer Einladungs-E-Mail noch einmal. Keiner der beiden Schritte beweist, ob das Konto erstellt wurde.",
   "session.accessLost": "MIA konnte Ihre Anmeldung oder Ihren Zugriff nicht bestätigen. Inhalte sind ausgeblendet. Aktualisieren Sie, um Ihre Anmeldung zu prüfen.",
-  "entry.home.mfaLink": "Mehrstufige Authentifizierung",
   "mfa.overview.pageTitle": "Mehrstufige Authentifizierung | MIA",
   "mfa.overview.heading": "Mehrstufige Authentifizierung",
   "mfa.enroll.pageTitle": "Mehrstufige Authentifizierung einrichten | MIA",
@@ -298,5 +297,12 @@
   "mfa.codes.hidden": "Wiederherstellungscodes sind ausgeblendet",
   "mfa.codes.hiddenHelp": "Ihre Wiederherstellungscodes wurden ausgeblendet, während Sie weg waren. Zeigen Sie sie wieder an, wenn niemand sonst Ihren Bildschirm sehen kann.",
   "mfa.codes.reveal": "Wiederherstellungscodes anzeigen",
-  "mfa.codes.unavailable": "Wiederherstellungscodes sind nicht mehr verfügbar. Sie werden nur einmal angezeigt und können nicht abgerufen werden. Nur ein künftiger Ersatz dieses Faktors erzeugt neue Codes."
+  "mfa.codes.unavailable": "Wiederherstellungscodes sind nicht mehr verfügbar. Sie werden nur einmal angezeigt und können nicht abgerufen werden. Nur ein künftiger Ersatz dieses Faktors erzeugt neue Codes.",
+  "shell.navigation.label": "Anwendung",
+  "shell.navigation.open": "Navigation öffnen",
+  "shell.navigation.close": "Navigation schließen",
+  "shell.navigation.home": "Startseite",
+  "shell.navigation.profileSecurity": "Profil und Sicherheit",
+  "shell.navigation.mfa": "Mehrstufige Authentifizierung",
+  "shell.productName": "MIA"
 }

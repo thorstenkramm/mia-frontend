@@ -306,7 +306,9 @@ test.describe("password sign-in", () => {
     ).toBe(0);
     expect(
       await page
-        .getByText("Access checks are complete.", { exact: true })
+        .getByText("Choose an area from the navigation to continue.", {
+          exact: true,
+        })
         .count(),
     ).toBe(0);
     expect(

@@ -230,6 +230,12 @@ function readCurrentCsrfCookie(): string | null {
   return values.length === 1 && values[0] !== "" ? (values[0] ?? null) : null;
 }
 
+// Logout confirmation needs the anonymous CSRF cookie that discovery issues; it
+// is read only to prove presence and never retained.
+function hasAnonymousCsrf(): boolean {
+  return readCurrentCsrfCookie() !== null;
+}
+
 function isRestrictedState(
   state: AuthenticationBootstrapState,
 ): state is Extract<
@@ -422,8 +428,15 @@ export class SessionController {
     });
   }
 
+  // A lifecycle signal during an explicit recovery fences that recovery: its
+  // late result must not reveal content in a tab that may now be hidden. Only
+  // a later explicit Refresh starts a new access cycle.
   observeLifecycle(): void {
-    if (this.state.kind === "Authenticated") this.shield();
+    if (
+      this.state.kind === "Authenticated" ||
+      (this.state.kind === "Privacy shield" && this.state.phase === "checking")
+    )
+      this.shield();
     else this.checkDeadline();
   }
 
@@ -807,7 +820,8 @@ export class SessionController {
     }
     this.logoutActive = true;
     this.logoutNonce = crypto.randomUUID();
-    this.recordedLogoutSuccess = false;
+    // A `204` already recorded for this logout flow stays applicable until the
+    // retry's own discovery observes the browser signed in again.
     this.reconciliationNeeded = false;
     this.setState({ kind: "Logout start" });
     this.broadcast("logout-start");
@@ -1443,6 +1457,18 @@ export class SessionController {
           if (attempt !== this.sequence) {
             return { kind: "reconciliation-needed" };
           }
+          // Logout requires a session cookie, so an anonymous browser cannot
+          // be signed out again. Only a recorded `204` lets this anonymous
+          // result confirm the flow; without one it stays unconfirmed.
+          if (recovered.kind === "anonymous") {
+            return this.recordedLogoutSuccess &&
+              !this.reconciliationNeeded &&
+              hasAnonymousCsrf()
+              ? { kind: "confirmed" }
+              : { kind: "unconfirmed" };
+          }
+          // The browser is signed in again: an earlier `204` no longer applies.
+          this.recordedLogoutSuccess = false;
           if (
             recovered.kind !== "mfa" &&
             recovered.kind !== "password-change" &&
@@ -1476,7 +1502,11 @@ export class SessionController {
         if (this.reconciliationNeeded) {
           return { kind: "reconciliation-needed" };
         }
-        return confirmation.kind === "anonymous"
+        if (confirmation.kind !== "anonymous") {
+          this.recordedLogoutSuccess = false;
+          return { kind: "unconfirmed" };
+        }
+        return hasAnonymousCsrf()
           ? { kind: "confirmed" }
           : { kind: "unconfirmed" };
       });
@@ -1508,9 +1538,16 @@ export class SessionController {
       this.logoutActive = false;
       if (this.reconciliationNeeded) {
         this.setState({ kind: "Logout reconciliation needed" });
-      } else if (this.recordedLogoutSuccess && session.kind === "anonymous") {
+      } else if (
+        this.recordedLogoutSuccess &&
+        session.kind === "anonymous" &&
+        hasAnonymousCsrf()
+      ) {
         this.setState({ kind: "Logout confirmed" });
       } else {
+        // A signed-in result means a late transition restored authentication;
+        // the earlier `204` cannot confirm a later anonymous observation.
+        if (session.kind !== "anonymous") this.recordedLogoutSuccess = false;
         this.finishUnconfirmed();
       }
     } catch (error) {

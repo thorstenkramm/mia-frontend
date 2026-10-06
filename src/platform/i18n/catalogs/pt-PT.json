@@ -51,7 +51,7 @@
   "entry.error.technicalDetails": "Detalhes técnicos",
   "entry.heading": "Iniciar sessão no MIA",
   "entry.home.heading": "Início",
-  "entry.home.introduction": "As verificações de acesso estão concluídas.",
+  "entry.home.introduction": "Escolha uma área na navegação para continuar.",
   "entry.home.pageTitle": "Início | MIA",
   "entry.introduction": "Escolha o idioma e o tamanho do texto antes de iniciar sessão.",
   "entry.language.changed": "O idioma da interface foi alterado.",
@@ -207,7 +207,6 @@
   "entry.invitation.unknown.heading": "Criação da conta não confirmada",
   "entry.invitation.unknown": "Não foi possível confirmar se a sua conta foi criada. Tente iniciar sessão com o nome de utilizador e a palavra-passe que escolheu, ou abra outra vez a ligação no e-mail de convite. Nenhum destes passos prova se a conta foi criada.",
   "session.accessLost": "O MIA não conseguiu confirmar o seu início de sessão ou acesso. O conteúdo está oculto. Atualize para verificar o seu início de sessão.",
-  "entry.home.mfaLink": "Autenticação multifator",
   "mfa.overview.pageTitle": "Autenticação multifator | MIA",
   "mfa.overview.heading": "Autenticação multifator",
   "mfa.enroll.pageTitle": "Configurar a autenticação multifator | MIA",
@@ -298,5 +297,12 @@
   "mfa.codes.hidden": "Os códigos de recuperação estão ocultos",
   "mfa.codes.hiddenHelp": "Os seus códigos de recuperação foram ocultados enquanto esteve ausente. Mostre-os novamente quando mais ninguém puder ver o seu ecrã.",
   "mfa.codes.reveal": "Mostrar os códigos de recuperação",
-  "mfa.codes.unavailable": "Os códigos de recuperação já não estão disponíveis. Só são mostrados uma vez e não podem ser recuperados. Só uma futura substituição deste fator emite novos códigos."
+  "mfa.codes.unavailable": "Os códigos de recuperação já não estão disponíveis. Só são mostrados uma vez e não podem ser recuperados. Só uma futura substituição deste fator emite novos códigos.",
+  "shell.navigation.label": "Aplicação",
+  "shell.navigation.open": "Abrir navegação",
+  "shell.navigation.close": "Fechar navegação",
+  "shell.navigation.home": "Início",
+  "shell.navigation.profileSecurity": "Perfil e segurança",
+  "shell.navigation.mfa": "Autenticação multifator",
+  "shell.productName": "MIA"
 }

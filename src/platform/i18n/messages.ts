@@ -486,7 +486,7 @@ export const messages = defineMessages({
   },
   homeIntroduction: {
     id: "entry.home.introduction",
-    defaultMessage: "Access checks are complete.",
+    defaultMessage: "Choose an area from the navigation to continue.",
   },
   errorPageTitle: {
     id: "entry.error.pageTitle",
@@ -879,9 +879,33 @@ export const messages = defineMessages({
     defaultMessage:
       "MIA could not confirm your sign-in or access. Content is hidden. Refresh to check your sign-in.",
   },
-  homeMfaLink: {
-    id: "entry.home.mfaLink",
+  shellNavigationLabel: {
+    id: "shell.navigation.label",
+    defaultMessage: "Application",
+  },
+  shellOpenNavigation: {
+    id: "shell.navigation.open",
+    defaultMessage: "Open navigation",
+  },
+  shellCloseNavigation: {
+    id: "shell.navigation.close",
+    defaultMessage: "Close navigation",
+  },
+  shellHomeLink: {
+    id: "shell.navigation.home",
+    defaultMessage: "Home",
+  },
+  shellProfileSecurityGroup: {
+    id: "shell.navigation.profileSecurity",
+    defaultMessage: "Profile and security",
+  },
+  shellMfaLink: {
+    id: "shell.navigation.mfa",
     defaultMessage: "Multi-factor authentication",
+  },
+  shellProductName: {
+    id: "shell.productName",
+    defaultMessage: "MIA",
   },
   mfaOverviewPageTitle: {
     id: "mfa.overview.pageTitle",
