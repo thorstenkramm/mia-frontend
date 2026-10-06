@@ -2452,6 +2452,7 @@ describe("SessionController public recovery and reset", () => {
       password,
       password,
       () => true,
+      new AbortController().signal,
     );
 
     expect(result.kind).toBe("csrf-rejected");

@@ -28,6 +28,11 @@ session of 2026-09-15 (memlog), satisfying `techstack.md`'s product-decision req
 
 ## Design Paradigm
 
+Delivery sequencing follows the PRD foundation's **Owner-approved tutoring-first milestone — 2026-10-06** and
+`../../epics.md`. Reuse the implemented entry/session substrate; build transfer and tutoring-stream responsibilities
+when their course-preparation and tutoring stories need them. Deferred surface families do not require speculative
+infrastructure before the tutoring milestone. The architecture decisions below are unchanged.
+
 Layered client architecture: three source tiers with one-way dependencies, where every cross-cutting concern has
 exactly one owning module ("single-owner boundary") and features may only consume, never reimplement. Long-lived
 stateful machinery is framework-independent: plain-TypeScript controllers exposed to React through one

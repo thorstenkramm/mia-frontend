@@ -1,4 +1,5 @@
 import { defineConfig } from "@playwright/test";
+import { hygieneOrigin } from "./scripts/secret-hygiene-evidence";
 
 // A failed test otherwise writes an aria snapshot of the page to
 // error-context.md, which would carry any secret the page still shows.
@@ -13,17 +14,17 @@ export default defineConfig({
   testDir: "./e2e",
   testMatch: "secret-hygiene.failure.ts",
   outputDir,
-  reporter: "line",
+  reporter: [["line"], ["json", { outputFile: `${outputDir}/report.json` }]],
   use: {
-    baseURL: "http://127.0.0.1:4173",
+    baseURL: hygieneOrigin,
     screenshot: "off",
     trace: "off",
     video: "off",
   },
   projects: [{ name: "chromium", use: { browserName: "chromium" } }],
   webServer: {
-    command: "npm run preview -- --host 127.0.0.1 --port 4173",
-    url: "http://127.0.0.1:4173",
+    command: `npm run preview -- --host 127.0.0.1 --port ${new URL(hygieneOrigin).port} --strictPort`,
+    url: hygieneOrigin,
     reuseExistingServer: false,
   },
 });

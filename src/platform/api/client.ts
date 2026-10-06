@@ -33,7 +33,9 @@ export class ApiHttpError extends Error {
       parsedBody = null;
     }
     const parsedError = errorCodeSchema.safeParse(parsedBody);
-    this.code = parsedError.success ? parsedError.data.errors[0].code : null;
+    this.code = parsedError.success
+      ? (parsedError.data.errors[0]?.code ?? null)
+      : null;
   }
 }
 
@@ -95,7 +97,7 @@ export async function readJsonApi<T>({
       credentials: "same-origin",
       headers: { Accept: jsonApiMediaType },
       method: "GET",
-      signal,
+      signal: signal ?? null,
     });
   } catch (error) {
     throw new ApiTransportError(error);

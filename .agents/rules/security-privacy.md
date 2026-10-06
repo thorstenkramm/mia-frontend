@@ -116,9 +116,9 @@ interactive external link.
 
 ## Session expiry and the privacy shield
 
-- Each tab owns its idle baseline. Only that tab's last successful, user-initiated authenticated request may reset it.
-  Activity in another tab, pointer movement, typing without dispatch, timer callbacks, SSE traffic, and automatic reads
-  do not.
+- Each tab owns its idle baseline. Follow the approved Continue-only renewal contract in
+  `SECURITY-PRIVACY-ACCEPTANCE.md` §Session Expiry and Lifecycle Revalidation: ordinary requests never renew it.
+  Activity in another tab, pointer movement, typing, timer callbacks, SSE traffic, and automatic reads do not renew it.
 - `online`, focus, visibility-return, persisted-`pageshow`, network-change, and SSE transport loss only mark
   revalidation needed. They send no authenticated request and open no replacement EventSource.
 - Explicit Refresh and Try now require BCG-001 non-refreshing transport. Continue working is one user-initiated
@@ -200,11 +200,10 @@ navigation, response size, or whether a resource was visible earlier.
   it in one active mutation flow, send it only in the OpenAPI-defined header or field, and drop every reference before
   handling the response — including on timeout — because the frontend cannot know whether it was consumed. Never retry
   automatically and never reuse it for another action.
-- **TOTP provisioning URI:** limit to 1,024 UTF-8 bytes before parsing, accept only the canonical
-  `otpauth://totp/<label>` form with `secret`, `issuer`, `algorithm=SHA1`, `digits=6`, `period=30` in exact order,
-  verify the label equals the current username and the issuer equals `MIA (<normalized hostname>)`, and require exactly
-  32 uppercase unpadded Base32 characters. Reject anything else. Derive the QR image locally — no remote image,
-  service, or authenticator handoff.
+- **TOTP provisioning URI:** validate the backend-returned grammar and bounds specified by
+  `SECURITY-PRIVACY-ACCEPTANCE.md` §TOTP Provisioning URI (including its Story 1.9 owner decision). Do not invent additional
+  required query parameters or a different issuer/label form. Derive the QR image locally — no remote image, service,
+  or authenticator handoff.
 
 ## Clipboard, print, and downloads
 

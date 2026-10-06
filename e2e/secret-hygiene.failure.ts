@@ -1,11 +1,23 @@
 import { expect, test } from "@playwright/test";
 import { expectRetainedSecret } from "./secretAssertions";
+import {
+  browserCases,
+  controlledFailure,
+  injectEarlyFailure,
+  hygieneOrigin,
+} from "../scripts/secret-hygiene-evidence";
 
 const mediaType = "application/vnd.api+json";
+const later = (minutes: number) =>
+  new Date(Date.now() + minutes * 60_000).toISOString().replace("Z", "000Z");
 
 test.use({ screenshot: "off", trace: "off", video: "off" });
+test.beforeEach(({ page }, info) => {
+  void page;
+  injectEarlyFailure(info.title);
+});
 
-test("controlled secret-bearing failure", async ({ page, context }) => {
+test(browserCases[0], async ({ page, context }) => {
   const username = process.env.MIA_SECRET_HYGIENE_USERNAME;
   const password = process.env.MIA_SECRET_HYGIENE_PASSWORD;
   const rawError = process.env.MIA_SECRET_HYGIENE_RAW_ERROR;
@@ -27,7 +39,7 @@ test("controlled secret-bearing failure", async ({ page, context }) => {
     {
       name: "mia_csrf",
       value: crypto.randomUUID(),
-      url: "http://127.0.0.1:4173/",
+      url: hygieneOrigin,
     },
   ]);
   await page.route("**/api/v1/auth/session", async (route) =>
@@ -48,8 +60,8 @@ test("controlled secret-bearing failure", async ({ page, context }) => {
           attributes: {
             stage: "mfa",
             mfa_challenge_id: "challenge-id",
-            idle_expires_at: "2026-10-01T10:30:00.000000Z",
-            absolute_expires_at: "2026-10-01T10:30:00.000000Z",
+            idle_expires_at: later(30),
+            absolute_expires_at: later(720),
           },
         },
       }),
@@ -67,8 +79,8 @@ test("controlled secret-bearing failure", async ({ page, context }) => {
             id: "account-id",
             attributes: {
               stage: "password-change",
-              idle_expires_at: "2026-10-01T10:30:00.000000Z",
-              absolute_expires_at: "2026-10-01T10:30:00.000000Z",
+              idle_expires_at: later(30),
+              absolute_expires_at: later(720),
             },
           },
         }),
@@ -100,10 +112,10 @@ test("controlled secret-bearing failure", async ({ page, context }) => {
   await page.close();
 
   // Deliberately fail without a locator, snapshot, fixture value, or DOM dump.
-  expect(false).toBe(true);
+  controlledFailure(browserCases[0], () => expect(false).toBe(true));
 });
 
-test("controlled retained-secret assertion failure", async ({ page }) => {
+test(browserCases[1], async ({ page }) => {
   const replacementPassword =
     process.env.MIA_SECRET_HYGIENE_REPLACEMENT_PASSWORD;
   if (replacementPassword === undefined)
@@ -118,8 +130,8 @@ test("controlled retained-secret assertion failure", async ({ page }) => {
           id: "account-id",
           attributes: {
             stage: "password-change",
-            idle_expires_at: "2026-10-01T10:30:00.000000Z",
-            absolute_expires_at: "2026-10-01T10:30:00.000000Z",
+            idle_expires_at: later(30),
+            absolute_expires_at: later(720),
           },
         },
       }),
@@ -132,10 +144,12 @@ test("controlled retained-secret assertion failure", async ({ page }) => {
   const retained = await page.locator("#new-password").inputValue();
   await page.close();
 
-  expectRetainedSecret(retained, replacementPassword, "New password field");
+  controlledFailure(browserCases[1], () =>
+    expectRetainedSecret(retained, replacementPassword, "New password field"),
+  );
 });
 
-test("controlled reset-token failure", async ({ page, context }) => {
+test(browserCases[2], async ({ page, context }) => {
   const resetToken = process.env.MIA_SECRET_HYGIENE_RESET_TOKEN;
   const resetPassword = process.env.MIA_SECRET_HYGIENE_RESET_PASSWORD;
   const rawError = process.env.MIA_SECRET_HYGIENE_RAW_ERROR;
@@ -150,7 +164,7 @@ test("controlled reset-token failure", async ({ page, context }) => {
     {
       name: "mia_csrf",
       value: crypto.randomUUID(),
-      url: "http://127.0.0.1:4173/",
+      url: hygieneOrigin,
     },
   ]);
   await page.route("**/api/v1/auth/session", async (route) =>
@@ -173,10 +187,10 @@ test("controlled reset-token failure", async ({ page, context }) => {
   await page.close();
 
   // Deliberately fail without a locator, snapshot, fixture value, or DOM dump.
-  expect(false).toBe(true);
+  controlledFailure(browserCases[2], () => expect(false).toBe(true));
 });
 
-test("controlled invitation-token failure", async ({ page, context }) => {
+test(browserCases[3], async ({ page, context }) => {
   const invitationToken = process.env.MIA_SECRET_HYGIENE_INVITATION_TOKEN;
   const invitationPassword = process.env.MIA_SECRET_HYGIENE_INVITATION_PASSWORD;
   const rawError = process.env.MIA_SECRET_HYGIENE_RAW_ERROR;
@@ -191,7 +205,7 @@ test("controlled invitation-token failure", async ({ page, context }) => {
     {
       name: "mia_csrf",
       value: crypto.randomUUID(),
-      url: "http://127.0.0.1:4173/",
+      url: hygieneOrigin,
     },
   ]);
   await page.route("**/api/v1/auth/session", async (route) =>
@@ -230,10 +244,10 @@ test("controlled invitation-token failure", async ({ page, context }) => {
   await page.close();
 
   // Deliberately fail without a locator, snapshot, fixture value, or DOM dump.
-  expect(false).toBe(true);
+  controlledFailure(browserCases[3], () => expect(false).toBe(true));
 });
 
-test("controlled TOTP enrollment failure", async ({ page, context }) => {
+test(browserCases[4], async ({ page, context }) => {
   const uri = process.env.MIA_SECRET_HYGIENE_TOTP_URI;
   const codeSet = process.env.MIA_SECRET_HYGIENE_RECOVERY_CODE_SET;
   const mfaCode = process.env.MIA_SECRET_HYGIENE_MFA_CODE;
@@ -263,14 +277,12 @@ test("controlled TOTP enrollment failure", async ({ page, context }) => {
   ];
   let pending = false;
   let active = false;
-  const later = (minutes: number) =>
-    new Date(Date.now() + minutes * 60_000).toISOString().replace("Z", "000Z");
 
   await context.addCookies([
     {
       name: "mia_csrf",
       value: crypto.randomUUID(),
-      url: "http://127.0.0.1:4173/",
+      url: hygieneOrigin,
     },
   ]);
   await page.route("**/api/v1/auth/session", async (route) =>
@@ -403,5 +415,5 @@ test("controlled TOTP enrollment failure", async ({ page, context }) => {
   await page.close();
 
   // Deliberately fail without a locator, snapshot, fixture value, or DOM dump.
-  expect(false).toBe(true);
+  controlledFailure(browserCases[4], () => expect(false).toBe(true));
 });

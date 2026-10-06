@@ -1,7 +1,6 @@
 {
   "$schema": "https://opencode.ai/config.json",
-  "plugin": [
+  "plugins": [
     "@upstash/context7-opencode"
-  ],
-  "subagent_depth": 2
+  ]
 }

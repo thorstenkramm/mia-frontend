@@ -267,13 +267,13 @@ describe("reset-link flow", () => {
     link.observeSession(signedOut);
     let settle: (result: PublicMutationResult) => void = () => undefined;
     let isCurrent: () => boolean = () => true;
-    let attemptSignal: AbortSignal | null = null;
+    const attempt: { signal?: AbortSignal } = {};
     const pending = link.submit(
       "password-one",
       "password-one",
       (_token, _password, _confirmation, current, signal) => {
         isCurrent = current;
-        attemptSignal = signal;
+        attempt.signal = signal;
         return new Promise((resolve) => {
           settle = resolve;
         });
@@ -282,7 +282,7 @@ describe("reset-link flow", () => {
     expect(isCurrent()).toBe(true);
     link.depart();
     expect(isCurrent()).toBe(false);
-    expect(attemptSignal?.aborted).toBe(true);
+    expect(attempt.signal?.aborted).toBe(true);
     settle({ kind: "completed", value: undefined });
     await pending;
 

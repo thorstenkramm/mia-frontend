@@ -21,7 +21,11 @@ import {
   type InvitationRole,
   type InvitationAcceptanceFields,
 } from "../api/entry";
-import { ApiProtocolError } from "../api/client";
+import {
+  ApiHttpError,
+  ApiProtocolError,
+  ApiTransportError,
+} from "../api/client";
 
 export type AuthenticationBootstrapState =
   | { readonly kind: "Cold" }
@@ -223,7 +227,7 @@ function readCurrentCsrfCookie(): string | null {
     .map((part) => part.trim())
     .filter((part) => part.startsWith(`${name}=`))
     .map((part) => part.slice(name.length + 1));
-  return values.length === 1 && values[0] !== "" ? values[0] : null;
+  return values.length === 1 && values[0] !== "" ? (values[0] ?? null) : null;
 }
 
 function isRestrictedState(
@@ -1942,11 +1946,9 @@ function isAccessLoss(failure: EntryApiFailure): boolean {
 
 function toEntryFailure(error: unknown): EntryApiFailure {
   if (
-    error instanceof Error &&
-    "kind" in error &&
-    (error.kind === "http" ||
-      error.kind === "protocol" ||
-      error.kind === "transport")
+    error instanceof ApiHttpError ||
+    error instanceof ApiProtocolError ||
+    error instanceof ApiTransportError
   ) {
     return error;
   }

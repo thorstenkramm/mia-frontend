@@ -51,6 +51,14 @@ permitted.
 
 ## Information Architecture
 
+### Current delivery slice
+
+The PRD foundation's **Owner-approved tutoring-first milestone — 2026-10-06** governs delivery priority over the full
+inventory below. Build navigation, supervisor onboarding, course preparation/activation, student provisioning/password
+setup, then tutoring. Show only authorized, implemented destinations; do not build Mentor or expanded profile/operations
+surfaces merely to fill the shell. Home's initial neutral-navigation treatment is defined by that PRD amendment.
+Canonical paths and the behavior of implemented surfaces remain governed by their existing companions.
+
 ### Navigation Model
 
 One capability-driven application shell serves every role combination. There is no role switcher and no duplicated

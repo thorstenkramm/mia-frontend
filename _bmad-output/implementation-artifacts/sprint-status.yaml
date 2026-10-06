@@ -28,11 +28,18 @@
 # - Developer typically creates the next story after the previous one is 'done' to incorporate learnings
 # - Dev moves story to 'review', then runs code-review (fresh context, different LLM recommended)
 # - Retrospective appends its action items to action_items; the status view surfaces open ones
+# - Tutoring-first replan 2026-10-06: execute Epics 2 -> 3 -> 4 -> 5 -> 6.
+# - Epics 7-9 are later backlog, not prerequisites for the tutoring demonstration.
+# - Epic 1 remains in-progress for recorded acceptance follow-up; do not restart its done stories.
+# - Unstarted story IDs were replaced; planning-artifacts/sprint-change-proposal-2026-10-06.md owns the map.
 generated: 09-19-2026 13:57
-last_updated: 10-06-2026
+last_updated: 10-06-2026 12:00
 project: mia-frontend
 project_key: NOKEY
 tracking_system: file-system
+delivery_plan: _bmad-output/planning-artifacts/epics.md
+current_milestone: student-tutoring-mvp
+next_story: 2-1-basic-capability-driven-navigation
 story_location: |
   /Users/thorsten/projects/thorsten/mia-frontend/_bmad-output/implementation-artifacts
 development_status:
@@ -46,51 +53,41 @@ development_status:
   1-7-invitation-preview-and-acceptance: done
   1-8-session-lifecycle-idle-warning-expiry-shield-logout-bcg-001: done
   1-9-totp-enrollment-and-recovery-codes: done
-  epic-1-retrospective: optional
+  epic-1-retrospective: done
 
   epic-2: backlog
-  2-1-capability-driven-application-shell: backlog
-  2-2-home-the-continuation-surface: backlog
-  2-3-navigation-contract-urls-history-route-changes: backlog
-  2-4-student-self-profile-read-only: backlog
-  2-5-staff-profile-editing: backlog
+  2-1-basic-capability-driven-navigation: backlog
+  2-2-working-routes-and-parent-navigation: backlog
   epic-2-retrospective: optional
 
   epic-3: backlog
-  3-1-administrator-creates-a-course: backlog
-  3-2-the-preparation-hub: backlog
-  3-3-course-fields-details-goals-ai-instructions-logo: backlog
-  3-4-readiness-activation-deactivation: backlog
-  3-5-supervisor-relationships-and-course-deletion: backlog
+  3-1-administrator-invites-a-supervisor: backlog
+  3-2-supervisor-account-setup-and-password-only-entry: backlog
   epic-3-retrospective: optional
 
   epic-4: backlog
-  4-1-create-materials-and-file-drafts: backlog
-  4-2-upload-files-with-live-progress: backlog
-  4-3-finalize-and-processing: backlog
-  4-4-brief-review-correction-and-approval: backlog
-  4-5-authorized-download-and-deletion: backlog
+  4-1-administrator-creates-a-course-with-a-supervisor: backlog
+  4-2-supervisor-edits-course-teaching-fields: backlog
+  4-3-supervisor-creates-material-and-uploads-files: backlog
+  4-4-process-material-and-approve-its-brief: backlog
+  4-5-activate-the-ready-course: backlog
   epic-4-retrospective: optional
 
   epic-5: backlog
-  5-1-create-a-new-student: backlog
-  5-2-add-an-existing-student-by-exact-username: backlog
-  5-3-roster-and-student-support: backlog
-  5-4-session-status-with-honest-visibility-expectations: backlog
-  5-5-completed-transcripts-used-material-summary-correction: backlog
+  5-1-supervisor-provisions-a-student-into-the-active-course: backlog
+  5-2-student-first-sign-in-and-joined-course-entry: backlog
   epic-5-retrospective: optional
 
   epic-6: backlog
-  6-1-start-a-tutoring-session: backlog
-  6-2-send-and-queue-messages: backlog
-  6-3-live-streamed-responses: backlog
-  6-4-stable-reading-and-transcript-integrity: backlog
-  6-5-stop-retry-and-reconnection: backlog
-  6-6-finish-a-session-bcg-012-gated-closure: backlog
-  6-7-workspace-honesty-fixed-copy-and-optional-speech: backlog
-  6-8-learning-history: backlog
+  6-1-start-or-resume-the-students-tutoring-session: backlog
+  6-2-send-messages-and-show-the-single-queued-message: backlog
+  6-3-stream-answers-without-disrupting-reading: backlog
+  6-4-recover-stop-and-deliberately-retry-tutoring-work: backlog
+  6-5-finish-and-show-the-completed-transcript: backlog
+  6-6-prove-the-complete-tutoring-journey: backlog
   epic-6-retrospective: optional
 
+  # Later scope: select only after the student-tutoring MVP milestone or a new owner decision.
   epic-7: backlog
   7-1-request-mentoring: backlog
   7-2-triage-and-assign-requests: backlog
@@ -100,10 +97,12 @@ development_status:
   epic-7-retrospective: optional
 
   epic-8: backlog
-  8-1-account-administration: backlog
-  8-2-invitation-administration: backlog
-  8-3-course-administration: backlog
-  8-4-durable-jobs-and-audit-records: backlog
+  8-1-complete-home-aggregation-and-profile-surfaces: backlog
+  8-2-extended-course-and-material-management: backlog
+  8-3-student-support-and-supervisor-oversight: backlog
+  8-4-learning-history-and-optional-speech: backlog
+  8-5-account-administration-and-operational-tools: backlog
+  8-6-additional-mfa-management-and-remaining-auth-follow-up: backlog
   epic-8-retrospective: optional
 
   epic-9: backlog
@@ -113,3 +112,39 @@ development_status:
   9-4-security-acceptance-suites: backlog
   9-5-manual-release-evidence: backlog
   epic-9-retrospective: optional
+action_items:
+  - id: "epic-1-retro-item-1-propose-lean-mvp-workflow-remove-review"
+    epic: 1
+    action: "Propose lean MVP workflow: remove review quotas and default re-derivation;
+      use bounded repairs and visible progress (P1/P2/P4)."
+    owner: "Product owner + workflow maintainer"
+    status: open
+    ref: "_bmad-output/implementation-artifacts/epic-1-retro-2026-10-06.md"
+  - id: "epic-1-retro-item-2-repair-compiler-and-secret-hygiene-verif"
+    epic: 1
+    action: "Repair compiler and secret-hygiene verification; reuse one build and
+      scope documentation checks (C4/P1)."
+    owner: "Frontend maintainer"
+    status: open
+    ref: "_bmad-output/implementation-artifacts/epic-1-retro-2026-10-06.md"
+  - id: "epic-1-retro-item-3-fix-cross-story-lifecycle-mfa-fencing-ma"
+    epic: 1
+    action: "Fix cross-story lifecycle/MFA fencing, masked expiry, queued payload
+      cleanup, reconciliation admission and code departure (C1/C2/C5/C6/C7)."
+    owner: "Frontend developer"
+    status: open
+    ref: "_bmad-output/implementation-artifacts/epic-1-retro-2026-10-06.md"
+  - id: "epic-1-retro-item-4-fix-anonymous-logout-retry-recovery-and"
+    epic: 1
+    action: "Fix anonymous logout retry recovery and validate nonce/CSRF confirmation
+      against the accepted contract (C3)."
+    owner: "Frontend developer + backend contract owner"
+    status: open
+    ref: "_bmad-output/implementation-artifacts/epic-1-retro-2026-10-06.md"
+  - id: "epic-1-retro-item-5-reconcile-stale-agent-summaries-and-sett"
+    epic: 1
+    action: "Reconcile stale agent summaries and settle prerequisites once before
+      implementation (P3/P6)."
+    owner: "Product owner + documentation maintainer"
+    status: open
+    ref: "_bmad-output/implementation-artifacts/epic-1-retro-2026-10-06.md"

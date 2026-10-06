@@ -34,28 +34,34 @@ else
     npm ci
   fi
 
-  for target in typecheck lint format:check test build check:bundle-size check:i18n check:api-types; do
+  built=0
+  for target in typecheck check:typecheck-coverage lint format:check test build check:bundle-size check:i18n check:api-types; do
     if has_script "$target"; then
       echo "Running npm run $target ..."
       npm run "$target"
+      if [[ "$target" == "build" ]]; then built=1; fi
     else
       skip "npm run $target (script not defined)"
     fi
   done
 
   # End-to-end tests need browsers installed; keep them a separate, explicit component.
-  if has_script "test:e2e"; then
-    echo "Running npm run test:e2e ..."
-    npm run test:e2e
+  if [[ "$built" -eq 0 ]]; then
+    skip "E2E and secret hygiene (no build produced by this gate)"
   else
-    skip "npm run test:e2e (script not defined)"
-  fi
+    if has_script "test:e2e:built"; then
+      echo "Running npm run test:e2e:built (using this gate's build) ..."
+      npm run test:e2e:built
+    else
+      skip "npm run test:e2e:built (script not defined)"
+    fi
 
-  if has_script "check:secret-hygiene"; then
-    echo "Running npm run check:secret-hygiene ..."
-    npm run check:secret-hygiene
-  else
-    skip "npm run check:secret-hygiene (script not defined)"
+    if has_script "check:secret-hygiene:built"; then
+      echo "Running npm run check:secret-hygiene:built (using this gate's build) ..."
+      npm run check:secret-hygiene:built
+    else
+      skip "npm run check:secret-hygiene:built (script not defined)"
+    fi
   fi
 fi
 

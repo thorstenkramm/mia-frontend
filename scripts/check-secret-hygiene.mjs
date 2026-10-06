@@ -1,8 +1,9 @@
 import { randomBytes, randomUUID } from "node:crypto";
-import { mkdtemp, readdir, readFile, rm } from "node:fs/promises";
+import { mkdir, mkdtemp, readdir, readFile, rm } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { spawnSync } from "node:child_process";
+import { browserCases, unitCases } from "./secret-hygiene-evidence.ts";
 
 const outputDir = await mkdtemp(join(tmpdir(), "mia-secret-hygiene-"));
 const recoveryAlphabet = "0123456789ABCDEFGHJKMNPQRSTVWXYZ";
@@ -57,94 +58,160 @@ async function leakingArtifacts(directory) {
     } else {
       const content = await readFile(path);
       if (markers.some((marker) => content.includes(Buffer.from(marker))))
-        leaks.push(path.slice(directory.length + 1));
+        leaks.push(true);
     }
   }
   return leaks;
 }
 
-try {
+const fixtureEnvironment = {
+  ...process.env,
+  MIA_SECRET_HYGIENE_USERNAME: markers[0],
+  MIA_SECRET_HYGIENE_PASSWORD: markers[1],
+  MIA_SECRET_HYGIENE_RAW_ERROR: markers[2],
+  MIA_SECRET_HYGIENE_MFA_CODE: markers[3],
+  MIA_SECRET_HYGIENE_RECOVERY_CODE: markers[4],
+  MIA_SECRET_HYGIENE_REPLACEMENT_PASSWORD: markers[5],
+  MIA_SECRET_HYGIENE_RESET_TOKEN: markers[6],
+  MIA_SECRET_HYGIENE_RESET_PASSWORD: markers[7],
+  MIA_SECRET_HYGIENE_INVITATION_TOKEN: markers[8],
+  MIA_SECRET_HYGIENE_INVITATION_PASSWORD: markers[9],
+  ...mfaEnrollmentEnvironment,
+};
+
+function browserResults(suites) {
+  return suites.flatMap((suite) => [
+    ...suite.specs.flatMap((spec) =>
+      spec.tests.map((test) => ({
+        id: spec.title,
+        attempts: test.results.length,
+        status: test.results[0]?.status,
+        errors:
+          test.results[0]?.errors.map((error) => error.message ?? "") ?? [],
+      })),
+    ),
+    ...browserResults(suite.suites ?? []),
+  ]);
+}
+
+async function runFailures(runner, earlyId) {
+  const directory = join(outputDir, `${runner}-${earlyId ?? "baseline"}`);
+  const evidence = join(directory, "checkpoints");
+  await mkdir(evidence, { recursive: true });
+  const artifacts = join(directory, "artifacts");
+  await mkdir(artifacts);
+  const reportFile = join(artifacts, "report.json");
+  const args =
+    runner === "playwright"
+      ? ["test", "--config", "playwright.secret-hygiene.config.ts"]
+      : [
+          "run",
+          "--config",
+          "vitest.secret-hygiene.config.ts",
+          "--reporter=default",
+          "--reporter=json",
+          `--outputFile.json=${reportFile}`,
+        ];
   const result = spawnSync(
-    join(process.cwd(), "node_modules", ".bin", "playwright"),
-    ["test", "--config", "playwright.secret-hygiene.config.ts"],
+    join(process.cwd(), "node_modules", ".bin", runner),
+    args,
     {
       cwd: process.cwd(),
       encoding: "buffer",
       env: {
-        ...process.env,
-        MIA_SECRET_HYGIENE_OUTPUT: outputDir,
-        MIA_SECRET_HYGIENE_USERNAME: markers[0],
-        MIA_SECRET_HYGIENE_PASSWORD: markers[1],
-        MIA_SECRET_HYGIENE_RAW_ERROR: markers[2],
-        MIA_SECRET_HYGIENE_MFA_CODE: markers[3],
-        MIA_SECRET_HYGIENE_RECOVERY_CODE: markers[4],
-        MIA_SECRET_HYGIENE_REPLACEMENT_PASSWORD: markers[5],
-        MIA_SECRET_HYGIENE_RESET_TOKEN: markers[6],
-        MIA_SECRET_HYGIENE_RESET_PASSWORD: markers[7],
-        MIA_SECRET_HYGIENE_INVITATION_TOKEN: markers[8],
-        MIA_SECRET_HYGIENE_INVITATION_PASSWORD: markers[9],
-        ...mfaEnrollmentEnvironment,
+        ...fixtureEnvironment,
+        NO_COLOR: "1",
+        MIA_SECRET_HYGIENE_OUTPUT: artifacts,
+        MIA_SECRET_HYGIENE_EVIDENCE: evidence,
+        MIA_SECRET_HYGIENE_EARLY_FAILURE: earlyId ?? "",
       },
       maxBuffer: 16 * 1024 * 1024,
+      timeout: 180_000,
     },
   );
-  // Every controlled test (sign-in flow, retained-secret assertion, reset
-  // token flow, invitation token flow, and TOTP enrollment) must fail.
-  if (
-    result.error !== undefined ||
-    result.status !== 1 ||
-    !result.stdout.includes(Buffer.from("5 failed"))
-  ) {
-    throw new Error("Controlled failures did not each fail exactly once.");
-  }
+  // Never forward child output or artifact names, including on infrastructure failure.
   const processLeak = markers.some(
     (marker) =>
-      result.stdout.includes(Buffer.from(marker)) ||
-      result.stderr.includes(Buffer.from(marker)),
+      result.stdout?.includes(Buffer.from(marker)) ||
+      result.stderr?.includes(Buffer.from(marker)),
   );
-  const artifactLeaks = await leakingArtifacts(outputDir);
+  const artifactLeaks = await leakingArtifacts(directory);
   if (processLeak || artifactLeaks.length > 0) {
+    throw new Error("Secret-hygiene scan found a controlled fixture marker.");
+  }
+  if (result.error || result.status !== 1) {
     throw new Error(
-      `Secret-hygiene scan found a controlled fixture marker (${processLeak ? "process" : ""}${processLeak && artifactLeaks.length > 0 ? "+" : ""}${artifactLeaks.length > 0 ? `artifact:${artifactLeaks.join(",")}` : ""}).`,
+      `The ${runner} controlled failure run did not finish normally.`,
     );
   }
-
-  // The token-bearing Vitest suites use the same shared assertion helpers as
-  // these controlled unit failures; all seven must fail without a marker leak.
-  const unit = spawnSync(
-    join(process.cwd(), "node_modules", ".bin", "vitest"),
-    ["run", "--config", "vitest.secret-hygiene.config.ts"],
-    {
-      cwd: process.cwd(),
-      encoding: "buffer",
-      env: {
-        ...process.env,
-        NO_COLOR: "1",
-        MIA_SECRET_HYGIENE_RESET_TOKEN: markers[6],
-        MIA_SECRET_HYGIENE_RESET_PASSWORD: markers[7],
-        MIA_SECRET_HYGIENE_INVITATION_TOKEN: markers[8],
-        MIA_SECRET_HYGIENE_INVITATION_PASSWORD: markers[9],
-        ...mfaEnrollmentEnvironment,
-      },
-      maxBuffer: 16 * 1024 * 1024,
-    },
-  );
-  if (
-    unit.error !== undefined ||
-    unit.status !== 1 ||
-    !/Tests\s+7 failed/u.test(unit.stdout.toString())
-  ) {
-    throw new Error("Controlled unit failures did not each fail exactly once.");
+  let report;
+  try {
+    report = JSON.parse(await readFile(reportFile, "utf8"));
+  } catch {
+    throw new Error(`The ${runner} hygiene report is missing or invalid.`);
   }
+  const cases = runner === "playwright" ? browserCases : unitCases;
+  const results =
+    runner === "playwright"
+      ? browserResults(report.suites)
+      : report.testResults.flatMap((suite) =>
+          suite.assertionResults.map((test) => ({
+            id: test.title,
+            attempts: 1,
+            status: test.status,
+            errors: test.failureMessages,
+          })),
+        );
   if (
-    markers.some(
-      (marker) =>
-        unit.stdout.includes(Buffer.from(marker)) ||
-        unit.stderr.includes(Buffer.from(marker)),
+    results.length !== cases.length ||
+    results.some(
+      (result) => result.status !== "failed" || result.attempts !== 1,
     )
-  ) {
+  )
     throw new Error(
-      "Secret-hygiene unit scan found a controlled fixture marker.",
+      `The ${runner} cases did not each fail exactly once (${cases.map((id) => `${id}: ${results.filter((result) => result.id === id && result.status === "failed").length} failed`).join("; ")}).`,
+    );
+  const rejected = [];
+  for (const id of cases) {
+    const matches = results.filter((result) => result.id === id);
+    const checkpoint = await readFile(
+      join(evidence, `${id}.checkpoint`),
+      "utf8",
+    ).catch((error) => {
+      if (error.code === "ENOENT") return null;
+      throw new Error("Could not read hygiene checkpoint.");
+    });
+    if (
+      matches.length !== 1 ||
+      checkpoint !== id ||
+      matches[0].errors.length !== 1 ||
+      !matches[0].errors[0].includes(`ControlledHygieneFailure:${id}\n`)
+    )
+      rejected.push(id);
+  }
+  return rejected;
+}
+
+try {
+  for (const [runner, cases] of [
+    ["playwright", browserCases],
+    ["vitest", unitCases],
+  ]) {
+    const rejected = await runFailures(runner);
+    if (rejected.length)
+      throw new Error(
+        `Missing checkpoint or deliberate failure identity: ${rejected.join(", ")}.`,
+      );
+    // Preserve the same failed-case count while replacing one intended failure
+    // with an early fixture failure. The identity gate must reject exactly it.
+    const earlyId = cases[0];
+    const earlyRejected = await runFailures(runner, earlyId);
+    if (earlyRejected.length !== 1 || earlyRejected[0] !== earlyId)
+      throw new Error(
+        `The ${runner} early-failure canary was not rejected correctly.`,
+      );
+    console.log(
+      `${runner}: checkpoints and failure identities verified; early-failure canary rejected.`,
     );
   }
   console.log("Secret-hygiene deliberate-failure scan passed.");

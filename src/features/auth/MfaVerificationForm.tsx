@@ -194,22 +194,20 @@ export function MfaVerificationForm({ route }: { readonly route: MfaRoute }) {
           </button>
         ) : null}
       </form>
-      {outcome?.kind !== "expired" ? (
-        <button
-          type="button"
-          aria-disabled={!enabled}
-          onClick={() =>
-            switchRoute(route === "challenge" ? "recovery" : "challenge")
-          }
-          className="mt-6 min-h-6 text-sm/6 font-semibold text-indigo-600 underline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-indigo-600"
-        >
-          {intl.formatMessage(
-            route === "challenge"
-              ? messages.mfaUseRecovery
-              : messages.mfaUseVerification,
-          )}
-        </button>
-      ) : null}
+      <button
+        type="button"
+        aria-disabled={!enabled}
+        onClick={() =>
+          switchRoute(route === "challenge" ? "recovery" : "challenge")
+        }
+        className="mt-6 min-h-6 text-sm/6 font-semibold text-indigo-600 underline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-indigo-600"
+      >
+        {intl.formatMessage(
+          route === "challenge"
+            ? messages.mfaUseRecovery
+            : messages.mfaUseVerification,
+        )}
+      </button>
     </>
   );
 }

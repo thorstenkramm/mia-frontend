@@ -654,9 +654,7 @@ describe("localized anonymous entry", () => {
       await user.paste("Example.User");
       input.focus();
       await user.paste(password);
-      await user.click(
-        screen.getByRole("button", { name: "Sign in", exact: true }),
-      );
+      await user.click(screen.getByRole("button", { name: "Sign in" }));
       const recheck = await screen.findByRole("button", {
         name: "Check sign-in status",
       });
@@ -671,7 +669,6 @@ describe("localized anonymous entry", () => {
       expect(input.readOnly).toBe(true);
       const submit = screen.getByRole("button", {
         name: "Sign in",
-        exact: true,
       });
       expect(submit).toHaveAttribute("aria-disabled", "true");
       await user.click(submit);
@@ -724,9 +721,7 @@ describe("localized anonymous entry", () => {
     const username = await screen.findByLabelText("Username (required)");
     await user.type(username, "example");
     await user.type(screen.getByLabelText("Password (required)"), "example");
-    await user.click(
-      screen.getByRole("button", { name: "Sign in", exact: true }),
-    );
+    await user.click(screen.getByRole("button", { name: "Sign in" }));
     const recheck = await screen.findByRole("button", {
       name: "Check sign-in status",
     });
@@ -764,9 +759,7 @@ describe("localized anonymous entry", () => {
       "example",
     );
     await user.type(screen.getByLabelText("Password (required)"), "example");
-    await user.click(
-      screen.getByRole("button", { name: "Sign in", exact: true }),
-    );
+    await user.click(screen.getByRole("button", { name: "Sign in" }));
     await screen.findByRole("button", { name: "Check sign-in status" });
     const language = screen.getByLabelText("Language");
     language.focus();
@@ -815,7 +808,6 @@ describe("localized anonymous entry", () => {
       expect(input.value === password).toBe(true);
       const submit = screen.getByRole("button", {
         name: "Sign in",
-        exact: true,
       });
       await user.click(submit);
       await waitFor(() => expect(posts).toBe(1));
@@ -892,9 +884,7 @@ describe("localized anonymous entry", () => {
         screen.getByLabelText("Password (required)"),
         crypto.randomUUID(),
       );
-      await user.click(
-        screen.getByRole("button", { name: "Sign in", exact: true }),
-      );
+      await user.click(screen.getByRole("button", { name: "Sign in" }));
       if (stage === "authenticated") {
         await screen.findByRole("heading", { name: "Checking access" });
         expect(
@@ -917,7 +907,7 @@ describe("localized anonymous entry", () => {
       if (stage !== "authenticated") {
         expect(screen.queryByRole("navigation")).not.toBeInTheDocument();
         expect(
-          await screen.findByRole("button", { name: "Sign out", exact: true }),
+          await screen.findByRole("button", { name: "Sign out" }),
         ).toBeInTheDocument();
       }
     },
@@ -1127,9 +1117,9 @@ describe("localized anonymous entry", () => {
   });
 
   it.each([
-    [403, "auth_mfa_step_used", "already used", false],
-    [422, "auth_invalid_mfa_code", "was not accepted", false],
-    [429, "rate_limited", "temporarily limited", false],
+    [403, "auth_mfa_step_used", "already used"],
+    [422, "auth_invalid_mfa_code", "was not accepted"],
+    [429, "rate_limited", "temporarily limited"],
   ] as const)(
     "renders MFA error code %s without replay and applies safe input retention",
     async (status, code, copy) => {

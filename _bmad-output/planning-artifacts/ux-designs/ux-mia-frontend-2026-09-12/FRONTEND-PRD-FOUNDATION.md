@@ -8,7 +8,7 @@ sources:
   - mia/_bmad-output/planning-artifacts/prds/prd-mia-2026-08-29/prd.md
   - mia/_bmad-output/planning-artifacts/prds/prd-mia-2026-08-29/addendum.md
   - mia/_bmad-output/planning-artifacts/architecture/architecture-mia-2026-08-29/ARCHITECTURE-SPINE.md
-updated: 2026-09-15
+updated: 2026-10-06
 ---
 
 # MIA Frontend PRD Foundation
@@ -97,6 +97,37 @@ MIA treats a student as working alone. Any human guidance is an external arrange
 represented by the interface.
 
 ## Frontend Scope and Exclusions
+
+### Owner-approved tutoring-first milestone — 2026-10-06
+
+The immediate MVP acceptance target is a working student tutoring journey, not completion of the entire release-one
+surface inventory. This scope/priority amendment takes precedence over the broader inclusion list below for delivery
+sequencing. The full inventory remains later backlog, not deleted requirements.
+
+The owner requested replanning in `tmp/epic-re-planning.md` and explicitly selected the existing backend provisioning
+flow: basic navigation → administrator invites supervisor → supervisor account setup → administrator creates course
+with supervisor → supervisor prepares material/brief and activates course → supervisor provisions student → student
+replaces temporary password → student conducts, resumes, finishes, and starts a second tutoring session.
+
+New supervisors and students need no MFA enrollment for this milestone. Existing required MFA challenges still apply;
+this decision does not disable factors or bypass authentication stages. Student provisioning remains course-scoped and
+supervisor-authorized; no administrator student invitation or public student registration is introduced.
+
+`../../epics.md` owns the current story boundaries and execution order; `../../sprint-change-proposal-2026-10-06.md`
+records the migration from the earlier backlog. These define the deliverable subsets of the requirement families below.
+
+For this milestone, Home may be a neutral navigation entry until real tutoring continuation is implemented. It must not
+claim no pending work without authority. The full cross-role attention aggregator, profile editing, logos, drag-and-drop
+enhancement, private student uploads, destructive administration, oversight/history expansion, speech, mentors, and further
+MFA management come later. Native file selection, validated teaching fields, brief review/approval, safe transcript reading,
+and essential recovery remain in the tutoring chain. Rich examples/templates beyond existing guided-field patterns do not
+precede a working course. No fabricated dashboard, unauthorized data, or unimplemented navigation links substitute for work.
+
+Retain the current stack, canonical routes, blueprint inheritance, seven-locale infrastructure, and authorization,
+privacy, no-replay, truthful-state, and keyboard-access requirements for implemented paths. Resolve only the BCG dependencies
+actually needed for a slice; do not guess missing transport or require unrelated mentoring/MFA gaps to close first.
+No BCG is closed by this amendment. Full release evidence remains mandatory before claiming a complete release; the
+functional tutoring demonstration is a distinct milestone. Existing test rules are not changed by this scope decision.
 
 ### Included
 

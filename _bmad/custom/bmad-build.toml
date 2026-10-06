@@ -1,0 +1,36 @@
+[workflow]
+persistent_facts = [
+  "The read-only rules in .opencode/review-contract.md apply to review-layer agents only, not the implementing workflow. Zero findings is valid.",
+  "Owner-approved 2026-10-06: preserve correct work; propose a local root-cause repair before considering re-derivation. A rewrite needs a concrete structural reason. Do not invent intent gaps from optional improvements.",
+]
+
+[[workflow.review_layers]]
+id = "blind-hunter"
+name = "Evidence-based story review"
+instruction = """
+Launch one independent read-only reviewer. Supply the current spec/acceptance and `{diff_file}` and instruct it to read
+`{project-root}/.opencode/review-contract.md`. Zero findings is valid. Return evidence-backed findings only; no nested
+agents, skills, edits or repeated full test suite. This layer covers acceptance and verification quality as well as code.
+"""
+
+[[workflow.review_layers]]
+id = "edge-case-hunter"
+name = "Targeted interaction review"
+when = "Only when a concrete changed cross-owner security, concurrency or lifecycle boundary requires a second independent lens; name that boundary before dispatch. Not a mandatory second review."
+instruction = """
+Launch one read-only reviewer for only the named high-risk interaction in `{diff_file}`. Read
+`{project-root}/.opencode/review-contract.md`; use the current spec and exact relevant contract. Zero findings is valid.
+No skills, nested agents, edits or application checks. Do not repeat the first layer's full scope.
+"""
+
+[[workflow.review_layers]]
+id = "verification-gap"
+instruction = ""
+
+[[workflow.oneshot_review_layers]]
+id = "blind-hunter"
+name = "Evidence-based small-change review"
+instruction = """
+Launch one read-only reviewer. Supply the explicit changed-file manifest, current intent and diff, including new files.
+Read `{project-root}/.opencode/review-contract.md`. Zero findings is valid. No nested agents, skills, edits or full suite.
+"""

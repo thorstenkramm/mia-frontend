@@ -20,6 +20,17 @@ sources: []
 
 # MIA Frontend — Release One
 
+## Current delivery priority — 2026-10-06
+
+The owner-approved tutoring-first milestone in the PRD foundation supersedes the original all-surfaces-first delivery
+sequence. Execute `../../planning-artifacts/epics.md` and sprint status: navigation, supervisor onboarding, active prepared
+course, student provisioning/password setup, then tutoring. The capability inventory below remains the broader product
+contract, not a requirement to finish every supporting feature before demonstrating tutoring.
+
+`stories.yaml` here contains the completed Epic 1 story bundle only; it is not the new future-work queue. Preserve its
+IDs and evidence. Future stories are selected from the revised epic plan and sprint tracker. Mentoring and further MFA
+management are later backlog; no server-required MFA challenge is bypassed for an already-enrolled account.
+
 ## Why
 
 A vision to realize with a mandate's rigor: MIA's self-hosted, curriculum-aligned AI tutoring platform has a complete

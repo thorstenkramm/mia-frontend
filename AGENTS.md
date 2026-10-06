@@ -73,8 +73,9 @@ documents above.
   capability and scope, then route resource, then dependent data.
 - Sessions expire after 30 minutes idle and no later than 12 hours after authentication. The absolute deadline never
   moves, and a client clock never extends a server-authored deadline.
-- Each tab owns its idle baseline. Only a deliberate user-initiated authenticated request in that tab resets it.
-  Background reads, lifecycle checks, focus, visibility, SSE traffic, and reconnects must never act as a keepalive.
+- Each tab owns its idle baseline. The approved Continue-only renewal contract in `SECURITY-PRIVACY-ACCEPTANCE.md`
+  governs it. Ordinary requests, background reads, lifecycle checks, focus, visibility, SSE traffic, and reconnects
+  must never act as a keepalive.
 - No unsafe request is ever replayed automatically — not after timeout, network loss, abort, `401`, `403`,
   `csrf_invalid`, tab return, or token rotation. Request-ID idempotency creates no exception.
 - Render only authoritative persisted or streamed state. Optimistic updates are forbidden, and destructive mutations
@@ -194,7 +195,13 @@ verification was not applicable rather than inventing project setup.
 
 `./run-all-tests.sh` is the complete suite and the authoritative gate. The commands above are the fast subset for
 iterating; they are not sufficient on their own, because the script also enforces checks that no npm script covers.
-Run it before reporting work complete whenever a change touches source, Markdown, or dependencies.
+Run it before reporting work complete whenever a change touches application source, tests, executable scripts,
+build/test configuration, or dependencies.
+
+Documentation-only changes, including Markdown, agent instructions, and planning or sprint-tracking files, require
+only applicable Markdown lint and planning-consistency checks. Respect the Markdown rule's directory exemptions.
+Do not run application tests or builds for these changes. Updating verification notes after a completed full gate
+does not require rerunning that gate unless executable code, configuration, or dependencies also changed.
 
 This repository has no CI, so nothing else runs these checks. On the backend, skipping the equivalent script is how
 the duplication gate stayed red across four consecutive stories.

@@ -1,0 +1,31 @@
+[workflow]
+persistent_facts = [
+  "The read-only rules in .opencode/review-contract.md apply to review-layer agents only, not the implementing workflow. Zero findings is valid.",
+  "Owner-approved 2026-10-06: preserve correct work and repair demonstrated root causes in place. Do not re-derive merely because an optional improvement was suggested. The epic agents use their own phase protocol and do not nest this complete workflow.",
+]
+
+[[workflow.review_layers]]
+id = "blind-hunter"
+name = "Evidence-based story review"
+instruction = """
+Launch one independent read-only reviewer. Supply the current spec/acceptance, `{diff_file}` and the original intent.
+Read `{project-root}/.opencode/review-contract.md`. Zero findings is valid. Include intent/acceptance and verification
+quality in this one review. No nested agents, skills, edits or repeated full test suite.
+"""
+
+[[workflow.review_layers]]
+id = "edge-case-hunter"
+name = "Targeted interaction review"
+when = "Only when a concrete changed cross-owner security, concurrency or lifecycle boundary requires a second independent lens; name that boundary before dispatch."
+instruction = """
+Launch one read-only reviewer for only the named interaction in `{diff_file}` using the current spec and
+`{project-root}/.opencode/review-contract.md`. Zero findings is valid. No nested agents, skills, edits or application checks.
+"""
+
+[[workflow.review_layers]]
+id = "verification-gap"
+instruction = ""
+
+[[workflow.review_layers]]
+id = "intent-alignment"
+instruction = ""

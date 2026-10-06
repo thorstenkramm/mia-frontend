@@ -1,6 +1,11 @@
 // Controlled Vitest failures for the token-bearing unit tests. Run only by
 // scripts/check-secret-hygiene.mjs, which scans the output for the markers.
-import { describe, expect, it } from "vitest";
+import { beforeEach, describe, expect, it } from "vitest";
+import {
+  unitCases,
+  controlledFailure,
+  injectEarlyFailure,
+} from "../scripts/secret-hygiene-evidence";
 import { captureInvitationLink } from "../src/platform/session/invitationLink";
 import { capturePasswordResetLink } from "../src/platform/session/passwordResetLink";
 import { parseTotpProvisioningUri } from "../src/platform/api/totpProvisioning";
@@ -14,6 +19,7 @@ const resetToken = process.env.MIA_SECRET_HYGIENE_RESET_TOKEN;
 const resetPassword = process.env.MIA_SECRET_HYGIENE_RESET_PASSWORD;
 const invitationToken = process.env.MIA_SECRET_HYGIENE_INVITATION_TOKEN;
 const invitationPassword = process.env.MIA_SECRET_HYGIENE_INVITATION_PASSWORD;
+beforeEach((context) => injectEarlyFailure(context.task.name));
 
 function markers(): { token: string; password: string } {
   if (resetToken === undefined || resetPassword === undefined)
@@ -22,38 +28,42 @@ function markers(): { token: string; password: string } {
 }
 
 describe("controlled reset-token unit failures", () => {
-  it.each(["valid fragment"])(
-    "fails a %s comparison through the shared helper",
-    async () => {
-      const { token, password } = markers();
-      window.history.replaceState(null, "", `/password-reset#token=${token}`);
-      const link = capturePasswordResetLink(window.location, window.history);
-      link.observeSession({ kind: "Signed out" });
-      const sent: string[] = [];
-      await link.submit(password, password, (sentToken, sentPassword) => {
-        sent.push(sentToken, sentPassword);
-        return Promise.resolve({ kind: "completed", value: undefined });
-      });
-      // A regression stand-in: the request carried a different token.
-      expectSameSecret(`${sent[0] ?? ""}-regressed`, token, "Reset token");
-    },
-  );
-
-  it("fails an absence check through the shared helper", () => {
+  it(unitCases[0], async () => {
     const { token, password } = markers();
-    expectSecretAbsent(`${password} ${token}`, token, "Rendered state");
+    window.history.replaceState(null, "", `/password-reset#token=${token}`);
+    const link = capturePasswordResetLink(window.location, window.history);
+    link.observeSession({ kind: "Signed out" });
+    const sent: string[] = [];
+    await link.submit(password, password, (sentToken, sentPassword) => {
+      sent.push(sentToken, sentPassword);
+      return Promise.resolve({ kind: "completed", value: undefined });
+    });
+    // A regression stand-in: the request carried a different token.
+    expectSameSecret(sent[0], token, "Captured reset token");
+    controlledFailure(unitCases[0], () =>
+      expectSameSecret(`${sent[0] ?? ""}-regressed`, token, "Reset token"),
+    );
   });
 
-  it("fails the reset-fragment removal assertion through the shared helper", () => {
+  it(unitCases[1], () => {
+    const { token, password } = markers();
+    controlledFailure(unitCases[1], () =>
+      expectSecretAbsent(`${password} ${token}`, token, "Rendered state"),
+    );
+  });
+
+  it(unitCases[2], () => {
     const { token } = markers();
     window.history.replaceState(null, "", `/password-reset#token=${token}`);
     capturePasswordResetLink(window.location, window.history);
     // Simulate the exact observable state if bootstrap stripping regresses.
     window.history.replaceState(null, "", `/password-reset#token=${token}`);
-    expectFragmentRemoved(window.location.hash, "Reset link fragment");
+    controlledFailure(unitCases[2], () =>
+      expectFragmentRemoved(window.location.hash, "Reset link fragment"),
+    );
   });
 
-  it("fails an invitation-token comparison through the shared helper", async () => {
+  it(unitCases[3], async () => {
     if (invitationToken === undefined)
       throw new Error("Controlled fixture markers are required.");
     window.history.replaceState(
@@ -69,14 +79,17 @@ describe("controlled reset-token unit failures", () => {
       return Promise.resolve({ kind: "completed", value: "mentor" });
     });
     // A regression stand-in: the request carried a different token.
-    expectSameSecret(
-      `${sent[0] ?? ""}-regressed`,
-      invitationToken,
-      "Invitation token",
+    expectSameSecret(sent[0], invitationToken, "Captured invitation token");
+    controlledFailure(unitCases[3], () =>
+      expectSameSecret(
+        `${sent[0] ?? ""}-regressed`,
+        invitationToken,
+        "Invitation token",
+      ),
     );
   });
 
-  it("fails an invitation-acceptance password comparison through the shared helper", async () => {
+  it(unitCases[4], async () => {
     if (invitationToken === undefined || invitationPassword === undefined)
       throw new Error("Controlled fixture markers are required.");
     window.history.replaceState(
@@ -106,28 +119,38 @@ describe("controlled reset-token unit failures", () => {
     );
     // A regression stand-in: the request carried a different password.
     expectSameSecret(
-      `${sent[1] ?? ""}-regressed`,
+      sent[1],
       invitationPassword,
-      "Invitation password",
+      "Submitted invitation password",
+    );
+    controlledFailure(unitCases[4], () =>
+      expectSameSecret(
+        `${sent[1] ?? ""}-regressed`,
+        invitationPassword,
+        "Invitation password",
+      ),
     );
   });
 
-  it("fails a TOTP setup-secret comparison through the shared helper", () => {
+  it(unitCases[5], () => {
     const uri = process.env.MIA_SECRET_HYGIENE_TOTP_URI;
     const secret = process.env.MIA_SECRET_HYGIENE_TOTP_SECRET;
     if (uri === undefined || secret === undefined)
       throw new Error("Controlled fixture markers are required.");
     const parsed = parseTotpProvisioningUri(uri);
+    expectSameSecret(parsed?.secret, secret, "Parsed TOTP secret");
     // A regression stand-in: the parsed value differs from the issued secret.
-    expectSameSecret(
-      `${parsed?.secret ?? ""}-regressed`,
-      secret,
-      "TOTP secret",
+    controlledFailure(unitCases[5], () =>
+      expectSameSecret(
+        `${parsed?.secret ?? ""}-regressed`,
+        secret,
+        "TOTP secret",
+      ),
     );
   });
 
-  it("fails a structural assertion without fixture values", () => {
+  it(unitCases[6], () => {
     markers();
-    expect(false).toBe(true);
+    controlledFailure(unitCases[6], () => expect(false).toBe(true));
   });
 });
