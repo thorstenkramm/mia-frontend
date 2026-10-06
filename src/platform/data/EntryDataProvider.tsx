@@ -54,7 +54,9 @@ export function EntryDataProvider({
 }
 
 export {
+  useAuthenticatedAccess,
   useAuthenticationBootstrapState,
+  useMfaEnrollment,
   useSessionActions,
 } from "../session/SessionProvider";
 export type { AuthenticationBootstrapState } from "../session/sessionController";

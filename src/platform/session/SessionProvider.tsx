@@ -7,8 +7,10 @@ import {
   type ReactNode,
 } from "react";
 import { flushSync } from "react-dom";
+import { MfaEnrollment } from "./mfaEnrollment";
 import {
   SessionController,
+  type AuthenticatedAccess,
   type AuthenticationBootstrapState,
   type MfaRoute,
   type PublicMutationResult,
@@ -20,7 +22,12 @@ import type {
   PasswordResetToken,
 } from "../api/entry";
 
-const SessionContext = createContext<SessionController | null>(null);
+type SessionContextValue = {
+  readonly controller: SessionController;
+  readonly mfaEnrollment: MfaEnrollment;
+};
+
+const SessionContext = createContext<SessionContextValue | null>(null);
 
 export function SessionProvider({
   children,
@@ -37,12 +44,20 @@ export function SessionProvider({
     () => new SessionController({ deferCapabilityGate }),
   );
   const controller = suppliedController ?? ownedController;
+  const [mfaEnrollment] = useState(() => new MfaEnrollment(controller));
   useEffect(() => {
     const unregister = controller.registerSecurityTeardown(onSecurityTeardown);
+    const unregisterMfa = controller.registerSecurityTeardown((scope) =>
+      mfaEnrollment.observeTeardown(scope),
+    );
     const shield = () => flushSync(() => controller.shield());
     const observe = () => flushSync(() => controller.observeLifecycle());
-    const pageHide = () =>
-      flushSync(() => controller.shield("lifecycle", true));
+    // Only a page that may enter BFCache keeps masked MFA secrets.
+    const pageHide = (event: PageTransitionEvent) =>
+      flushSync(() => {
+        if (!event.persisted) mfaEnrollment.destroy();
+        controller.shield("lifecycle", true);
+      });
     const pageShow = (event: PageTransitionEvent) => {
       if (event.persisted) shield();
     };
@@ -67,19 +82,43 @@ export function SessionProvider({
       connection?.removeEventListener("change", observe);
       controller.stop();
       onSecurityTeardown();
+      mfaEnrollment.destroy();
+      unregisterMfa();
       unregister();
     };
-  }, [controller, onSecurityTeardown]);
+  }, [controller, mfaEnrollment, onSecurityTeardown]);
 
-  return <SessionContext value={controller}>{children}</SessionContext>;
+  return (
+    <SessionContext value={{ controller, mfaEnrollment }}>
+      {children}
+    </SessionContext>
+  );
+}
+
+function useSessionContext(): SessionContextValue {
+  const context = use(SessionContext);
+  if (context === null) {
+    throw new Error("SessionProvider is required.");
+  }
+  return context;
 }
 
 function useSessionController(): SessionController {
-  const controller = use(SessionContext);
-  if (controller === null) {
-    throw new Error("SessionProvider is required.");
-  }
-  return controller;
+  return useSessionContext().controller;
+}
+
+// The current tab's passed gate decisions; `null` unless authenticated.
+export function useAuthenticatedAccess(): AuthenticatedAccess | null {
+  const controller = useSessionController();
+  return useSyncExternalStore(
+    controller.subscribe,
+    controller.getAuthenticatedAccess,
+    controller.getAuthenticatedAccess,
+  );
+}
+
+export function useMfaEnrollment(): MfaEnrollment {
+  return useSessionContext().mfaEnrollment;
 }
 
 export function useAuthenticationBootstrapState(): AuthenticationBootstrapState {

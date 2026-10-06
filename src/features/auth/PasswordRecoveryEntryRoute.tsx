@@ -13,7 +13,7 @@ import { useAnnouncer } from "../../platform/announcer/AnnouncementRegion";
 import { useSessionActions } from "../../platform/data/EntryDataProvider";
 import { messages } from "../../platform/i18n/messages";
 import type { PublicMutationResult } from "../../platform/session/sessionController";
-import { AuthSubmitButton } from "./AuthSubmitButton";
+import { AuthSubmitButton } from "../../platform/ui/AuthSubmitButton";
 
 // FRONTEND-STATE-MACHINES.md §1, Story 1-6 recovery states. `Submitting` is the
 // form action's pending phase.

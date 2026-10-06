@@ -67,7 +67,8 @@ export type AuthenticationBootstrapState =
         | "continuation unknown"
         | "continuation denied"
         | "recovery failed"
-        | "stopped";
+        | "stopped"
+        | "access lost";
       readonly error?: EntryApiFailure;
     }
   // Stories 1-6 and 1-7: cold discovery found `authenticated` while a captured link
@@ -114,6 +115,29 @@ export type AuthenticationBootstrapState =
   | { readonly kind: "Logout reconciliation needed" };
 
 type Listener = () => void;
+// A `lifecycle` shield only masks route-local secrets; every other teardown
+// destroys them (owner decision 2026-10-05).
+export type SecurityTeardownScope = "mask" | "destroy";
+type SecurityTeardown = (scope: SecurityTeardownScope) => void;
+// The gate decisions the current authenticated tab passed, in one security
+// epoch. Every destroying teardown starts a new epoch.
+export type AuthenticatedAccess = {
+  readonly accountId: AccountId;
+  readonly ownProfileView: boolean;
+  readonly epoch: number;
+};
+export type AuthenticatedReadResult<T> =
+  | { readonly kind: "completed"; readonly value: T }
+  | { readonly kind: "failed"; readonly failure: EntryApiFailure }
+  | { readonly kind: "superseded" };
+// One authenticated mutation, dispatched at most once. Only `unknown` means it
+// may have been processed without a response; `superseded` drops any value.
+export type AuthenticatedMutationResult<T> =
+  | { readonly kind: "completed"; readonly value: T }
+  | { readonly kind: "rejected"; readonly failure: HttpFailure }
+  | { readonly kind: "unknown"; readonly failure: EntryApiFailure }
+  | { readonly kind: "not-sent"; readonly failure: EntryApiFailure }
+  | { readonly kind: "superseded" };
 export type MfaRoute = "challenge" | "recovery";
 type MfaOutcome = {
   readonly kind:
@@ -266,11 +290,132 @@ export class SessionController {
   private monotonicSample = performance.now();
   private clockAnchor = this.clockSample;
   private monotonicAnchor = this.monotonicSample;
-  private readonly securityTeardowns = new Set<Listener>();
+  private readonly securityTeardowns = new Set<SecurityTeardown>();
+  private access: AuthenticatedAccess | null = null;
+  private securityEpoch = 0;
+  private readonly authenticatedReads = new Set<AbortController>();
 
-  registerSecurityTeardown(teardown: Listener): () => void {
+  registerSecurityTeardown(teardown: SecurityTeardown): () => void {
     this.securityTeardowns.add(teardown);
     return () => this.securityTeardowns.delete(teardown);
+  }
+
+  getAuthenticatedAccess = (): AuthenticatedAccess | null =>
+    this.state.kind === "Authenticated" ? this.access : null;
+
+  // A route-resource or dependent read for the current authenticated tab. It
+  // never refreshes idle expiry, and any shield or epoch change fences it.
+  async readAuthenticated<T>(
+    read: (signal: AbortSignal) => Promise<T>,
+  ): Promise<AuthenticatedReadResult<T>> {
+    if (this.state.kind !== "Authenticated") return { kind: "superseded" };
+    const sequence = this.sequence;
+    const epoch = this.securityEpoch;
+    const current = () =>
+      sequence === this.sequence &&
+      epoch === this.securityEpoch &&
+      this.state.kind === "Authenticated";
+    const controller = new AbortController();
+    this.authenticatedReads.add(controller);
+    try {
+      return await withCoordinatorLock(
+        "shared",
+        async (): Promise<AuthenticatedReadResult<T>> => {
+          if (!current()) return { kind: "superseded" };
+          const value = await read(controller.signal);
+          return current()
+            ? { kind: "completed", value }
+            : { kind: "superseded" };
+        },
+      );
+    } catch (error) {
+      if (!current()) return { kind: "superseded" };
+      const failure = toEntryFailure(error);
+      if (isAccessLoss(failure)) {
+        this.loseAuthenticatedAccess(failure);
+        return { kind: "superseded" };
+      }
+      return { kind: "failed", failure };
+    } finally {
+      this.authenticatedReads.delete(controller);
+    }
+  }
+
+  // Mirrors the public mutation discipline for the authenticated stage: one
+  // shared lease, CSRF read immediately before the only dispatch, no abort, and
+  // no replay. A lifecycle mask does not fence the response; only a destroying
+  // teardown (a new security epoch) drops it.
+  runAuthenticatedMutation<T>(
+    request: { send: ((csrf: string) => Promise<T>) | null },
+    isCurrent: () => boolean,
+  ): Promise<AuthenticatedMutationResult<T>> {
+    const work = this.dispatchAuthenticatedMutation(request, isCurrent);
+    this.trackSettlement(work.then(() => undefined));
+    return work;
+  }
+
+  private async dispatchAuthenticatedMutation<T>(
+    request: { send: ((csrf: string) => Promise<T>) | null },
+    isCurrent: () => boolean,
+  ): Promise<AuthenticatedMutationResult<T>> {
+    const sequence = this.sequence;
+    const epoch = this.securityEpoch;
+    const dispatchable = () =>
+      sequence === this.sequence &&
+      epoch === this.securityEpoch &&
+      this.state.kind === "Authenticated" &&
+      this.state.lifecycle !== "Continue dispatching" &&
+      isCurrent();
+    const abandon = (): AuthenticatedMutationResult<T> => {
+      request.send = null;
+      return { kind: "superseded" };
+    };
+    if (!dispatchable()) return abandon();
+    let dispatched = false;
+    try {
+      return await withCoordinatorLock(
+        "shared",
+        async (): Promise<AuthenticatedMutationResult<T>> => {
+          const send = request.send;
+          // Recheck the owner and epoch immediately before the request leaves.
+          if (send === null || !dispatchable()) return abandon();
+          request.send = null;
+          const csrf = readCurrentCsrfCookie();
+          if (csrf === null) throw new ApiProtocolError();
+          dispatched = true;
+          const value = await send(csrf);
+          return epoch === this.securityEpoch
+            ? { kind: "completed", value }
+            : { kind: "superseded" };
+        },
+      );
+    } catch (error) {
+      request.send = null;
+      const failure = toEntryFailure(error);
+      if (!dispatched) return { kind: "not-sent", failure };
+      if (epoch !== this.securityEpoch) return { kind: "superseded" };
+      if (isAccessLoss(failure)) {
+        this.loseAuthenticatedAccess(failure);
+        return { kind: "superseded" };
+      }
+      if (failure.kind === "http" && failure.disclosure.status < 500)
+        return { kind: "rejected", failure };
+      return { kind: "unknown", failure };
+    }
+  }
+
+  // A definitive sign-in or stage loss on an authenticated operation destroys
+  // protected state. Recovery is the explicit Refresh of the privacy shield.
+  private loseAuthenticatedAccess(failure: EntryApiFailure): void {
+    if (this.state.kind.startsWith("Logout")) return;
+    this.sequence++;
+    this.activeRead?.abort();
+    this.setState({
+      kind: "Privacy shield",
+      phase: "pending",
+      reason: "access lost",
+      error: failure,
+    });
   }
 
   observeLifecycle(): void {
@@ -538,6 +683,9 @@ export class SessionController {
   stop(): void {
     this.clearDeadlineTimer();
     this.deadlines = null;
+    this.access = null;
+    this.securityEpoch++;
+    for (const read of this.authenticatedReads) read.abort();
     this.sequence += 1;
     this.activeRead?.abort();
     this.activeRead = null;
@@ -1240,6 +1388,17 @@ export class SessionController {
           }
           this.checkDeadline();
           if (sequence !== this.sequence) return;
+          // A different account after a masking shield is an account change.
+          if (
+            this.access !== null &&
+            this.access.accountId !== session.accountId
+          )
+            this.destroySecrets();
+          this.access = {
+            accountId: session.accountId,
+            ownProfileView: capabilities.ownProfileView,
+            epoch: this.securityEpoch,
+          };
           this.setState({ kind: "Authenticated" });
           this.checkDeadline();
         } catch (error) {
@@ -1535,6 +1694,10 @@ export class SessionController {
   }
 
   private setState(state: AuthenticationBootstrapState): void {
+    // A lifecycle recovery may discover a restricted stage. Its deadlines
+    // remain valid, but the former authenticated account's secrets do not.
+    if (state.kind === "MFA required" || state.kind === "Password change")
+      this.destroySecrets();
     if (
       state.kind === "Privacy shield" ||
       state.kind.startsWith("Logout") ||
@@ -1544,12 +1707,26 @@ export class SessionController {
       this.clearDeadlineTimer();
       this.deadlines = null;
       document.title = "MIA";
-      for (const teardown of this.securityTeardowns) teardown();
+      for (const read of this.authenticatedReads) read.abort();
+      // A lifecycle shield and its explicit recovery check only mask.
+      if (
+        state.kind === "Privacy shield" &&
+        (state.reason === "lifecycle" ||
+          (state.reason === undefined && state.phase === "checking"))
+      )
+        for (const teardown of this.securityTeardowns) teardown("mask");
+      else this.destroySecrets();
     }
     this.state = state;
     for (const listener of this.listeners) {
       listener();
     }
+  }
+
+  private destroySecrets(): void {
+    this.securityEpoch++;
+    this.access = null;
+    for (const teardown of this.securityTeardowns) teardown("destroy");
   }
 
   private installDeadlines(session: EntrySession): void {
@@ -1751,6 +1928,16 @@ function mfaOutcomeKind(failure: HttpFailure): MfaOutcome["kind"] {
     return "invalid-code";
   if (failure.disclosure.status === 429) return "throttled";
   return "failed";
+}
+
+// Sign-in loss or a restricted stage on an authenticated operation.
+function isAccessLoss(failure: EntryApiFailure): boolean {
+  return (
+    failure.kind === "http" &&
+    (failure.disclosure.status === 401 ||
+      (failure.disclosure.status === 403 &&
+        failure.code === "auth_password_change_required"))
+  );
 }
 
 function toEntryFailure(error: unknown): EntryApiFailure {

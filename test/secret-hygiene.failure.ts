@@ -3,6 +3,7 @@
 import { describe, expect, it } from "vitest";
 import { captureInvitationLink } from "../src/platform/session/invitationLink";
 import { capturePasswordResetLink } from "../src/platform/session/passwordResetLink";
+import { parseTotpProvisioningUri } from "../src/platform/api/totpProvisioning";
 import {
   expectFragmentRemoved,
   expectSameSecret,
@@ -108,6 +109,20 @@ describe("controlled reset-token unit failures", () => {
       `${sent[1] ?? ""}-regressed`,
       invitationPassword,
       "Invitation password",
+    );
+  });
+
+  it("fails a TOTP setup-secret comparison through the shared helper", () => {
+    const uri = process.env.MIA_SECRET_HYGIENE_TOTP_URI;
+    const secret = process.env.MIA_SECRET_HYGIENE_TOTP_SECRET;
+    if (uri === undefined || secret === undefined)
+      throw new Error("Controlled fixture markers are required.");
+    const parsed = parseTotpProvisioningUri(uri);
+    // A regression stand-in: the parsed value differs from the issued secret.
+    expectSameSecret(
+      `${parsed?.secret ?? ""}-regressed`,
+      secret,
+      "TOTP secret",
     );
   });
 

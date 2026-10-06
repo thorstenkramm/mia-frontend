@@ -956,6 +956,15 @@ allowed query field, valid percent encoding, bounded issuer and account label, a
 fixed SHA-1, six-digit, 30-second policy. It rejects missing, duplicate, conflicting, unknown, malformed, or
 out-of-policy fields before deriving QR, manual values, copy text, or an app link. Derivation makes no network request.
 
+Owner decision, 2026-10-05 (`BACKEND-CONTRACT-GAPS.md` BCG-009 Story 1-9 slice) fixes the mask semantics. Only a
+privacy shield with reason `lifecycle` (focus, visibility, online, network change, clock anomaly, or a persisted
+pagehide) and its explicit Refresh check mask: the secret stays in its one in-memory owner, and a mutation that settles
+behind the shield is retained masked. Every other shield reason (deadline, continuation, recovery failure, stopped,
+access lost), logout, signed-out, restricted-expired, a non-persisted pagehide, route departure, Reload, and an account
+or security-epoch change destroy it. Reveal checking runs only after explicit Refresh passes the full gate; the fresh
+MFA read must confirm the same unexpired pending enrollment ID (for recovery codes, the same account with an active
+factor), and Setup restored then needs an explicit Reveal. The same rules govern recovery codes.
+
 Temporary page hiding masks but does not destroy the still-live route-local secret. Return reveals the same values only
 after BCG-009 confirms the same pending enrollment and current access; mismatch destroys them. Reload, route departure,
 unload, activation, definitive cancellation or expiry, account/security epoch change, and unreconcilable state always

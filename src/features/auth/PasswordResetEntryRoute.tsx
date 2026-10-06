@@ -26,7 +26,7 @@ import {
   type PasswordResetLink,
   type PasswordResetState,
 } from "../../platform/session/passwordResetLink";
-import { AuthSubmitButton } from "./AuthSubmitButton";
+import { AuthSubmitButton } from "../../platform/ui/AuthSubmitButton";
 import {
   primaryAction,
   secondaryAction,

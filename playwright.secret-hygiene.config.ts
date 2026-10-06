@@ -1,5 +1,9 @@
 import { defineConfig } from "@playwright/test";
 
+// A failed test otherwise writes an aria snapshot of the page to
+// error-context.md, which would carry any secret the page still shows.
+process.env.PLAYWRIGHT_NO_COPY_PROMPT = "1";
+
 const outputDir = process.env.MIA_SECRET_HYGIENE_OUTPUT;
 if (outputDir === undefined) {
   throw new Error("Secret-hygiene output directory is required.");

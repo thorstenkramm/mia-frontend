@@ -29,7 +29,7 @@
 # - Dev moves story to 'review', then runs code-review (fresh context, different LLM recommended)
 # - Retrospective appends its action items to action_items; the status view surfaces open ones
 generated: 09-19-2026 13:57
-last_updated: 10-05-2026
+last_updated: 10-06-2026
 project: mia-frontend
 project_key: NOKEY
 tracking_system: file-system
@@ -45,7 +45,7 @@ development_status:
   1-6-password-recovery-and-token-reset: done
   1-7-invitation-preview-and-acceptance: done
   1-8-session-lifecycle-idle-warning-expiry-shield-logout-bcg-001: done
-  1-9-totp-enrollment-and-recovery-codes: backlog
+  1-9-totp-enrollment-and-recovery-codes: done
   epic-1-retrospective: optional
 
   epic-2: backlog

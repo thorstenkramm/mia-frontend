@@ -12,8 +12,11 @@ import {
 } from "../../platform/data/EntryDataProvider";
 import { messages } from "../../platform/i18n/messages";
 import type { MfaRoute } from "../../platform/session/sessionController";
-import { AuthSubmitButton } from "./AuthSubmitButton";
-import { isSixDigitMfaCode, normalizeRecoveryCode } from "./mfaCodes";
+import { AuthSubmitButton } from "../../platform/ui/AuthSubmitButton";
+import {
+  isSixDigitMfaCode,
+  normalizeRecoveryCode,
+} from "../../platform/ui/mfaCodes";
 
 type LocalResult = "invalid" | null;
 

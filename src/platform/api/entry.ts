@@ -10,7 +10,7 @@ import {
   type ApiFailure,
 } from "./client";
 
-const utcInstant = z
+export const utcInstant = z
   .string()
   .regex(/^\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2}\.\d{6}Z$/u)
   .refine(
@@ -18,7 +18,7 @@ const utcInstant = z
       Number.isFinite(Date.parse(value)) &&
       new Date(value).toISOString() === value.replace(/\d{3}Z$/u, "Z"),
   );
-const resourceId = z.string().min(1);
+export const resourceId = z.string().min(1);
 
 type SessionDocument =
   operations["discoverSession"]["responses"][200]["content"][typeof jsonApiMediaType];
@@ -152,9 +152,14 @@ export type SessionDeadlines = {
   readonly absoluteExpiresAt: number;
 };
 
-export type AccountCapabilities = { readonly accountId: AccountId };
+// Only the decisions a current route gate needs leave this boundary.
+export type AccountCapabilities = {
+  readonly accountId: AccountId;
+  // `profile.view` is available in the current account's own scope.
+  readonly ownProfileView: boolean;
+};
 
-function toAccountId(id: string): AccountId {
+export function toAccountId(id: string): AccountId {
   return id as AccountId;
 }
 
@@ -216,6 +221,7 @@ export async function continueSession(
   csrfToken: string,
 ): Promise<Extract<EntrySession, { kind: "authenticated" }>> {
   const response = await sendUnsafeRequest({
+    method: "POST",
     path: "/api/v1/auth/session-continuations",
     csrfToken,
   });
@@ -243,6 +249,7 @@ async function sendAuthTransition(
   body: unknown,
 ): Promise<EntrySession> {
   const response = await sendUnsafeRequest({
+    method: "POST",
     path,
     csrfToken,
     body: JSON.stringify(body),
@@ -312,7 +319,14 @@ export async function getCurrentAccountCapabilities(
     initiator: "background",
     ...(signal === undefined ? {} : { signal }),
   });
-  return { accountId: toAccountId(document.data.id) };
+  const profileView = document.data.attributes.capabilities.find(
+    (capability) => capability.action === "profile.view",
+  );
+  return {
+    accountId: toAccountId(document.data.id),
+    ownProfileView:
+      profileView?.available === true && profileView.scope.own_resource,
+  };
 }
 
 export function logoutCurrentBrowser(
@@ -320,6 +334,7 @@ export function logoutCurrentBrowser(
   signal?: AbortSignal,
 ): Promise<void> {
   return sendNoContent({
+    method: "POST",
     path: "/api/v1/auth/logout",
     csrfToken,
     ...(signal === undefined ? {} : { signal }),
@@ -341,6 +356,7 @@ export function requestPasswordRecovery(
     data: { type: "password-recovery-requests", attributes: { username } },
   } satisfies operations["requestPasswordRecovery"]["requestBody"]["content"][typeof jsonApiMediaType];
   return sendNoContent({
+    method: "POST",
     path: "/api/v1/auth/password-recovery-requests",
     csrfToken,
     body: JSON.stringify(body),
@@ -364,6 +380,7 @@ export function resetPassword(
     },
   } satisfies operations["resetPassword"]["requestBody"]["content"][typeof jsonApiMediaType];
   return sendNoContent({
+    method: "POST",
     path: "/api/v1/auth/password-resets",
     csrfToken,
     body: JSON.stringify(body),
@@ -412,6 +429,7 @@ export async function previewInvitation(
     data: { type: "invitation-previews", attributes: { token } },
   } satisfies operations["previewInvitation"]["requestBody"]["content"][typeof jsonApiMediaType];
   const response = await sendUnsafeRequest({
+    method: "POST",
     path: "/api/v1/invitation-previews",
     csrfToken,
     body: JSON.stringify(body),
@@ -454,6 +472,7 @@ export async function acceptInvitation(
     },
   } satisfies operations["acceptInvitation"]["requestBody"]["content"][typeof jsonApiMediaType];
   const response = await sendUnsafeRequest({
+    method: "POST",
     path: "/api/v1/invitation-acceptances",
     csrfToken,
     body: JSON.stringify(body),
@@ -461,7 +480,7 @@ export async function acceptInvitation(
   await parseJsonApiResponse(response, createdUserDocumentSchema, 201);
 }
 
-async function sendNoContent(
+export async function sendNoContent(
   options: Parameters<typeof sendUnsafeRequest>[0],
 ): Promise<void> {
   const response = await sendUnsafeRequest(options);

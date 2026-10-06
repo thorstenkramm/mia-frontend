@@ -189,7 +189,9 @@ export function SessionPrivacyShield() {
             ? messages.lifecycleRecoveryFailed
             : reason === "stopped"
               ? messages.lifecycleStopped
-              : null;
+              : reason === "access lost"
+                ? messages.lifecycleAccessLost
+                : null;
   useEffect(() => {
     if (
       phase === "pending" &&

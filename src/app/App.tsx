@@ -10,7 +10,9 @@ import {
 } from "react-router";
 import {
   EntryDataProvider,
+  useAuthenticatedAccess,
   useAuthenticationBootstrapState,
+  useMfaEnrollment,
   useSessionActions,
   type AuthenticationBootstrapState,
   type EntryError,
@@ -30,7 +32,13 @@ import {
   type PasswordResetLink,
   type PasswordResetSurface,
 } from "../platform/session/passwordResetLink";
-import { entryRoutes, type EntryRouteKey } from "./routes/entryRoutes";
+import { CheckingAccess } from "./routes/CheckingAccess";
+import {
+  authenticatedRouteKey,
+  entryRoutes,
+  type EntryRouteKey,
+} from "./routes/entryRoutes";
+import { ProfileMfaRoute } from "./routes/ProfileMfaRoute";
 import { SimpleEntrySurface } from "./routes/SimpleEntrySurface";
 import { SessionPrivacyShield, SessionWarning } from "./SessionLifecycle";
 
@@ -80,6 +88,7 @@ function routeKey(
   pathname: string,
   resetSurface: PasswordResetSurface | null,
   invitation: InvitationSurface | null,
+  ownProfileView: boolean,
 ): EntryRouteKey | null {
   if (state.kind === "Privacy shield") return null;
   // A captured reset or invitation link owns its paths until the flow ends;
@@ -110,7 +119,7 @@ function routeKey(
     case "Password change":
       return "passwordChange";
     case "Authenticated":
-      return "home";
+      return authenticatedRouteKey(pathname, ownProfileView);
     case "Access deferred":
       // Only a link interstitial renders this state; without it, stay neutral.
       return null;
@@ -147,6 +156,8 @@ function CanonicalEntry({
   invitationLink,
 }: Omit<AppProps, "queryClient">) {
   const state = useAuthenticationBootstrapState();
+  const access = useAuthenticatedAccess();
+  const mfaEnrollment = useMfaEnrollment();
   const { continueDeferredAccess } = useSessionActions();
   const location = useLocation();
   const resetState = useSyncExternalStore(
@@ -169,7 +180,13 @@ function CanonicalEntry({
     invitationState,
     location.pathname,
   );
-  const key = routeKey(state, location.pathname, resetSurface, invitation);
+  const key = routeKey(
+    state,
+    location.pathname,
+    resetSurface,
+    invitation,
+    access?.ownProfileView === true,
+  );
 
   // These route-local owners exist outside the mounted form. Drop their tokens
   // synchronously before BFCache capture, including cold/anonymous entry.
@@ -192,7 +209,9 @@ function CanonicalEntry({
   useEffect(() => {
     if (location.pathname !== passwordResetPath) passwordResetLink.depart();
     if (!invitationPaths.includes(location.pathname)) invitationLink.depart();
-  }, [invitationLink, passwordResetLink, location.pathname]);
+    // MFA setup data and recovery codes are dropped on route departure.
+    mfaEnrollment.observePath(location.pathname);
+  }, [invitationLink, mfaEnrollment, passwordResetLink, location.pathname]);
   useEffect(() => {
     // A link can be abandoned while discovery is pending. Once discovery then
     // reports authenticated, resume the ordinary gate instead of stranding the
@@ -213,6 +232,9 @@ function CanonicalEntry({
   if (location.pathname !== route.path) {
     return <Navigate replace to={route.path} />;
   }
+
+  if (route.gate === "Profile(own MFA)")
+    return <ProfileMfaRoute route={route} />;
 
   const RouteContent = route.component;
   const mfaExpired =
@@ -304,30 +326,6 @@ function assertNever(value: never): never {
   throw new Error(`Unhandled authentication bootstrap state: ${String(value)}`);
 }
 
-function EntryIntroduction({
-  message,
-}: {
-  message: (typeof messages)[keyof typeof messages];
-}) {
-  const intl = useIntl();
-  return (
-    <p className="mt-3 text-center text-sm/6 text-gray-600">
-      {intl.formatMessage(message)}
-    </p>
-  );
-}
-
-function CheckingAccess() {
-  return (
-    <SimpleEntrySurface
-      titleMessage={messages.checkingPageTitle}
-      headingMessage={messages.checkingHeading}
-    >
-      <EntryIntroduction message={messages.checkingIntroduction} />
-    </SimpleEntrySurface>
-  );
-}
-
 function EntryFailure({
   error,
   source,
@@ -348,6 +346,7 @@ function EntryFailure({
     >
       {/* Tailwind Plus: Application UI > Feedback > Alerts > With description */}
       {/* Library version: 2026-09-13-083323. MIA adds the required inert raw-error disclosure. */}
+      {/* Its blueprint repeat in MfaRecoveryCodesRoute.tsx carries the duplication marker. */}
       <div className="mt-8 rounded-md bg-yellow-50 p-4">
         <div className="flex">
           <div className="shrink-0">

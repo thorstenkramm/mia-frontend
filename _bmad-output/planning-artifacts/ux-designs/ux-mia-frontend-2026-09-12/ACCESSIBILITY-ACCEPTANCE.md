@@ -459,6 +459,13 @@ empty, malformed, oversized, or out-of-policy fields reject the enrollment befor
 Issuer and account values in the label and query MUST agree. Secret, SHA-1, six digits, and 30 seconds MUST match
 product policy. Rejected-grammar and QR/manual-equivalence fixtures make no network request.
 
+Owner decision, 2026-10-05 (`BACKEND-CONTRACT-GAPS.md` BCG-009 Story 1-9 slice): the accepted grammar is the URI the
+backend emits, `otpauth://totp/MIA%20(<host[:port]>):<username>?secret=<32 Base32>&issuer=MIA` with optional fixed
+`algorithm`, `digits`, and `period`, bounded at 1,024 bytes. Its label prefix `MIA (<host>)` and issuer `MIA` do not
+agree; that is a non-blocking backend note, and the manual path shows the decoded label as the account exactly as the
+QR code carries it. Masking keeps the values for an explicit Reveal only after Refresh and a confirming
+`BCG-009` read, as described below.
+
 The manual secret and provisioning URI are credentials. They MUST not enter URLs, history state, generic query caches,
 logs, analytics, diagnostics, error reports, or clipboard without an explicit copy action. Route-local setup data MUST
 remain available after a definitive correctable code failure or timeout before dispatch while the same authorized

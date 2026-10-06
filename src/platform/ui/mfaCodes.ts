@@ -10,3 +10,8 @@ export function normalizeRecoveryCode(value: string): string | null {
     .replace(/[a-z]/gu, (letter) => letter.toUpperCase());
   return recoveryWirePattern.test(normalized) ? normalized : null;
 }
+
+// Display grouping `XXXX-XXXX-XXXX-XXXX` for one wire-form recovery code.
+export function formatRecoveryCode(code: string): string {
+  return code.replace(/(.{4})(?=.)/gu, "$1-");
+}

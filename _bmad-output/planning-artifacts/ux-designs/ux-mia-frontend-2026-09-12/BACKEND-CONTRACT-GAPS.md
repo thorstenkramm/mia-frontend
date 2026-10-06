@@ -863,6 +863,40 @@ account details after access loss.
 
 ### BCG-009: Current and pending MFA-factor discovery
 
+Status: **OPEN — Story 1-9 TOTP enrollment slice approved; replace, disable, SMS, and lost-factor flows remain
+blocked.**
+
+#### BCG-009 Story 1-9 TOTP-enrollment-slice decision
+
+The mismatch assessment below is stale: OpenAPI now defines `GET /api/v1/users/me/mfa` (`getCurrentMFAState`) with
+active-factor and pending-enrollment metadata and server-authored action flags, without secrets or codes.
+`mia/docs/api-authentication-and-user-invitation.md` §MFA enrollment owns the sequencing.
+
+Owner decisions, 2026-10-05 (BCG-001/003/009 Story 1-9 slice; broader closure of all three stays open):
+
+1. Validate the provisioning URI the backend emits:
+   `otpauth://totp/MIA%20(<host[:port]>):<username>?secret=<32 uppercase unpadded Base32>&issuer=MIA`, optionally
+   followed by `algorithm=SHA1`, `digits=6`, and `period=30` in that order. The limit is 1,024 UTF-8 bytes. Anything
+   else is a protocol failure: no QR code or manual value renders. The label/issuer disagreement with the product
+   requirements is a non-blocking backend note; the frontend never constructs or adjusts either value.
+2. The gate for `/profile/security/mfa[...]` is the authenticated stage, then `profile.view` with own scope from
+   `GET /api/v1/users/me/capabilities`, then `GET /api/v1/users/me/mfa` as the route resource, read freshly for each
+   surface.
+3. Home `/` stands in for the `/profile` parent and fallback until Epic 2 and shows one secondary link to the overview.
+4. A `lifecycle` shield, including a persisted pagehide, masks setup data and recovery codes and keeps them in memory.
+   Every other shield reason, a non-persisted pagehide, route departure, Reload, and an account or epoch change destroy
+   them. Reveal requires explicit Refresh through the full gate, then a fresh MFA read confirming the same pending
+   enrollment ID (for codes: the same account and an active factor), then an explicit Reveal.
+5. A pending enrollment without a held URI (Reload, another tab, a lost response, or `409`) offers code entry plus
+   explicit Cancel. Starting over requires a cancel first.
+6. After an unknown verify outcome or an invalid code, one MFA read reconciles: an active factor means the codes are
+   unrecoverable and only a future replacement issues new ones; a still-pending enrollment permits an explicit resubmit;
+   a missing enrollment destroys the setup and says so. A `422` on DELETE reconciles the same way.
+7. `expires_at` renders as a localized absolute time; there is no countdown or local expiry timer.
+
+The slice uses only `getCurrentMFAState`, TOTP `startMFAEnrollment`, `verifyMFAEnrollment`, and pending-enrollment
+`cancelOrDisableMFA`. Mutations read fresh CSRF, dispatch once, and are never replayed.
+
 #### BCG-009 frontend capability blocked
 
 The profile/security MFA overview, disable flow, replacement flow, pending-enrollment continuation, and reload recovery

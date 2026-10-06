@@ -562,6 +562,15 @@ nor exposes that count.
 
 ### TOTP Provisioning URI
 
+> [!IMPORTANT]
+> Owner decision, 2026-10-05 (`BACKEND-CONTRACT-GAPS.md` BCG-009 Story 1-9 slice) supersedes the label and issuer
+> rules in this section. The accepted grammar is exactly
+> `otpauth://totp/MIA%20(<host[:port]>):<username>?secret=<32 uppercase unpadded Base32>&issuer=MIA`, optionally followed
+> by `&algorithm=SHA1`, `&digits=6`, and `&period=30` in that order, within 1,024 UTF-8 bytes. The host is validated as
+> a hostname or bracketed IP literal with an optional port, the username as the backend username grammar. The frontend
+> never derives or compares them; the label/issuer disagreement is a non-blocking backend note. Everything else in this
+> section still applies.
+
 Treat the complete `otpauth://` URI and its secret as credentials. Limit the URI to 1,024 UTF-8 bytes before parsing;
 the decoded account label is the current 3-32-character ASCII username, and the normalized hostname is at most 253 ASCII
 characters. Accept only the canonical base `otpauth://totp/<percent-encoded-label>` followed by these query parameters

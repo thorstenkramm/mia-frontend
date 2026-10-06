@@ -47,7 +47,7 @@ import {
   type InvitationState,
   type InvitationView,
 } from "../../platform/session/invitationLink";
-import { AuthSubmitButton } from "./AuthSubmitButton";
+import { AuthSubmitButton } from "../../platform/ui/AuthSubmitButton";
 import { countryCodes } from "./countryCodes";
 import {
   primaryAction,

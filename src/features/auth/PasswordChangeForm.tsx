@@ -12,7 +12,7 @@ import {
   type AuthenticationBootstrapState,
 } from "../../platform/data/EntryDataProvider";
 import { messages } from "../../platform/i18n/messages";
-import { AuthSubmitButton } from "./AuthSubmitButton";
+import { AuthSubmitButton } from "../../platform/ui/AuthSubmitButton";
 import { NewPasswordForm, useNewPasswordCheck } from "./NewPasswordFields";
 
 const outcomeMessages = {

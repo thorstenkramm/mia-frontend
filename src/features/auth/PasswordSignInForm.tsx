@@ -18,7 +18,7 @@ import {
 } from "../../platform/data/EntryDataProvider";
 import { TechnicalErrorDisclosure } from "../../platform/api/TechnicalErrorDisclosure";
 import { messages } from "../../platform/i18n/messages";
-import { AuthSubmitButton } from "./AuthSubmitButton";
+import { AuthSubmitButton } from "../../platform/ui/AuthSubmitButton";
 import { PasswordRevealButton } from "./PasswordRevealButton";
 
 const outcomeMessages = {

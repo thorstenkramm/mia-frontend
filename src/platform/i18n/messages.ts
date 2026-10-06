@@ -874,6 +874,410 @@ export const messages = defineMessages({
     defaultMessage:
       "We couldn't confirm whether your account was created. Try signing in with the username and password you chose, or open the link in your invitation email again. Neither step proves whether the account was created.",
   },
+  lifecycleAccessLost: {
+    id: "session.accessLost",
+    defaultMessage:
+      "MIA could not confirm your sign-in or access. Content is hidden. Refresh to check your sign-in.",
+  },
+  homeMfaLink: {
+    id: "entry.home.mfaLink",
+    defaultMessage: "Multi-factor authentication",
+  },
+  mfaOverviewPageTitle: {
+    id: "mfa.overview.pageTitle",
+    defaultMessage: "Multi-factor authentication | MIA",
+  },
+  mfaOverviewHeading: {
+    id: "mfa.overview.heading",
+    defaultMessage: "Multi-factor authentication",
+  },
+  mfaEnrollPageTitle: {
+    id: "mfa.enroll.pageTitle",
+    defaultMessage: "Set up multi-factor authentication | MIA",
+  },
+  mfaEnrollHeading: {
+    id: "mfa.enroll.heading",
+    defaultMessage: "Set up multi-factor authentication",
+  },
+  mfaVerifyPageTitle: {
+    id: "mfa.verify.pageTitle",
+    defaultMessage: "Verify multi-factor authentication | MIA",
+  },
+  mfaVerifyHeading: {
+    id: "mfa.verify.heading",
+    defaultMessage: "Verify multi-factor authentication",
+  },
+  mfaCodesPageTitle: {
+    id: "mfa.codes.pageTitle",
+    defaultMessage: "MFA recovery codes | MIA",
+  },
+  mfaCodesHeading: {
+    id: "mfa.codes.heading",
+    defaultMessage: "MFA recovery codes",
+  },
+  mfaBackToHome: {
+    id: "mfa.backToHome",
+    defaultMessage: "Back to Home",
+  },
+  mfaBackToOverview: {
+    id: "mfa.backToOverview",
+    defaultMessage: "Back to multi-factor authentication",
+  },
+  mfaOverviewIntroduction: {
+    id: "mfa.overview.introduction",
+    defaultMessage:
+      "Multi-factor authentication asks for a code from another device each time you sign in.",
+  },
+  mfaStatusOn: {
+    id: "mfa.status.on",
+    defaultMessage: "Multi-factor authentication is on",
+  },
+  mfaStatusOnTotp: {
+    id: "mfa.status.onTotp",
+    defaultMessage:
+      "You confirm each sign-in with a code from your authenticator app.",
+  },
+  mfaStatusOnSms: {
+    id: "mfa.status.onSms",
+    defaultMessage:
+      "You confirm each sign-in with a code sent by text message.",
+  },
+  mfaStatusOnCodesNote: {
+    id: "mfa.status.onCodesNote",
+    defaultMessage:
+      "Recovery codes are shown only once, when multi-factor authentication is set up.",
+  },
+  mfaStatusOff: {
+    id: "mfa.status.off",
+    defaultMessage: "Multi-factor authentication is off",
+  },
+  mfaStatusOffHelp: {
+    id: "mfa.status.offHelp",
+    defaultMessage:
+      "Set up an authenticator app to add a second step when you sign in.",
+  },
+  mfaStatusUnavailable: {
+    id: "mfa.status.unavailable",
+    defaultMessage: "Setup is not available for your account right now.",
+  },
+  mfaStatusPending: {
+    id: "mfa.status.pending",
+    defaultMessage: "Setup is pending",
+  },
+  mfaPendingExpires: {
+    id: "mfa.status.pendingExpires",
+    defaultMessage: "This setup expires on {expiresAt}.",
+  },
+  mfaPendingSms: {
+    id: "mfa.status.pendingSms",
+    defaultMessage:
+      "This pending text-message setup can only be cancelled here.",
+  },
+  mfaSetUp: {
+    id: "mfa.action.setUp",
+    defaultMessage: "Set up authenticator app",
+  },
+  mfaContinueSetup: {
+    id: "mfa.action.continueSetup",
+    defaultMessage: "Continue setup",
+  },
+  mfaCancelSetup: {
+    id: "mfa.action.cancelSetup",
+    defaultMessage: "Cancel setup",
+  },
+  mfaEnrollIntroduction: {
+    id: "mfa.enroll.introduction",
+    defaultMessage:
+      "You need an authenticator app on another device, such as your phone.",
+  },
+  mfaEnrollStepStart: {
+    id: "mfa.enroll.stepStart",
+    defaultMessage: "Start setup to get a QR code and a setup key.",
+  },
+  mfaEnrollStepScan: {
+    id: "mfa.enroll.stepScan",
+    defaultMessage:
+      "Scan the QR code with your authenticator app, or enter the setup key.",
+  },
+  mfaEnrollStepCode: {
+    id: "mfa.enroll.stepCode",
+    defaultMessage:
+      "Enter the six-digit code that your authenticator app shows.",
+  },
+  mfaStartSetup: {
+    id: "mfa.action.startSetup",
+    defaultMessage: "Start setup",
+  },
+  mfaStarting: {
+    id: "mfa.progress.starting",
+    defaultMessage: "Starting setup…",
+  },
+  mfaAlreadyOn: {
+    id: "mfa.enroll.alreadyOn",
+    defaultMessage: "Multi-factor authentication is already on.",
+  },
+  mfaVerifyIntroduction: {
+    id: "mfa.verify.introduction",
+    defaultMessage:
+      "Add MIA to your authenticator app, then enter the code it shows.",
+  },
+  mfaQrLabel: {
+    id: "mfa.setup.qrLabel",
+    defaultMessage: "QR code for adding MIA to your authenticator app",
+  },
+  mfaManualHeading: {
+    id: "mfa.setup.manualHeading",
+    defaultMessage: "Manual setup",
+  },
+  mfaManualHelp: {
+    id: "mfa.setup.manualHelp",
+    defaultMessage:
+      "If you cannot scan the QR code, enter these values in your authenticator app.",
+  },
+  mfaIssuer: {
+    id: "mfa.setup.issuer",
+    defaultMessage: "Issuer",
+  },
+  mfaAccount: {
+    id: "mfa.setup.account",
+    defaultMessage: "Account",
+  },
+  mfaSecret: {
+    id: "mfa.setup.secret",
+    defaultMessage: "Setup key",
+  },
+  mfaAlgorithm: {
+    id: "mfa.setup.algorithm",
+    defaultMessage: "Algorithm",
+  },
+  mfaDigits: {
+    id: "mfa.setup.digits",
+    defaultMessage: "Digits",
+  },
+  mfaPeriod: {
+    id: "mfa.setup.period",
+    defaultMessage: "Time step",
+  },
+  mfaPeriodValue: {
+    id: "mfa.setup.periodValue",
+    defaultMessage: "{seconds, plural, one {# second} other {# seconds}}",
+  },
+  mfaSetupHidden: {
+    id: "mfa.setup.hidden",
+    defaultMessage: "Setup details are hidden",
+  },
+  mfaSetupHiddenHelp: {
+    id: "mfa.setup.hiddenHelp",
+    defaultMessage:
+      "The QR code and setup key were hidden while you were away. Show them again when no one else can see your screen.",
+  },
+  mfaRevealSetup: {
+    id: "mfa.setup.reveal",
+    defaultMessage: "Show setup details",
+  },
+  mfaSetupNotShown: {
+    id: "mfa.setup.notShown",
+    defaultMessage:
+      "The QR code and setup key for this setup cannot be shown again. If you already added MIA to your authenticator app, enter its current code. Otherwise, cancel this setup and start again.",
+  },
+  mfaUriRejected: {
+    id: "mfa.setup.uriRejected",
+    defaultMessage:
+      "MIA received setup data it cannot use, so no QR code or setup key is shown. Cancel this setup and start again.",
+  },
+  mfaEnrollCodeLabel: {
+    id: "mfa.verify.codeLabel",
+    defaultMessage: "Six-digit code from your authenticator app (required)",
+  },
+  mfaEnrollCodeHelp: {
+    id: "mfa.verify.codeHelp",
+    defaultMessage:
+      "Enter the code that is currently shown. Leading zeros count.",
+  },
+  mfaEnrollCodeLocalInvalid: {
+    id: "mfa.verify.localInvalid",
+    defaultMessage: "Enter exactly six digits.",
+  },
+  mfaVerifySubmit: {
+    id: "mfa.action.verify",
+    defaultMessage: "Verify code",
+  },
+  mfaVerifying: {
+    id: "mfa.progress.verifying",
+    defaultMessage: "Checking your code…",
+  },
+  mfaCancelling: {
+    id: "mfa.progress.cancelling",
+    defaultMessage: "Cancelling setup…",
+  },
+  mfaStatusReconciling: {
+    id: "mfa.progress.reconciling",
+    defaultMessage: "Checking your multi-factor authentication status…",
+  },
+  mfaNoPending: {
+    id: "mfa.verify.noPending",
+    defaultMessage: "There is no pending setup to verify.",
+  },
+  mfaCodeInvalid: {
+    id: "mfa.outcome.codeInvalid",
+    defaultMessage:
+      "That code was not accepted. Enter the current code from your authenticator app.",
+  },
+  mfaSetupGone: {
+    id: "mfa.outcome.setupGone",
+    defaultMessage:
+      "This setup has ended. It may have expired or received too many incorrect codes. Start a new setup.",
+  },
+  mfaCodesLost: {
+    id: "mfa.outcome.codesLost",
+    defaultMessage:
+      "Multi-factor authentication is now on, but the recovery codes from this setup could not be shown. They cannot be retrieved. Only a future replacement of this factor issues new codes.",
+  },
+  mfaVerifyUnknownPending: {
+    id: "mfa.outcome.verifyUnknownPending",
+    defaultMessage:
+      "We could not confirm whether your code was accepted. The setup is still pending, so you can enter a new code.",
+  },
+  mfaVerifyRejected: {
+    id: "mfa.outcome.verifyRejected",
+    defaultMessage: "Your code could not be checked.",
+  },
+  mfaNotSent: {
+    id: "mfa.outcome.notSent",
+    defaultMessage:
+      "The request was not sent. Check your connection and try again.",
+  },
+  mfaSettingsThrottled: {
+    id: "mfa.outcome.throttled",
+    defaultMessage:
+      "There have been too many attempts. Wait a while before trying again.",
+  },
+  mfaStartRejected: {
+    id: "mfa.outcome.startRejected",
+    defaultMessage: "Setup could not be started.",
+  },
+  mfaStartUnknownPending: {
+    id: "mfa.outcome.startUnknownPending",
+    defaultMessage:
+      "We could not confirm the setup response. A setup is pending, but its QR code and setup key cannot be shown.",
+  },
+  mfaStartUnknownNone: {
+    id: "mfa.outcome.startUnknownNone",
+    defaultMessage: "Setup did not start. You can start again.",
+  },
+  mfaPendingExists: {
+    id: "mfa.outcome.pendingExists",
+    defaultMessage:
+      "A setup is already pending. Continue it or cancel it before starting again.",
+  },
+  mfaCancelled: {
+    id: "mfa.outcome.cancelled",
+    defaultMessage: "Setup cancelled.",
+  },
+  mfaCancelGone: {
+    id: "mfa.outcome.cancelGone",
+    defaultMessage: "This setup no longer exists.",
+  },
+  mfaCancelRejected: {
+    id: "mfa.outcome.cancelRejected",
+    defaultMessage: "The setup could not be cancelled.",
+  },
+  mfaCancelUnknownPending: {
+    id: "mfa.outcome.cancelUnknownPending",
+    defaultMessage:
+      "We could not confirm whether the setup was cancelled. It is still pending, so you can cancel it again.",
+  },
+  mfaCancelUnknownGone: {
+    id: "mfa.outcome.cancelUnknownGone",
+    defaultMessage: "The setup is no longer pending.",
+  },
+  mfaCheckFailed: {
+    id: "mfa.outcome.checkFailed",
+    defaultMessage:
+      "We could not check your multi-factor authentication status.",
+  },
+  mfaCheckAgain: {
+    id: "mfa.action.checkAgain",
+    defaultMessage: "Check again",
+  },
+  mfaCodesWarningHeading: {
+    id: "mfa.codes.warningHeading",
+    defaultMessage: "Save these recovery codes now",
+  },
+  mfaCodesWarning: {
+    id: "mfa.codes.warning",
+    defaultMessage:
+      "Each code works once if you cannot use your authenticator app. MIA shows these codes only now and cannot show them again. MIA cannot remove copies from your clipboard, screenshots, print queue, or paper.",
+  },
+  mfaCodesListLabel: {
+    id: "mfa.codes.listLabel",
+    defaultMessage: "Recovery codes",
+  },
+  mfaCopyCodes: {
+    id: "mfa.codes.copy",
+    defaultMessage: "Copy all recovery codes",
+  },
+  mfaCopyCodesSuccess: {
+    id: "mfa.codes.copySuccess",
+    defaultMessage: "Recovery codes copied.",
+  },
+  mfaCopyCodesFailure: {
+    id: "mfa.codes.copyFailure",
+    defaultMessage:
+      "Recovery codes could not be copied. Select and copy them manually.",
+  },
+  mfaPrintCodes: {
+    id: "mfa.codes.print",
+    defaultMessage: "Print recovery codes",
+  },
+  mfaPrintFailure: {
+    id: "mfa.codes.printFailure",
+    defaultMessage:
+      "Printing could not start. Copy the codes or write them down.",
+  },
+  mfaPrintInitiated: {
+    id: "mfa.codes.printInitiated",
+    defaultMessage: "Print dialog requested. Printing is not confirmed.",
+  },
+  mfaCodesStorageLegend: {
+    id: "mfa.codes.storageLegend",
+    defaultMessage: "Safe storage confirmation",
+  },
+  mfaCodesAcknowledge: {
+    id: "mfa.codes.acknowledge",
+    defaultMessage: "I have saved my recovery codes",
+  },
+  mfaCodesAcknowledgeHelp: {
+    id: "mfa.codes.acknowledgeHelp",
+    defaultMessage:
+      "Store them somewhere safe and private. You will not see them again.",
+  },
+  mfaCodesDone: {
+    id: "mfa.codes.done",
+    defaultMessage: "Done",
+  },
+  mfaCodesAcknowledgeFirst: {
+    id: "mfa.codes.acknowledgeFirst",
+    defaultMessage: "Confirm that you saved your recovery codes first.",
+  },
+  mfaCodesHidden: {
+    id: "mfa.codes.hidden",
+    defaultMessage: "Recovery codes are hidden",
+  },
+  mfaCodesHiddenHelp: {
+    id: "mfa.codes.hiddenHelp",
+    defaultMessage:
+      "Your recovery codes were hidden while you were away. Show them again when no one else can see your screen.",
+  },
+  mfaRevealCodes: {
+    id: "mfa.codes.reveal",
+    defaultMessage: "Show recovery codes",
+  },
+  mfaCodesUnavailable: {
+    id: "mfa.codes.unavailable",
+    defaultMessage:
+      "Recovery codes are no longer available. They are shown only once and cannot be retrieved. Only a future replacement of this factor issues new codes.",
+  },
 });
 
 export type MessageId = (typeof messages)[keyof typeof messages]["id"];

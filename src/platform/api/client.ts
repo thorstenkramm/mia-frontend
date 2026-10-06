@@ -139,6 +139,7 @@ export async function parseJsonApiResponse<T>(
 }
 
 type UnsafeRequestOptions = {
+  readonly method: "POST" | "DELETE";
   readonly path: string;
   readonly csrfToken: string;
   readonly signal?: AbortSignal;
@@ -146,6 +147,7 @@ type UnsafeRequestOptions = {
 };
 
 export async function sendUnsafeRequest({
+  method,
   path,
   csrfToken,
   signal,
@@ -160,8 +162,8 @@ export async function sendUnsafeRequest({
         "X-CSRF-Token": csrfToken,
         ...(body === undefined ? {} : { "Content-Type": jsonApiMediaType }),
       },
-      method: "POST",
-      signal,
+      method,
+      ...(signal === undefined ? {} : { signal }),
       ...(body === undefined ? {} : { body }),
     });
   } catch (error) {

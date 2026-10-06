@@ -23,6 +23,30 @@ const markers = [
   randomUUID(),
   `invitation-password-${randomBytes(24).toString("hex")}`,
 ];
+const base32Alphabet = "ABCDEFGHIJKLMNOPQRSTUVWXYZ234567";
+const totpSecret = Array.from(
+  randomBytes(32),
+  (byte) => base32Alphabet[byte % base32Alphabet.length],
+).join("");
+// The URI marker carries its own unique host so it is distinct from the secret.
+const totpUri = `otpauth://totp/MIA%20(mia-${randomBytes(12).toString("hex")}.example.test):example.learner?secret=${totpSecret}&issuer=MIA`;
+const recoveryCodeSet = Array.from({ length: 10 }, () =>
+  Array.from(
+    randomBytes(16),
+    (byte) => recoveryAlphabet[byte % recoveryAlphabet.length],
+  ).join(""),
+);
+markers.push(
+  totpSecret,
+  totpUri,
+  ...recoveryCodeSet,
+  ...recoveryCodeSet.map((code) => code.replace(/(.{4})(?=.)/gu, "$1-")),
+);
+const mfaEnrollmentEnvironment = {
+  MIA_SECRET_HYGIENE_TOTP_SECRET: totpSecret,
+  MIA_SECRET_HYGIENE_TOTP_URI: totpUri,
+  MIA_SECRET_HYGIENE_RECOVERY_CODE_SET: recoveryCodeSet.join(","),
+};
 
 async function leakingArtifacts(directory) {
   const leaks = [];
@@ -59,16 +83,17 @@ try {
         MIA_SECRET_HYGIENE_RESET_PASSWORD: markers[7],
         MIA_SECRET_HYGIENE_INVITATION_TOKEN: markers[8],
         MIA_SECRET_HYGIENE_INVITATION_PASSWORD: markers[9],
+        ...mfaEnrollmentEnvironment,
       },
       maxBuffer: 16 * 1024 * 1024,
     },
   );
   // Every controlled test (sign-in flow, retained-secret assertion, reset
-  // token flow, and invitation token flow) must fail.
+  // token flow, invitation token flow, and TOTP enrollment) must fail.
   if (
     result.error !== undefined ||
     result.status !== 1 ||
-    !result.stdout.includes(Buffer.from("4 failed"))
+    !result.stdout.includes(Buffer.from("5 failed"))
   ) {
     throw new Error("Controlled failures did not each fail exactly once.");
   }
@@ -85,7 +110,7 @@ try {
   }
 
   // The token-bearing Vitest suites use the same shared assertion helpers as
-  // these controlled unit failures; all six must fail without a marker leak.
+  // these controlled unit failures; all seven must fail without a marker leak.
   const unit = spawnSync(
     join(process.cwd(), "node_modules", ".bin", "vitest"),
     ["run", "--config", "vitest.secret-hygiene.config.ts"],
@@ -99,6 +124,7 @@ try {
         MIA_SECRET_HYGIENE_RESET_PASSWORD: markers[7],
         MIA_SECRET_HYGIENE_INVITATION_TOKEN: markers[8],
         MIA_SECRET_HYGIENE_INVITATION_PASSWORD: markers[9],
+        ...mfaEnrollmentEnvironment,
       },
       maxBuffer: 16 * 1024 * 1024,
     },
@@ -106,7 +132,7 @@ try {
   if (
     unit.error !== undefined ||
     unit.status !== 1 ||
-    !/Tests\s+6 failed/u.test(unit.stdout.toString())
+    !/Tests\s+7 failed/u.test(unit.stdout.toString())
   ) {
     throw new Error("Controlled unit failures did not each fail exactly once.");
   }

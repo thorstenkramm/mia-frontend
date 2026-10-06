@@ -1,9 +1,33 @@
 import { createHash, randomBytes } from "node:crypto";
 import { useEffect } from "react";
-import { act, render, screen, waitFor, within } from "@testing-library/react";
+import {
+  act,
+  configure,
+  getConfig,
+  render,
+  screen,
+  waitFor,
+  within,
+} from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
 import { delay, http, HttpResponse } from "msw";
-import { afterEach, describe, expect, it, vi } from "vitest";
+import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
+import {
+  authenticatedSessionResponse,
+  enrollmentResponse,
+  mfaErrorResponse,
+  mfaStateResponse,
+  ownProfileCapabilities,
+  provisioningUriFixture,
+  recoveryCodesFixture,
+  recoveryCodesResponse,
+  totpSecretFixture,
+  type MfaStateFixture,
+} from "../../test/mfaFixtures";
+import {
+  expectSameSecret,
+  expectSecretAbsent,
+} from "../../test/secretAssertions";
 import { server } from "../../test/server";
 import { App } from "./App";
 import {
@@ -34,6 +58,7 @@ import {
 } from "../platform/session/passwordResetLink";
 
 const mediaType = "application/vnd.api+json";
+const defaultElementError = getConfig().getElementError;
 
 function lifecycleResponse(absolute = false, renewed = false) {
   return HttpResponse.json(
@@ -4125,4 +4150,667 @@ describe("invitation preview and acceptance", () => {
       });
     },
   );
+});
+
+describe("TOTP enrollment and recovery codes", () => {
+  const pendingId = "mfe_pending";
+  // Secret-bearing DOM must never reach a failure message: report only the
+  // query, not the pretty-printed DOM or the accessible-name inventory.
+  beforeEach(() =>
+    configure({
+      getElementError: (message) => {
+        const error = new Error((message ?? "").split("\n")[0]);
+        error.name = "TestingLibraryElementError";
+        return error;
+      },
+    }),
+  );
+  afterEach(() => configure({ getElementError: defaultElementError }));
+  let mfaState: MfaStateFixture = {};
+  let counts = { reads: 0, starts: 0, verifies: 0, cancels: 0 };
+
+  function mfaHandlers(
+    options: {
+      readonly uri?: () => string;
+      readonly verify?: () => Response;
+      readonly ownProfileView?: boolean;
+      readonly ownResource?: boolean;
+      readonly read?: () => Response;
+    } = {},
+  ) {
+    return [
+      http.get("/api/v1/auth/session", () => authenticatedSessionResponse()),
+      http.get("/api/v1/users/me/capabilities", () =>
+        ownProfileCapabilities(
+          "account-id",
+          options.ownProfileView ?? true,
+          options.ownResource,
+        ),
+      ),
+      http.get("/api/v1/users/me/mfa", () => {
+        counts.reads++;
+        return options.read?.() ?? mfaStateResponse(mfaState);
+      }),
+      http.post("/api/v1/users/me/mfa-enrollments", () => {
+        counts.starts++;
+        mfaState = { pending: { id: pendingId } };
+        return enrollmentResponse(
+          pendingId,
+          (options.uri ?? (() => provisioningUriFixture()))(),
+        );
+      }),
+      http.post(
+        `/api/v1/users/me/mfa-enrollments/${pendingId}/verifications`,
+        () => {
+          counts.verifies++;
+          return (
+            options.verify ??
+            (() => {
+              mfaState = { active: "totp" };
+              return recoveryCodesResponse(pendingId, recoveryCodesFixture());
+            })
+          )();
+        },
+      ),
+      http.delete(`/api/v1/users/me/mfa-enrollments/${pendingId}`, () => {
+        counts.cancels++;
+        mfaState = {};
+        return new HttpResponse(null, { status: 204 });
+      }),
+    ];
+  }
+
+  function beginAt(path: string) {
+    mfaState = {};
+    counts = { reads: 0, starts: 0, verifies: 0, cancels: 0 };
+    document.cookie = `mia_csrf=${crypto.randomUUID()}; Path=/`;
+    window.history.replaceState(null, "", path);
+    storageWrites = [];
+    const setItem = Storage.prototype.setItem;
+    vi.spyOn(Storage.prototype, "setItem").mockImplementation(function (
+      this: Storage,
+      key: string,
+      value: string,
+    ) {
+      storageWrites.push(key, value);
+      setItem.call(this, key, value);
+    });
+  }
+
+  let storageWrites: string[] = [];
+
+  function documentText(): string {
+    return `${new XMLSerializer().serializeToString(document)}${document.title}${window.location.href}${JSON.stringify(window.history.state)}`;
+  }
+
+  function storageText(): string {
+    return storageWrites.join("\n");
+  }
+
+  async function startSetup(user: ReturnType<typeof userEvent.setup>) {
+    await user.click(
+      await screen.findByRole("button", { name: "Start setup" }),
+    );
+    return screen.findByRole("heading", {
+      level: 1,
+      name: "Verify multi-factor authentication",
+    });
+  }
+
+  it("links Home to the MFA overview only with own-scope profile.view", async () => {
+    beginAt("/");
+    renderEntry(...mfaHandlers());
+    const user = userEvent.setup();
+    await user.click(
+      await screen.findByRole("link", { name: "Multi-factor authentication" }),
+    );
+    expect(
+      await screen.findByRole("heading", {
+        level: 1,
+        name: "Multi-factor authentication",
+      }),
+    ).toHaveFocus();
+    expect(document.title).toBe("Multi-factor authentication | MIA");
+    expect(
+      await screen.findByText("Multi-factor authentication is off"),
+    ).toBeVisible();
+    expect(counts.reads).toBe(1);
+  });
+
+  it.each([
+    [true, false],
+    [false, true],
+    [false, false],
+  ])(
+    "falls back without MFA reads or Home link for available=%s own_resource=%s",
+    async (available, ownResource) => {
+      beginAt("/profile/security/mfa/enroll");
+      renderEntry(...mfaHandlers({ ownProfileView: available, ownResource }));
+      await screen.findByRole("heading", { level: 1, name: "Home" });
+      expect(window.location.pathname).toBe("/");
+      expect(
+        screen.queryByRole("link", { name: "Multi-factor authentication" }),
+      ).toBeNull();
+      await delay(20);
+      expect(counts.reads).toBe(0);
+    },
+  );
+
+  it("withholds the protected route body after a failed resource read until deliberate Check again", async () => {
+    beginAt("/profile/security/mfa");
+    let failing = true;
+    renderEntry(
+      ...mfaHandlers({
+        read: () =>
+          failing ? mfaErrorResponse(503, "unavailable") : mfaStateResponse(),
+      }),
+    );
+    const retry = await screen.findByRole("button", { name: "Check again" });
+    expect(
+      screen.getByText(
+        "We could not check your multi-factor authentication status.",
+      ),
+    ).toBeVisible();
+    expect(
+      screen.queryByRole("heading", {
+        name: "Multi-factor authentication",
+        level: 1,
+      }),
+    ).toBeNull();
+    expect(screen.queryByText("Multi-factor authentication is off")).toBeNull();
+    expect(
+      screen.queryByRole("link", { name: "Set up authenticator app" }),
+    ).toBeNull();
+    failing = false;
+    await delay(20);
+    expect(counts.reads).toBe(1);
+    await userEvent.setup().click(retry);
+    expect(
+      await screen.findByText("Multi-factor authentication is off"),
+    ).toBeVisible();
+    expect(
+      screen.getByRole("link", { name: "Set up authenticator app" }),
+    ).toBeVisible();
+    expect(counts.reads).toBe(2);
+  });
+
+  it.each(["state read 401", "verify 403"] as const)(
+    "renders access-lost explanation and deliberate Refresh after MFA %s",
+    async (failure) => {
+      beginAt("/profile/security/mfa/enroll");
+      const secret = totpSecretFixture();
+      let denyRead = false;
+      renderEntry(
+        ...mfaHandlers({
+          uri: () => provisioningUriFixture(secret),
+          read: () =>
+            denyRead
+              ? mfaErrorResponse(401, "auth_unauthenticated")
+              : mfaStateResponse(mfaState),
+          verify: () => mfaErrorResponse(403, "auth_password_change_required"),
+        }),
+      );
+      const user = userEvent.setup();
+      await startSetup(user);
+      if (failure === "state read 401") {
+        denyRead = true;
+        act(() => window.dispatchEvent(new Event("focus")));
+        await user.click(screen.getByRole("button", { name: "Refresh" }));
+      } else {
+        await user.type(
+          screen.getByLabelText(
+            "Six-digit code from your authenticator app (required)",
+          ),
+          mfaCodeFixture(),
+        );
+        await user.click(screen.getByRole("button", { name: "Verify code" }));
+      }
+      expect(
+        await screen.findByText(
+          "MIA could not confirm your sign-in or access. Content is hidden. Refresh to check your sign-in.",
+          { selector: "main p" },
+        ),
+      ).toBeVisible();
+      expect(
+        screen.getByRole("heading", { level: 1, name: "Content hidden" }),
+      ).toBeVisible();
+      expectSecretAbsent(documentText(), secret, "Access-lost document");
+      expect(screen.queryByRole("img")).toBeNull();
+      const reads = counts.reads;
+      denyRead = false;
+      await delay(20);
+      expect(counts.reads).toBe(reads);
+      await user.click(screen.getByRole("button", { name: "Refresh" }));
+      expect(await screen.findByText(/cannot be shown again/u)).toBeVisible();
+      expectSecretAbsent(documentText(), secret, "Reauthorized document");
+      expect(counts.verifies).toBe(failure === "verify 403" ? 1 : 0);
+      expect(counts.reads).toBe(reads + 1);
+    },
+  );
+
+  it("renders a local SVG QR code and selectable manual values from one valid URI", async () => {
+    beginAt("/profile/security/mfa/enroll");
+    const secret = totpSecretFixture();
+    const requests: string[] = [];
+    const onRequest = ({ request }: { request: Request }) => {
+      requests.push(new URL(request.url).pathname);
+    };
+    server.events.on("request:start", onRequest);
+    renderEntry(...mfaHandlers({ uri: () => provisioningUriFixture(secret) }));
+    const user = userEvent.setup();
+    await startSetup(user);
+    const qr = await screen.findByRole("img", {
+      name: "QR code for adding MIA to your authenticator app",
+    });
+    expect(qr.tagName.toLowerCase()).toBe("svg");
+    expect(qr.querySelector("path")?.getAttribute("d")).not.toBe("");
+    expect(document.querySelector("img, image, canvas")).toBeNull();
+    expect(document.querySelector('a[href^="otpauth:"]')).toBeNull();
+    const term = screen.getByText("Setup key");
+    expectSameSecret(
+      term.nextElementSibling?.textContent,
+      secret,
+      "Manual setup key",
+    );
+    expect(
+      screen.getByText("MIA (mia.example.test):example.learner"),
+    ).toBeVisible();
+    expect(counts.starts).toBe(1);
+    server.events.removeListener("request:start", onRequest);
+    expect(requests.every((path) => path.startsWith("/api/v1/"))).toBe(true);
+    expectSecretAbsent(storageText(), secret, "Browser storage");
+    expectSecretAbsent(
+      `${document.title}${window.location.href}${JSON.stringify(window.history.state)}`,
+      secret,
+      "URL, title, and history state",
+    );
+    expectSecretAbsent(
+      announcementRegion("polite").textContent ?? "",
+      secret,
+      "Announcements",
+    );
+  });
+
+  it("renders no QR code or manual value for a rejected URI and offers Cancel", async () => {
+    beginAt("/profile/security/mfa/enroll");
+    const secret = totpSecretFixture();
+    renderEntry(
+      ...mfaHandlers({
+        uri: () =>
+          provisioningUriFixture(secret, "mia.example.test", "x", "&image=1"),
+      }),
+    );
+    const user = userEvent.setup();
+    await user.click(
+      await screen.findByRole("button", { name: "Start setup" }),
+    );
+    expect(
+      await screen.findByRole("heading", {
+        level: 2,
+        name: /setup data it cannot use/u,
+      }),
+    ).toBeVisible();
+    expect(screen.queryByRole("img")).toBeNull();
+    expectSecretAbsent(documentText(), secret, "Rejected setup document");
+    await user.click(screen.getByRole("button", { name: "Cancel setup" }));
+    expect(
+      await screen.findByText("Setup cancelled.", { selector: "main *" }),
+    ).toBeVisible();
+    expect(counts).toMatchObject({ starts: 1, cancels: 1 });
+  });
+
+  it("offers code entry and Cancel for a pending enrollment without a held URI", async () => {
+    beginAt("/profile/security/mfa/verify");
+    renderEntry(...mfaHandlers());
+    mfaState = { pending: { id: pendingId } };
+    expect(await screen.findByText(/cannot be shown again/u)).toBeVisible();
+    expect(screen.queryByRole("img")).toBeNull();
+    expect(
+      screen.getByLabelText(
+        "Six-digit code from your authenticator app (required)",
+      ),
+    ).toHaveAttribute("autocomplete", "one-time-code");
+    expect(screen.getByRole("button", { name: "Cancel setup" })).toBeVisible();
+    expect(counts.starts).toBe(0);
+  });
+
+  it("masks setup on a lifecycle shield and reveals it only after Refresh and a fresh read", async () => {
+    beginAt("/profile/security/mfa/enroll");
+    const secret = totpSecretFixture();
+    renderEntry(...mfaHandlers({ uri: () => provisioningUriFixture(secret) }));
+    const user = userEvent.setup();
+    await startSetup(user);
+    act(() => window.dispatchEvent(new Event("focus")));
+    expect(screen.getByRole("heading", { level: 1 })).toHaveTextContent(
+      "Content hidden",
+    );
+    expectSecretAbsent(documentText(), secret, "Shielded document");
+    const readsBefore = counts.reads;
+    await user.click(screen.getByRole("button", { name: "Refresh" }));
+    await screen.findByText("Setup details are hidden");
+    expect(counts.reads).toBe(readsBefore + 1);
+    expectSecretAbsent(documentText(), secret, "Masked setup");
+    await user.click(
+      screen.getByRole("button", { name: "Show setup details" }),
+    );
+    expectSameSecret(
+      screen.getByText("Setup key").nextElementSibling?.textContent,
+      secret,
+      "Revealed setup key",
+    );
+    expect(counts.starts).toBe(1);
+  });
+
+  it.each(["non-persisted pagehide", "route departure"])(
+    "destroys setup on %s",
+    async (cause) => {
+      beginAt("/profile/security/mfa/enroll");
+      const secret = totpSecretFixture();
+      renderEntry(
+        ...mfaHandlers({ uri: () => provisioningUriFixture(secret) }),
+      );
+      const user = userEvent.setup();
+      await startSetup(user);
+      if (cause === "route departure") {
+        await user.click(
+          screen.getByRole("link", {
+            name: "Back to multi-factor authentication",
+          }),
+        );
+        await screen.findByText("Setup is pending");
+        await user.click(screen.getByRole("link", { name: "Continue setup" }));
+      } else {
+        act(() =>
+          window.dispatchEvent(
+            new PageTransitionEvent("pagehide", { persisted: false }),
+          ),
+        );
+        await user.click(screen.getByRole("button", { name: "Refresh" }));
+      }
+      expect(await screen.findByText(/cannot be shown again/u)).toBeVisible();
+      expectSecretAbsent(documentText(), secret, "Destroyed setup");
+    },
+  );
+
+  it("re-reads after an unknown verify outcome and explains unrecoverable codes", async () => {
+    beginAt("/profile/security/mfa/enroll");
+    renderEntry(
+      ...mfaHandlers({
+        verify: () => {
+          mfaState = { active: "totp" };
+          return HttpResponse.error();
+        },
+      }),
+    );
+    const user = userEvent.setup();
+    await startSetup(user);
+    const readsBefore = counts.reads;
+    await user.type(
+      screen.getByLabelText(
+        "Six-digit code from your authenticator app (required)",
+      ),
+      mfaCodeFixture(),
+    );
+    await user.click(screen.getByRole("button", { name: "Verify code" }));
+    expect(
+      await screen.findByText(
+        /recovery codes from this setup could not be shown/u,
+        { selector: "main *" },
+      ),
+    ).toBeVisible();
+    expect(counts).toMatchObject({ verifies: 1, reads: readsBefore + 1 });
+  });
+
+  it("keeps the setup and input after an invalid code without resubmitting", async () => {
+    beginAt("/profile/security/mfa/enroll");
+    const secret = totpSecretFixture();
+    renderEntry(
+      ...mfaHandlers({
+        uri: () => provisioningUriFixture(secret),
+        verify: () => mfaErrorResponse(422, "auth_invalid_mfa_code"),
+      }),
+    );
+    const user = userEvent.setup();
+    await startSetup(user);
+    const field = screen.getByLabelText<HTMLInputElement>(
+      "Six-digit code from your authenticator app (required)",
+    );
+    const code = mfaCodeFixture();
+    await user.type(field, code);
+    await user.click(screen.getByRole("button", { name: "Verify code" }));
+    await screen.findByRole("heading", {
+      level: 2,
+      name: /code was not accepted/u,
+    });
+    await waitFor(() => expect(field).toHaveFocus());
+    expect(field.value === code).toBe(true);
+    expect(field).toHaveAttribute("aria-invalid", "true");
+    expect(field).toHaveAccessibleDescription(/code was not accepted/u);
+    expectSameSecret(
+      screen.getByText("Setup key").nextElementSibling?.textContent,
+      secret,
+      "Retained setup key",
+    );
+    expect(counts.verifies).toBe(1);
+  });
+
+  it.each(["unknown", "throttled", "reconcile failed"])(
+    "keeps a valid code valid and focuses feedback after %s",
+    async (result) => {
+      beginAt("/profile/security/mfa/verify");
+      renderEntry(
+        ...mfaHandlers({
+          verify: () =>
+            result === "throttled"
+              ? mfaErrorResponse(429, "rate_limited")
+              : HttpResponse.error(),
+        }),
+      );
+      mfaState = { pending: { id: pendingId } };
+      const user = userEvent.setup();
+      const field = await screen.findByLabelText<HTMLInputElement>(
+        "Six-digit code from your authenticator app (required)",
+      );
+      if (result === "reconcile failed")
+        server.use(
+          http.get("/api/v1/users/me/mfa", () => HttpResponse.error()),
+        );
+      const code = mfaCodeFixture();
+      await user.type(field, code);
+      await user.click(screen.getByRole("button", { name: "Verify code" }));
+      const feedback =
+        result === "reconcile failed"
+          ? await screen.findByRole("button", { name: "Check again" })
+          : await screen.findByRole("heading", { level: 2 });
+      await waitFor(() => expect(feedback).toHaveFocus());
+      expect(field).toHaveAttribute("aria-invalid", "false");
+      expectSecretAbsent(
+        announcementRegion("assertive").textContent ?? "",
+        code,
+        "Result announcement",
+      );
+      expect(counts.verifies).toBe(1);
+    },
+  );
+
+  it("replaces enroll with verify in history and destroys setup on intentional Back", async () => {
+    beginAt("/profile/security/mfa");
+    const secret = totpSecretFixture();
+    renderEntry(...mfaHandlers({ uri: () => provisioningUriFixture(secret) }));
+    const user = userEvent.setup();
+    await user.click(
+      await screen.findByRole("link", { name: "Set up authenticator app" }),
+    );
+    await startSetup(user);
+    act(() => window.history.back());
+    await screen.findByRole("heading", {
+      level: 1,
+      name: "Multi-factor authentication",
+    });
+    expect(window.location.pathname).toBe("/profile/security/mfa");
+    expectSecretAbsent(documentText(), secret, "Intentional Back departure");
+  });
+
+  it("shows ten grouped codes once with copy, a codes-only print view, and acknowledgement-gated Done", async () => {
+    beginAt("/profile/security/mfa/enroll");
+    const codes = recoveryCodesFixture();
+    let copied = "";
+    vi.spyOn(navigator.clipboard, "writeText").mockImplementation((text) => {
+      copied = text;
+      return Promise.resolve();
+    });
+    const print = vi.spyOn(window, "print").mockImplementation(() => {});
+    renderEntry(
+      ...mfaHandlers({
+        verify: () => {
+          mfaState = { active: "totp" };
+          return recoveryCodesResponse(pendingId, codes);
+        },
+      }),
+    );
+    const user = userEvent.setup();
+    await startSetup(user);
+    await user.type(
+      screen.getByLabelText(
+        "Six-digit code from your authenticator app (required)",
+      ),
+      mfaCodeFixture(),
+    );
+    await user.click(screen.getByRole("button", { name: "Verify code" }));
+    expect(
+      await screen.findByRole("heading", {
+        level: 1,
+        name: "MFA recovery codes",
+      }),
+    ).toHaveFocus();
+    expect(window.location.pathname).toBe(
+      "/profile/security/mfa/recovery-codes",
+    );
+    const grouped = codes.map((code) => code.replace(/(.{4})(?=.)/gu, "$1-"));
+    const reveal = await screen.findByRole("button", {
+      name: "Show recovery codes",
+    });
+    for (const code of [...codes, ...grouped])
+      expectSecretAbsent(documentText(), code, "Before initial Reveal");
+    expect(screen.queryByTestId("recovery-code-print")).toBeNull();
+    expect(screen.getByText(/cannot show them again/u)).toBeVisible();
+    await user.click(reveal);
+    const list = await within(screen.getByRole("main")).findByRole("list", {
+      name: "Recovery codes",
+    });
+    expectSameSecret(
+      within(list)
+        .getAllByRole("listitem")
+        .map((item) => item.textContent)
+        .join("\n"),
+      grouped.join("\n"),
+      "Rendered grouped codes",
+    );
+    act(() => window.dispatchEvent(new Event("focus")));
+    for (const code of grouped)
+      expectSecretAbsent(documentText(), code, "Lifecycle-masked codes");
+    expect(screen.queryByTestId("recovery-code-print")).toBeNull();
+    await user.click(screen.getByRole("button", { name: "Refresh" }));
+    const revealAgain = await screen.findByRole("button", {
+      name: "Show recovery codes",
+    });
+    for (const code of grouped)
+      expectSecretAbsent(documentText(), code, "Before guarded re-reveal");
+    await user.click(revealAgain);
+    expect(
+      within(screen.getByRole("main")).getByText(/cannot show them again/u),
+    ).toBeVisible();
+    expect(
+      screen.getByRole("group", { name: "Safe storage confirmation" }),
+    ).toBeVisible();
+
+    const copy = screen.getByRole("button", {
+      name: "Copy all recovery codes",
+    });
+    await user.click(copy);
+    expectSameSecret(copied, grouped.join("\n"), "Copied codes");
+    expect(copy).toHaveFocus();
+    await waitFor(() =>
+      expect(announcementRegion("polite")).toHaveTextContent(
+        "Recovery codes copied.",
+      ),
+    );
+
+    const printView = screen.getByTestId("recovery-code-print");
+    expect(document.getElementById("root")?.contains(printView)).not.toBe(true);
+    expectSameSecret(
+      within(printView)
+        .getAllByRole("listitem", { hidden: true })
+        .map((item) => item.textContent)
+        .join("\n"),
+      grouped.join("\n"),
+      "Printed codes",
+    );
+    expectSameSecret(
+      printView.textContent,
+      `${within(screen.getByRole("main")).getByText(/cannot show them again/u).textContent}${grouped.join("")}`,
+      "Print view contains only the warning and codes",
+    );
+    await user.click(
+      screen.getByRole("button", { name: "Print recovery codes" }),
+    );
+    expect(print).toHaveBeenCalledTimes(1);
+    await waitFor(() =>
+      expect(announcementRegion("polite")).toHaveTextContent(
+        "Print dialog requested. Printing is not confirmed.",
+      ),
+    );
+
+    const done = screen.getByRole("button", { name: "Done" });
+    expect(done).toHaveAttribute("aria-disabled", "true");
+    await user.click(done);
+    expect(
+      screen.getByLabelText("I have saved my recovery codes"),
+    ).toHaveFocus();
+    expect(window.location.pathname).toBe(
+      "/profile/security/mfa/recovery-codes",
+    );
+    await user.click(screen.getByLabelText("I have saved my recovery codes"));
+    await user.click(done);
+    expect(
+      await screen.findByText("Multi-factor authentication is on"),
+    ).toBeVisible();
+    expect(window.location.pathname).toBe("/profile/security/mfa");
+    for (const code of grouped)
+      expectSecretAbsent(documentText(), code, "Document after Done");
+    expect(counts.verifies).toBe(1);
+  });
+
+  it("announces a copy failure and leaves the codes selectable", async () => {
+    beginAt("/profile/security/mfa/enroll");
+    vi.spyOn(navigator.clipboard, "writeText").mockRejectedValue(
+      new Error("denied"),
+    );
+    renderEntry(...mfaHandlers());
+    const user = userEvent.setup();
+    await startSetup(user);
+    await user.type(
+      screen.getByLabelText(
+        "Six-digit code from your authenticator app (required)",
+      ),
+      mfaCodeFixture(),
+    );
+    await user.click(screen.getByRole("button", { name: "Verify code" }));
+    await user.click(
+      await screen.findByRole("button", { name: "Show recovery codes" }),
+    );
+    await user.click(
+      await screen.findByRole("button", { name: "Copy all recovery codes" }),
+    );
+    await waitFor(() =>
+      expect(announcementRegion("assertive")).toHaveTextContent(
+        "Recovery codes could not be copied.",
+      ),
+    );
+    expect(
+      within(screen.getByRole("main")).getByRole("list", {
+        name: "Recovery codes",
+      }),
+    ).toBeVisible();
+  });
 });
