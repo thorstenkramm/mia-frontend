@@ -4,6 +4,7 @@ import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { spawnSync } from "node:child_process";
 import { browserCases, unitCases } from "./secret-hygiene-evidence.ts";
+import { checkRouteSecretHygiene } from "./check-route-secret-hygiene.mjs";
 
 const outputDir = await mkdtemp(join(tmpdir(), "mia-secret-hygiene-"));
 const recoveryAlphabet = "0123456789ABCDEFGHJKMNPQRSTVWXYZ";
@@ -214,6 +215,7 @@ try {
       `${runner}: checkpoints and failure identities verified; early-failure canary rejected.`,
     );
   }
+  await checkRouteSecretHygiene();
   console.log("Secret-hygiene deliberate-failure scan passed.");
 } finally {
   await rm(outputDir, { force: true, recursive: true });

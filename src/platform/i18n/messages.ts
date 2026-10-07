@@ -1,6 +1,26 @@
 import { defineMessages } from "react-intl";
 
 export const messages = defineMessages({
+  routeLoading: { id: "route.loading", defaultMessage: "Loading this page…" },
+  routeUnavailable: {
+    id: "route.unavailable",
+    defaultMessage: "This page could not be loaded",
+  },
+  routeLoadFailed: {
+    id: "route.loadFailed",
+    defaultMessage:
+      "Reload to try loading this page again, or use an available exit. Reload does not repeat your submitted action.",
+  },
+  routeCodesLoadFailed: {
+    id: "route.codesLoadFailed",
+    defaultMessage:
+      "Your recovery-code page could not be loaded. Navigation remains blocked until you save the codes. Browser Reload loses these codes and they cannot be retrieved. You can sign out.",
+  },
+  routeReload: { id: "route.reload", defaultMessage: "Reload page" },
+  routeBackToInvitation: {
+    id: "route.backToInvitation",
+    defaultMessage: "Back to invitation",
+  },
   lifecycleAbsoluteWarning: {
     id: "session.absoluteWarning",
     defaultMessage: "Your sign-in cannot be extended and will end soon.",

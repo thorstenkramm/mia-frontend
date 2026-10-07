@@ -304,6 +304,37 @@ export class SessionController {
   private access: AuthenticatedAccess | null = null;
   private securityEpoch = 0;
   private readonly authenticatedReads = new Set<AbortController>();
+  private routeAdmission: Promise<void> | null = null;
+
+  // A deliberate new route/history entry re-establishes the first two gate
+  // steps. This is a read cycle, not Continue working or an auth mutation.
+  checkRouteAdmission(): Promise<void> {
+    this.checkDeadline();
+    const failedEntry =
+      (this.state.kind === "Checking" ||
+        this.state.kind === "Access checking") &&
+      this.state.phase === "failed";
+    if (
+      this.state.kind !== "Authenticated" &&
+      this.routeAdmission === null &&
+      !failedEntry
+    )
+      return Promise.resolve();
+    if (
+      this.state.kind === "Privacy shield" ||
+      this.state.kind.startsWith("Logout")
+    )
+      return Promise.resolve();
+    this.activeRead?.abort();
+    for (const read of this.authenticatedReads) read.abort();
+    const work = this.bootstrap(false);
+    this.routeAdmission = work;
+    this.trackSettlement(work);
+    void work.then(() => {
+      if (this.routeAdmission === work) this.routeAdmission = null;
+    });
+    return work;
+  }
 
   registerSecurityTeardown(teardown: SecurityTeardown): () => void {
     this.securityTeardowns.add(teardown);
@@ -434,6 +465,7 @@ export class SessionController {
   observeLifecycle(): void {
     if (
       this.state.kind === "Authenticated" ||
+      this.routeAdmission !== null ||
       (this.state.kind === "Privacy shield" && this.state.phase === "checking")
     )
       this.shield();
@@ -1321,18 +1353,21 @@ export class SessionController {
     return true;
   }
 
-  private async bootstrap(): Promise<void> {
+  private async bootstrap(
+    deferCapabilityGate = this.deferCapabilityGate,
+  ): Promise<void> {
     const sequence = ++this.sequence;
     const controller = new AbortController();
     this.activeRead = controller;
     this.setState({ kind: "Checking", phase: "loading" });
     try {
       await withCoordinatorLock("shared", async () => {
+        if (sequence !== this.sequence || controller.signal.aborted) return;
         const session = await discoverSession(controller.signal);
         if (sequence !== this.sequence) {
           return;
         }
-        if (this.deferCapabilityGate && session.kind === "authenticated") {
+        if (deferCapabilityGate && session.kind === "authenticated") {
           this.installDeadlines(session);
           if (sequence !== this.sequence) return;
           this.setState({
@@ -1347,6 +1382,7 @@ export class SessionController {
       });
     } catch (error) {
       if (sequence === this.sequence && !controller.signal.aborted) {
+        if (this.access !== null) this.destroySecrets();
         this.setState({
           kind: "Checking",
           phase: "failed",
@@ -1409,7 +1445,8 @@ export class SessionController {
           // A different account after a masking shield is an account change.
           if (
             this.access !== null &&
-            this.access.accountId !== session.accountId
+            (this.access.accountId !== session.accountId ||
+              this.access.ownProfileView !== capabilities.ownProfileView)
           )
             this.destroySecrets();
           this.access = {
@@ -1421,6 +1458,7 @@ export class SessionController {
           this.checkDeadline();
         } catch (error) {
           if (sequence === this.sequence && !signal.aborted) {
+            if (this.access !== null) this.destroySecrets();
             this.setState(
               recovering
                 ? {

@@ -1045,6 +1045,9 @@ unknown mutation outcome remains on its owning route without success copy until 
 - Gate: `Profile(own MFA state)`.
 - Fallback: `/profile`.
 
+Until `/profile` is implemented, Home `/` is the parent and safe fallback under the 2026-10-07 owner decision in
+`BACKEND-CONTRACT-GAPS.md` §BCG-009 Story 1-9 TOTP-enrollment-slice decision. No `/profile` surface is added by Story 2.2.
+
 ### Start MFA Enrollment
 
 - Path: `/profile/security/mfa/enroll`

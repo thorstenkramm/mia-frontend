@@ -1078,7 +1078,7 @@ describe("localized anonymous entry", () => {
       }),
     );
     expect(window.location.pathname).toBe("/auth/mfa/recovery");
-    const input = screen.getByLabelText("Recovery code (required)");
+    const input = await screen.findByLabelText("Recovery code (required)");
     await user.click(input);
     await user.paste(displayed);
     await user.click(screen.getByRole("button", { name: "Use recovery code" }));
@@ -2552,7 +2552,7 @@ describe("password recovery and token reset", () => {
     expect(window.location.pathname).toBe("/login/recovery");
     expect(screen.queryByRole("navigation")).toBeNull();
     await user.type(
-      screen.getByLabelText("Username (required)"),
+      await screen.findByLabelText("Username (required)"),
       "Example.Staff",
     );
     await user.click(screen.getByRole("button", { name: "Send reset link" }));
@@ -3376,7 +3376,8 @@ describe("invitation preview and acceptance", () => {
     expect(window.location.pathname).toBe("/invitation/accept");
     expect(document.title).toBe("Create account | MIA");
     expect(
-      screen.getByLabelText<HTMLSelectElement>("Language (required)").value,
+      (await screen.findByLabelText<HTMLSelectElement>("Language (required)"))
+        .value,
     ).toBe("en-US");
     expect(
       screen.getByLabelText<HTMLSelectElement>("Time zone (required)").value,

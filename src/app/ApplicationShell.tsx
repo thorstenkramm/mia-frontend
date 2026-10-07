@@ -20,7 +20,7 @@ import {
   type RefObject,
 } from "react";
 import { useIntl } from "react-intl";
-import { Link, useLocation, useNavigate } from "react-router";
+import { useLocation } from "react-router";
 import {
   useAuthenticatedAccess,
   useSessionActions,
@@ -28,9 +28,9 @@ import {
 import { messages } from "../platform/i18n/messages";
 import {
   RouteDepartureProvider,
-  useRouteDeparture,
   type RouteDeparture,
 } from "../platform/ui/routeDeparture";
+import { RouteDepartureLink } from "../platform/ui/RouteDepartureLink";
 import { entryRoutes } from "./routes/entryRoutes";
 import {
   BuildIdentifier,
@@ -327,29 +327,13 @@ function ShellNavigationLink({
 }) {
   const intl = useIntl();
   const { pathname } = useLocation();
-  const navigate = useNavigate();
-  const departure = useRouteDeparture();
   const current = pathname === link.to;
   const Icon = link.icon;
   return (
-    <Link
+    <RouteDepartureLink
       to={link.to}
       aria-current={current ? "page" : undefined}
-      onClick={(event) => {
-        // The mounted route decides whether this departure may happen.
-        const decision = departure();
-        if (decision.kind === "refuse") {
-          event.preventDefault();
-          if (onNavigate) onNavigate(decision.explain);
-          else decision.explain();
-          return;
-        }
-        onNavigate?.();
-        if (!decision.replace && decision.release === undefined) return;
-        event.preventDefault();
-        navigate(link.to, { replace: decision.replace });
-        decision.release?.();
-      }}
+      {...(onNavigate ? { onDepart: onNavigate } : {})}
       className={clsx(
         current
           ? "bg-gray-50 text-indigo-600 forced-colors:underline"
@@ -367,6 +351,6 @@ function ShellNavigationLink({
         )}
       />
       {intl.formatMessage(link.label)}
-    </Link>
+    </RouteDepartureLink>
   );
 }

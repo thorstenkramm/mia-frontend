@@ -1,4 +1,10 @@
 {
+  "route.loading": "Diese Seite wird geladen…",
+  "route.unavailable": "Diese Seite konnte nicht geladen werden",
+  "route.loadFailed": "Laden Sie die Seite neu oder nutzen Sie einen verfügbaren Ausgang. Neuladen wiederholt Ihre übermittelte Aktion nicht.",
+  "route.codesLoadFailed": "Die Seite mit Ihren Wiederherstellungscodes konnte nicht geladen werden. Die Navigation bleibt gesperrt, bis Sie die Codes gespeichert haben. Beim Neuladen im Browser gehen diese Codes unwiederbringlich verloren. Sie können sich abmelden.",
+  "route.reload": "Seite neu laden",
+  "route.backToInvitation": "Zurück zur Einladung",
   "session.absoluteWarning": "Deine Anmeldung kann nicht verlängert werden und endet bald.",
   "session.absoluteHelp": "Melde dich ab. Der Ablauf der Anmeldung beendet deine Lernsitzung nicht.",
   "session.retryContinue": "Weiterarbeiten erneut versuchen",

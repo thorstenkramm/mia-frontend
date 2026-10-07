@@ -1,0 +1,180 @@
+story: 2-2-working-routes-and-parent-navigation
+phase: commit-pending
+readiness: ready
+spec: _bmad-output/implementation-artifacts/spec-2-2-working-routes-and-parent-navigation.md
+baseline_commit: d1be39a5a4c041f7a26dfef30e6d1e605b21f8ab
+pre_existing_changes:
+  - path: .opencode/agents/epic-solver.md
+    disposition: "Approved parent bookkeeping, including 2026-10-07 permission repair; preserve/exclude from 2.2 commit. Hash below is the original prepare snapshot."
+    sha256: cd740b2c046c94ad8fc9412adc2023cdec7664bb7a13139769d572868e60bb41
+  - path: .opencode/story-execution.md
+    disposition: "Approved parent bookkeeping; preserve/exclude from 2.2 commit."
+    sha256: d4cf943ef1132790c7f18665fa09afed96ac73ad0cdf4128fca46df19da15cc1
+  - path: _bmad-output/implementation-artifacts/execution/2-1-basic-capability-driven-navigation.yaml
+    disposition: "Approved 2.1 postcommit operational update; preserve/exclude from 2.2 commit."
+    sha256: bec8d6c617afaf9142d4d0d0f54d2b9d83d403590c65542e573e6fc915d4441d
+manifest_status: "Actual 43-file cumulative manifest reconciled against fix-manifest.txt and proposed-checkpoint-closure.json."
+files:
+  - _bmad-output/implementation-artifacts/spec-2-2-working-routes-and-parent-navigation.md
+  - _bmad-output/implementation-artifacts/execution/2-2-working-routes-and-parent-navigation.yaml
+  - _bmad-output/implementation-artifacts/sprint-status.yaml
+  - _bmad-output/planning-artifacts/ux-designs/ux-mia-frontend-2026-09-12/BACKEND-CONTRACT-GAPS.md
+  - _bmad-output/planning-artifacts/ux-designs/ux-mia-frontend-2026-09-12/ROUTE-INVENTORY.md
+  - src/app/App.tsx
+  - src/main.tsx
+  - src/app/routes/entryRoutes.tsx
+  - src/app/routes/ProfileMfaRoute.tsx
+  - src/app/routes/routeFrame.tsx
+  - src/app/ApplicationShell.tsx
+  - src/platform/session/sessionController.ts
+  - src/platform/session/sessionController.test.ts
+  - src/platform/session/SessionProvider.tsx
+  - src/platform/announcer/AnnouncementRegion.tsx
+  - src/platform/announcer/AnnouncementRegion.test.tsx
+  - src/platform/i18n/messages.ts
+  - src/platform/i18n/catalogs/de-DE.json
+  - src/platform/i18n/catalogs/en-US.json
+  - src/platform/i18n/catalogs/es-AR.json
+  - src/platform/i18n/catalogs/es-ES.json
+  - src/platform/i18n/catalogs/fr-FR.json
+  - src/platform/i18n/catalogs/pt-BR.json
+  - src/platform/i18n/catalogs/pt-PT.json
+  - src/app/routes/RouteAdmission.tsx
+  - src/app/routes/RouteRecoveryBoundary.tsx
+  - src/platform/ui/RouteRecoveryPanel.tsx
+  - src/platform/ui/RouteDepartureLink.tsx
+  - src/app/routes/routeNavigation.test.tsx
+  - src/app/routes/routeRecovery.test.tsx
+  - e2e/routeNavigation.spec.ts
+  - e2e/routeRecovery.spec.ts
+  - e2e/routeFixtures.ts
+  - e2e/scaffold.spec.ts
+  - src/app/App.test.tsx
+  - src/app/ApplicationShell.test.tsx
+  - src/features/auth/LogoutEntryRoute.tsx
+  - src/features/auth/LogoutRecovery.tsx
+  - e2e/routeSecretHygiene.ts
+  - scripts/check-secret-hygiene.mjs
+  - scripts/check-route-secret-hygiene.mjs
+  - scripts/route-secret-hygiene-cases.ts
+  - playwright.route-secret-hygiene.config.ts
+worker_session: ses_eee90c265ffeVIAWyc2DlyrnYF
+reviewer_session: ses_eeb0334cbffe6XF3R8nJuKGhdL
+models:
+  prepare: openai/gpt-6.1-sol#high
+  implement: openai/gpt-6.1-sol#high
+  fix: openai/gpt-6.1-sol#high
+  verify: openai/gpt-6.1-sol#high
+  commit: openai/gpt-6.1-sol#high
+  review: openai/gpt-6-astra#high
+  current_solver: openai/gpt-6-astra
+  batch_worker: openai/gpt-6.1-sol#high
+  batch_reviewer: "openai/gpt-6-astra#high (fresh independent session required)"
+  configured_solver: anthropic/claude-sonnet-5-5#medium
+  configured_worker: anthropic/claude-opus-5-5#high
+  configured_reviewer: openai/gpt-6-astra#high
+  availability: "All listed IDs/variants present and active in runtime catalog; Anthropic not dispatched after prior batch 429. OpenAI fallback remains selected."
+completed_blocks:
+  - prepare-baseline-and-approved-dirty-snapshot
+  - prepare-contract-api-and-owner-map
+  - prepare-reused-tooling-and-model-resolution
+  - prepare-bounded-spec-and-manifest
+  - solver-bookkeeping-settled-o2-and-scoped-o1
+  - owner-o1-recorded-and-ready
+  - implement-D1-D5-and-targeted-checks
+  - review-batch1-R1-R2-and-optional-observer
+  - fix-batch1-eager-logout-recovery
+  - fix-batch1-actual-test-failure-hygiene-and-dispatch-observer
+  - independent-recheck-cleared-R1-R2-and-optional-observer
+  - verify-single-authoritative-gate-passed
+  - verify-input-preservation-and-baseline-advisory-dispositions
+  - solver-tracking-synchronization-after-permission-repair
+settled_decisions:
+  O1: "Owner YES 2026-10-07 recorded in BACKEND-CONTRACT-GAPS.md BCG-009 Story 1-9 slice: Home remains MFA overview parent/fallback until /profile is implemented; no /profile in 2.2."
+  O2: "Already settled by explicit user scope (no auth/MFA backlog beyond 2.1 C1/C3) and epics.md:47-49. Baseline C7 remains outside 2.2, known and open, with no compliance claim or silent closure. All new controls must satisfy guard/teardown; do not ask again."
+manifest_additions:
+  - "e2e/scaffold.spec.ts: evidenced keyboard recovery test presses Tab before lazy form readiness; add a visibility wait only, keep heading/field focus and dispatch assertions. Recorded before edit; no new suites."
+  - "src/app/App.test.tsx: existing tests must await lazy child form readiness separately from eager heading readiness; record before edit, no assertion removal."
+  - "e2e/routeFixtures.ts: shared minimized protocol fake for both new browser suites; reuses test/mfaFixtures response builders, fixed clocks and content-free ledgers. Recorded before creation."
+  - "src/app/ApplicationShell.test.tsx: existing navigation request-count expectation must now require two admission cycles; reported before edit, preserve gate assertions."
+  - "src/app/recoveryCodesDeparture.test.tsx and e2e/applicationShell.spec.ts: inspect targeted regressions; adapt only evidenced expectations if necessary, report before edit."
+  - "src/main.tsx: React 19 onCaughtError/onRecoverableError must avoid default raw error/stack logging from new route boundaries; fixed content-free local diagnostics only. Recorded before edit."
+dependency_scope: "O1 resolved by dated owner decision; no product/transport blocker for approved existing-route slice."
+repair_queue:
+  - id: R1
+    priority: P2
+    root_cause: Generic chunk fallback discarded retained logout guidance/actions.
+    disposition: Fixed in batch 1 and independently cleared.
+    evidence: tmp/agent-execution/2-2-working-routes-and-parent-navigation/fix-report.md
+  - id: R2
+    priority: P2
+    root_cause: Missing per-new-secret-test deliberate-failure/original-output scan evidence.
+    disposition: Fixed in batch 1 and independently cleared; 24 tests at 26 checkpoints, zero marker leaks.
+    evidence: tmp/agent-execution/2-2-working-routes-and-parent-navigation/final-hygiene-evidence.json
+  - id: optional-acceptance-counter
+    root_cause: Acceptance counter lacked an actual dispatch observer.
+    disposition: Addressed and independently cleared.
+    evidence: e2e/routeFixtures.ts
+last_verification:
+  status: verified
+  baseline_commit: d1be39a5a4c041f7a26dfef30e6d1e605b21f8ab
+  input_fingerprint: e9c94753f95ff6e22c277eb05d468518913a08606afca5347706be21974b40c3
+  input_count: 150
+  fingerprint_method: SHA256 of sorted UTF-8 SHA256/path lines with LF termination; tracked and new application/test/script/root executable/config/dependency inputs.
+  input_hashes: tmp/agent-execution/2-2-working-routes-and-parent-navigation/verification-inputs.sha256
+  backend_api_fingerprint: f0118cff1f72c2492d8fce032e1f6677912a4524d48b5e52cdaf317285537d8e
+  markdown_fingerprint: 7f6223bd94d09a765fb1b7a1b07af4bfcbfb4ad30d8fc800ac2e7e35ede1eea2
+  commands: [./run-all-tests.sh]
+  invocations: 1
+  exit_code: 0
+  started_utc: "2026-10-07T06:43:51.531829+00:00"
+  finished_utc: "2026-10-07T06:54:22.420953+00:00"
+  duration_seconds: 630.889
+  results:
+    gate_components_passed: 17
+    gate_components_failed: 0
+    gate_components_skipped: 0
+    unit_tests_passed: 572
+    unit_suites_passed: 19
+    browser_tests_passed: 131
+    fixed_browser_hygiene_cases: 5
+    fixed_unit_hygiene_cases: 7
+    actual_hygiene_cases: 24
+    actual_hygiene_checkpoints_passed: 26
+    marker_leaks: 0
+    jscpd_clones: 0
+    icu_catalogs: 7
+    initial_route_js_gzip_bytes: 209377
+    initial_route_js_gzip_limit: 256000
+    trivy: Ran /opt/homebrew/bin/trivy 0.75.0; baseline findings dispositioned, not suppressed.
+  advisories:
+    katex: Authorized unchanged baseline LOW CVE-2026-103923 / GHSA-238p-pmpm-9mq7, nested 0.16.47, fixed 0.18.2; unresolved. Four LOW npm dependency-chain entries.
+    secret_pattern: MEDIUM SendGrid-pattern match substantiated as unchanged static 249-country-code list; authorized false positive.
+    vite: Minified chunk above 500 kB warning; binding initial gzip budget passed, warning not suppressed.
+  log: tmp/agent-execution/2-2-working-routes-and-parent-navigation/final-gate.log
+  log_sha256: 1e0e1b3bf355427a6c61837aa0303c5f716093201797e9b17996ebf7b7fbd1f4
+  report: tmp/agent-execution/2-2-working-routes-and-parent-navigation/verification-report.md
+  advisory_evidence: tmp/agent-execution/2-2-working-routes-and-parent-navigation/verification-advisories.log
+  not_run: Manual browser/assistive-technology release evidence and separate baseline-worktree discrimination; no release or C7 compliance claim.
+  evidence_reuse: Commit worker must confirm unchanged fingerprints before scoped commit; reporting-only edits do not invalidate gate.
+prepare_checks:
+  history_status: pass
+  identity_and_sprint: pass
+  api_required_operations: pass
+  tooling: "Reused 2.1 batch evidence; unchanged dependencies/Playwright/gate. No installation or repeat probe."
+  blueprint: "Retrieved With actions alert and Secondary buttons v4/react-light sources; licensed version 2026-09-13-083323."
+  models: pass
+  planning_consistency: "pass: YAML/frontmatter, exact identity/next_story, 31-path manifest, baseline, empty index, no app edits, approved dirty hashes unchanged."
+  markdown_lint: "Not applicable: spec/checkpoint under exempt _bmad-output."
+  application_tests_build_gate: "Not run: prepare/documentation only; prior 2.1 pass is baseline evidence, not 2.2 verification."
+  log: tmp/agent-execution/2-2-working-routes-and-parent-navigation/prepare.log
+resume_attempts: 0
+commit:
+  intended_message: "feat: add working routes and parent navigation (story 2.2)"
+  sha: null
+  authorization: Explicit user authorization for per-story commit; no push.
+next_action: Confirm unchanged verified fingerprints and commit only the 43 story paths; completion remains pending confirmed full SHA.
+blocked_on: null
+clarification_attempt: "O1 resolved by owner YES dated 2026-10-07; O2 already settled by scope."
+operational_recovery: "Solver tracking writes were denied; worker correctly refused forbidden delegation. Parent repaired normalized-path permissions on 2026-10-07; solver applied verified closure metadata without application changes."
+block_notification: "Already sent by solver; not resent."

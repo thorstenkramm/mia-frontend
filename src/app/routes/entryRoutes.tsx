@@ -13,6 +13,10 @@ export type EntryRouteProps = {
   invitationLink: InvitationLink;
 };
 type EntryRouteBase = {
+  readonly parent: {
+    readonly path: string;
+    readonly label: (typeof messages)[keyof typeof messages];
+  } | null;
   readonly titleMessage: (typeof messages)[keyof typeof messages];
   readonly headingMessage: (typeof messages)[keyof typeof messages];
 };
@@ -49,6 +53,7 @@ type EntryRoute =
 
 export const entryRoutes = {
   signedOut: {
+    parent: null,
     path: "/login",
     gate: "Public",
     titleMessage: messages.pageTitle,
@@ -56,6 +61,7 @@ export const entryRoutes = {
     component: lazy(() => import("../../features/auth/SignedOutEntryRoute")),
   },
   passwordRecovery: {
+    parent: { path: "/login", label: messages.backToSignIn },
     path: "/login/recovery",
     gate: "Public",
     titleMessage: messages.recoveryPageTitle,
@@ -65,6 +71,7 @@ export const entryRoutes = {
     ),
   },
   passwordReset: {
+    parent: { path: "/login", label: messages.backToSignIn },
     path: "/password-reset",
     gate: "Public + Token(reset)",
     titleMessage: messages.resetPageTitle,
@@ -74,6 +81,7 @@ export const entryRoutes = {
     ),
   },
   invitation: {
+    parent: { path: "/login", label: messages.backToSignIn },
     path: "/invitation",
     gate: "Public + Token(invitation)",
     titleMessage: messages.invitationPageTitle,
@@ -81,6 +89,7 @@ export const entryRoutes = {
     component: lazy(() => import("../../features/auth/InvitationEntryRoute")),
   },
   invitationAccept: {
+    parent: { path: "/invitation", label: messages.routeBackToInvitation },
     path: "/invitation/accept",
     gate: "Public + Token(invitation)",
     titleMessage: messages.invitationAcceptPageTitle,
@@ -88,6 +97,7 @@ export const entryRoutes = {
     component: lazy(() => import("../../features/auth/InvitationEntryRoute")),
   },
   mfa: {
+    parent: null,
     path: "/auth/mfa",
     gate: "Restricted(mfa)",
     titleMessage: messages.mfaPageTitle,
@@ -95,6 +105,7 @@ export const entryRoutes = {
     component: lazy(() => import("../../features/auth/MfaEntryRoute")),
   },
   mfaRecovery: {
+    parent: { path: "/auth/mfa", label: messages.mfaUseVerification },
     path: "/auth/mfa/recovery",
     gate: "Restricted(mfa)",
     titleMessage: messages.mfaRecoveryPageTitle,
@@ -102,6 +113,7 @@ export const entryRoutes = {
     component: lazy(() => import("../../features/auth/MfaEntryRoute")),
   },
   passwordChange: {
+    parent: null,
     path: "/auth/password-change",
     gate: "Restricted(password-change)",
     titleMessage: messages.passwordChangePageTitle,
@@ -111,6 +123,7 @@ export const entryRoutes = {
     ),
   },
   restrictedLogout: {
+    parent: null,
     path: "/auth/logout",
     gate: "Restricted(logout)",
     titleMessage: messages.logoutPageTitle,
@@ -118,6 +131,7 @@ export const entryRoutes = {
     component: lazy(() => import("../../features/auth/LogoutEntryRoute")),
   },
   home: {
+    parent: null,
     path: "/",
     gate: "Authenticated",
     titleMessage: messages.homePageTitle,
@@ -125,6 +139,8 @@ export const entryRoutes = {
     component: lazy(() => import("../../features/home/HomeEntryRoute")),
   },
   mfaOverview: {
+    // BCG-009 owner decision 2026-10-07: Home until /profile exists.
+    parent: { path: "/", label: messages.mfaBackToHome },
     path: mfaPaths.overview,
     gate: "Profile(own MFA)",
     titleMessage: messages.mfaOverviewPageTitle,
@@ -132,6 +148,7 @@ export const entryRoutes = {
     component: lazy(() => import("../../features/profile/MfaOverviewRoute")),
   },
   mfaEnroll: {
+    parent: { path: mfaPaths.overview, label: messages.mfaBackToOverview },
     path: mfaPaths.enroll,
     gate: "Profile(own MFA)",
     titleMessage: messages.mfaEnrollPageTitle,
@@ -139,6 +156,8 @@ export const entryRoutes = {
     component: lazy(() => import("../../features/profile/MfaEnrollRoute")),
   },
   mfaVerify: {
+    // The safe fallback remains overview when setup is left/lost.
+    parent: { path: mfaPaths.overview, label: messages.mfaBackToOverview },
     path: mfaPaths.verify,
     gate: "Profile(own MFA)",
     titleMessage: messages.mfaVerifyPageTitle,
@@ -146,6 +165,7 @@ export const entryRoutes = {
     component: lazy(() => import("../../features/profile/MfaVerifyRoute")),
   },
   mfaRecoveryCodes: {
+    parent: { path: mfaPaths.overview, label: messages.mfaBackToOverview },
     path: mfaPaths.recoveryCodes,
     gate: "Profile(own MFA)",
     titleMessage: messages.mfaCodesPageTitle,

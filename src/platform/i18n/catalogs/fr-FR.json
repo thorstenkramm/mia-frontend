@@ -1,4 +1,10 @@
 {
+  "route.loading": "Chargement de cette page…",
+  "route.unavailable": "Cette page n’a pas pu être chargée",
+  "route.loadFailed": "Rechargez la page ou utilisez une sortie disponible. Le rechargement ne répète pas votre action envoyée.",
+  "route.codesLoadFailed": "La page des codes de récupération n’a pas pu être chargée. La navigation reste bloquée tant que vous n’avez pas enregistré les codes. Un rechargement du navigateur perd ces codes, qui ne peuvent pas être récupérés. Vous pouvez vous déconnecter.",
+  "route.reload": "Recharger la page",
+  "route.backToInvitation": "Retour à l’invitation",
   "session.absoluteWarning": "Votre connexion ne peut pas être prolongée et prendra bientôt fin.",
   "session.absoluteHelp": "Déconnectez-vous. L’expiration de la connexion ne termine pas votre séance de tutorat.",
   "session.retryContinue": "Réessayer de continuer à travailler",

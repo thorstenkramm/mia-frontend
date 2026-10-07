@@ -249,7 +249,7 @@ describe("application shell", () => {
     expect(
       within(navigation()).getByRole("link", { name: "Home" }),
     ).not.toHaveAttribute("aria-current");
-    expect(counts).toEqual({ session: 1, capabilities: 1, mfa: 1 });
+    expect(counts).toEqual({ session: 2, capabilities: 2, mfa: 1 });
   });
 
   it.each([

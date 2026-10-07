@@ -894,6 +894,10 @@ Owner decisions, 2026-10-05 (BCG-001/003/009 Story 1-9 slice; broader closure of
    a missing enrollment destroys the setup and says so. A `422` on DELETE reconciles the same way.
 7. `expires_at` renders as a localized absolute time; there is no countdown or local expiry timer.
 
+Owner decision, 2026-10-07 (Story 2.2 O1): Home `/` remains the MFA overview's parent and safe fallback until
+`/profile` is implemented. This extends decision 3's original until-Epic-2 bridge; Story 2.2 does not implement
+`/profile`. The dated 2026-10-05 decisions above remain historical, and BCG-001/003/009 remain open globally.
+
 The slice uses only `getCurrentMFAState`, TOTP `startMFAEnrollment`, `verifyMFAEnrollment`, and pending-enrollment
 `cancelOrDisableMFA`. Mutations read fresh CSRF, dispatch once, and are never replayed.
 

@@ -1,4 +1,10 @@
 {
+  "route.loading": "Loading this page…",
+  "route.unavailable": "This page could not be loaded",
+  "route.loadFailed": "Reload to try loading this page again, or use an available exit. Reload does not repeat your submitted action.",
+  "route.codesLoadFailed": "Your recovery-code page could not be loaded. Navigation remains blocked until you save the codes. Browser Reload loses these codes and they cannot be retrieved. You can sign out.",
+  "route.reload": "Reload page",
+  "route.backToInvitation": "Back to invitation",
   "session.absoluteWarning": "Your sign-in cannot be extended and will end soon.",
   "session.absoluteHelp": "Sign out. Sign-in expiry does not end your tutoring session.",
   "session.retryContinue": "Retry Continue working",

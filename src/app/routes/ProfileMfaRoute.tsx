@@ -1,13 +1,21 @@
-import { ExclamationTriangleIcon } from "@heroicons/react/20/solid";
-import { Suspense, useEffect } from "react";
+import { useLayoutEffect, useState } from "react";
 import { useIntl } from "react-intl";
 import { useLocation } from "react-router";
 import { useAnnouncer } from "../../platform/announcer/AnnouncementRegion";
 import { TechnicalErrorDisclosure } from "../../platform/api/TechnicalErrorDisclosure";
-import { useMfaEnrollment } from "../../platform/data/EntryDataProvider";
+import {
+  useMfaEnrollment,
+  useSessionActions,
+} from "../../platform/data/EntryDataProvider";
 import { messages } from "../../platform/i18n/messages";
 import { mfaPaths } from "../../platform/session/mfaEnrollment";
-import type { RouteDeparture } from "../../platform/ui/routeDeparture";
+import {
+  RouteDepartureProvider,
+  type RouteDeparture,
+} from "../../platform/ui/routeDeparture";
+import { RouteDepartureLink } from "../../platform/ui/RouteDepartureLink";
+import { RouteRecoveryPanel } from "../../platform/ui/RouteRecoveryPanel";
+import { RouteRecoveryBoundary } from "./RouteRecoveryBoundary";
 import { useMfaSnapshot } from "../../features/profile/mfaOutcome";
 import { ApplicationShell } from "../ApplicationShell";
 import { SessionWarning } from "../SessionLifecycle";
@@ -28,12 +36,36 @@ export function ProfileMfaRoute({
   const { read, codes } = useMfaSnapshot();
   const { pathname } = useLocation();
   const { announce } = useAnnouncer();
+  const { beginAuthenticatedLogout } = useSessionActions();
+  const [requested, setRequested] = useState(false);
+  const holdingCodes =
+    route.path === mfaPaths.recoveryCodes && codes.kind !== "None";
+  const departureFallback = holdingCodes
+    ? (): RouteDeparture => ({
+        kind: "refuse",
+        explain: () =>
+          announce(
+            intl.formatMessage(messages.mfaCodesAcknowledgeFirst),
+            "urgent",
+          ),
+      })
+    : undefined;
+  const signOut = (
+    <button
+      type="button"
+      onClick={beginAuthenticatedLogout}
+      className="rounded-md px-2 py-1.5 text-sm font-medium text-yellow-800 hover:bg-yellow-100 focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-yellow-600"
+    >
+      {intl.formatMessage(messages.logoutButton)}
+    </button>
+  );
 
-  useEffect(() => {
+  useLayoutEffect(() => {
     void mfa.check(pathname);
+    setRequested(true);
   }, [mfa, pathname]);
 
-  if (read.kind === "Checking" || read.path !== pathname)
+  if (!requested || read.kind === "Checking" || read.path !== pathname)
     return (
       <CheckingAccess>
         <SessionWarning />
@@ -42,62 +74,42 @@ export function ProfileMfaRoute({
 
   if (read.kind === "Check failed")
     return (
-      <SimpleEntrySurface
-        titleMessage={messages.errorPageTitle}
-        headingMessage={messages.errorHeading}
-      >
-        <SessionWarning />
-        {/* Tailwind Plus: Application UI > Feedback > Alerts > With actions */}
-        {/* v4/react-light.jsx, library version 2026-09-13-083323. MIA uses warning
-            colors, an h2, and the required inert raw-error disclosure. */}
-        <div className="mt-8 rounded-md bg-yellow-50 p-4">
-          <div className="flex">
-            <div className="shrink-0">
-              <ExclamationTriangleIcon
-                aria-hidden="true"
-                className="size-5 text-yellow-400"
-              />
-            </div>
-            <div className="ml-3 min-w-0">
-              <h2 className="text-sm font-medium text-yellow-800">
-                {intl.formatMessage(messages.errorSummary)}
-              </h2>
-              <div className="mt-2 text-sm text-yellow-700">
-                <p>{intl.formatMessage(messages.mfaCheckFailed)}</p>
-                <TechnicalErrorDisclosure error={read.error} />
-              </div>
-              <div className="mt-4">
-                <div className="-mx-2 -my-1.5 flex flex-wrap gap-3">
-                  <button
-                    type="button"
-                    onClick={() => void mfa.check(pathname)}
-                    className="rounded-md bg-yellow-50 px-2 py-1.5 text-sm font-medium text-yellow-800 hover:bg-yellow-100 focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-yellow-600"
-                  >
-                    {intl.formatMessage(messages.mfaCheckAgain)}
-                  </button>
-                </div>
-              </div>
-            </div>
-          </div>
-        </div>
-      </SimpleEntrySurface>
+      <RouteDepartureProvider fallback={departureFallback ?? null}>
+        <SimpleEntrySurface
+          titleMessage={messages.errorPageTitle}
+          headingMessage={messages.errorHeading}
+        >
+          <SessionWarning />
+          <RouteRecoveryPanel
+            heading={intl.formatMessage(messages.errorSummary)}
+            actions={
+              <>
+                <button
+                  type="button"
+                  onClick={() => void mfa.check(pathname)}
+                  className="rounded-md bg-yellow-50 px-2 py-1.5 text-sm font-medium text-yellow-800 hover:bg-yellow-100 focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-yellow-600"
+                >
+                  {intl.formatMessage(messages.mfaCheckAgain)}
+                </button>
+                <RouteDepartureLink
+                  to="/"
+                  className="rounded-md px-2 py-1.5 text-sm font-medium text-yellow-800 hover:bg-yellow-100 focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-yellow-600"
+                >
+                  {intl.formatMessage(messages.mfaBackToHome)}
+                </RouteDepartureLink>
+                {signOut}
+              </>
+            }
+          >
+            <p>{intl.formatMessage(messages.mfaCheckFailed)}</p>
+            <TechnicalErrorDisclosure error={read.error} />
+          </RouteRecoveryPanel>
+        </SimpleEntrySurface>
+      </RouteDepartureProvider>
     );
 
   // Every gate step passed in this epoch: only now does the shared shell mount.
   const RouteContent = route.component;
-  // Held recovery codes refuse shell departure even before the lazily loaded
-  // codes route has registered its own reveal/acknowledgement guard.
-  const departureFallback =
-    route.path === mfaPaths.recoveryCodes && codes.kind !== "None"
-      ? (): RouteDeparture => ({
-          kind: "refuse",
-          explain: () =>
-            announce(
-              intl.formatMessage(messages.mfaCodesAcknowledgeFirst),
-              "urgent",
-            ),
-        })
-      : undefined;
   return (
     <ApplicationShell
       titleMessage={route.titleMessage}
@@ -105,9 +117,24 @@ export function ProfileMfaRoute({
       {...(departureFallback ? { departureFallback } : {})}
     >
       <SessionWarning />
-      <Suspense fallback={null}>
+      <RouteRecoveryBoundary
+        canReload={!holdingCodes}
+        actions={
+          <>
+            {route.parent ? (
+              <RouteDepartureLink
+                to={route.parent.path}
+                className="rounded-md px-2 py-1.5 text-sm font-medium text-yellow-800 hover:bg-yellow-100 focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-yellow-600"
+              >
+                {intl.formatMessage(route.parent.label)}
+              </RouteDepartureLink>
+            ) : null}
+            {signOut}
+          </>
+        }
+      >
         <RouteContent state={read.state} />
-      </Suspense>
+      </RouteRecoveryBoundary>
     </ApplicationShell>
   );
 }

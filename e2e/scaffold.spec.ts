@@ -1139,6 +1139,9 @@ test.describe("password recovery and token reset", () => {
     await expect(
       page.getByRole("heading", { level: 1, name: "Recover access" }),
     ).toBeFocused();
+    // The eager route frame focuses its heading while the form chunk loads.
+    // Wait for that independently loading region before asserting Tab order.
+    await expect(page.getByLabel("Username (required)")).toBeVisible();
     await page.keyboard.press("Tab");
     await expect(page.getByLabel("Username (required)")).toBeFocused();
     await page.keyboard.type("example.staff");

@@ -1,7 +1,33 @@
-import { useEffect, useRef, type RefObject } from "react";
+import {
+  createContext,
+  use,
+  useEffect,
+  useEffectEvent,
+  useRef,
+  type RefObject,
+  type ReactNode,
+} from "react";
 import { useIntl } from "react-intl";
 import { useLocation } from "react-router";
 import { messages } from "../../platform/i18n/messages";
+import { useAnnouncer } from "../../platform/announcer/AnnouncementRegion";
+
+const RouteSequenceContext = createContext<{ current: string | null } | null>(
+  null,
+);
+
+// One location ledger survives neutral/admitted layout replacement, but holds
+// no protected title, content or history payload.
+export function RouteSequenceProvider({
+  children,
+}: {
+  readonly children: ReactNode;
+}) {
+  const sequence = useRef<string | null>(null);
+  return (
+    <RouteSequenceContext value={sequence}>{children}</RouteSequenceContext>
+  );
+}
 
 // The route frame parts every rendered route shares, whichever layout hosts it:
 // route-heading focus, the bypass link, and the public build identifier.
@@ -13,16 +39,45 @@ export function useRouteHeadingFocus(
 ): RefObject<HTMLHeadingElement | null> {
   const headingRef = useRef<HTMLHeadingElement>(null);
   const location = useLocation();
+  const intl = useIntl();
+  const routeSubject = useEffectEvent(() =>
+    intl.formatMessage({ id: headingId }),
+  );
+  const { announce } = useAnnouncer();
+  const sequence = use(RouteSequenceContext);
 
   useEffect(() => {
     const heading = headingRef.current;
     if (heading === null) return;
-    heading.focus({ preventScroll: true });
-    // A heading that changes in place (a result replacing a form) may sit above
-    // the scrolled viewport; reveal it so focus is never off-screen.
-    if (heading.getBoundingClientRect().bottom < 0)
-      heading.scrollIntoView({ block: "nearest" });
-  }, [location.pathname, headingId]);
+    let active = true;
+    const focus = (selected = true) => {
+      if (!active || !heading.isConnected) return;
+      // Urgent/auth owners retain their chosen corrective target. A suppressed
+      // but current route still needs heading focus if unmount left only body.
+      if (
+        !selected &&
+        document.activeElement !== document.body &&
+        document.activeElement !== null &&
+        document.activeElement !== heading
+      )
+        return;
+      heading.focus({ preventScroll: true });
+      if (heading.getBoundingClientRect().bottom < 0)
+        heading.scrollIntoView({ block: "nearest" });
+    };
+    const checking = headingId === messages.checkingHeading.id;
+    const changed =
+      sequence !== null &&
+      sequence.current !== null &&
+      sequence.current !== location.key;
+    if (!checking && sequence !== null) sequence.current = location.key;
+    if (!checking && changed) announce(routeSubject(), "polite", focus);
+    else focus();
+    return () => {
+      active = false;
+    };
+    // Locale/text-size changes do not reset route focus or announce entry.
+  }, [location.key, headingId, announce, sequence]);
 
   return headingRef;
 }

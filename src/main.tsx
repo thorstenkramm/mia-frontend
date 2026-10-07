@@ -45,7 +45,12 @@ const initialTextSize: TextSize = readTextSize();
 applyDocumentLocale(initialLocale);
 applyTextSize(initialTextSize);
 
-createRoot(rootElement).render(
+createRoot(rootElement, {
+  // The eager route boundary renders localized recovery. React's default
+  // diagnostics include arbitrary exception text/props; never log those.
+  onCaughtError: () => console.error("MIA route recovery was shown."),
+  onRecoverableError: () => console.warn("MIA recovered a rendering failure."),
+}).render(
   <StrictMode>
     <AnnouncementProvider>
       <MiaIntlProvider initialLocale={initialLocale}>

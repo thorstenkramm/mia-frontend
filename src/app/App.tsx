@@ -1,5 +1,4 @@
-import { ExclamationTriangleIcon } from "@heroicons/react/20/solid";
-import { Suspense, useEffect, useSyncExternalStore } from "react";
+import { useEffect, useSyncExternalStore } from "react";
 import { useIntl } from "react-intl";
 import {
   BrowserRouter,
@@ -42,6 +41,12 @@ import {
 import { ProfileMfaRoute } from "./routes/ProfileMfaRoute";
 import { SimpleEntrySurface } from "./routes/SimpleEntrySurface";
 import { SessionPrivacyShield, SessionWarning } from "./SessionLifecycle";
+import { RouteSequenceProvider } from "./routes/routeFrame";
+import { useRouteAdmission } from "./routes/RouteAdmission";
+import { RouteRecoveryBoundary } from "./routes/RouteRecoveryBoundary";
+import { RouteDepartureLink } from "../platform/ui/RouteDepartureLink";
+import { RouteRecoveryPanel } from "../platform/ui/RouteRecoveryPanel";
+import { LogoutRecovery } from "../features/auth/LogoutRecovery";
 
 type AppProps = {
   initialTextSize: TextSize;
@@ -67,18 +72,20 @@ export function App({
       {...(queryClient ? { queryClient } : {})}
     >
       <BrowserRouter>
-        <Routes>
-          <Route
-            path="*"
-            element={
-              <CanonicalEntry
-                initialTextSize={initialTextSize}
-                passwordResetLink={passwordResetLink}
-                invitationLink={invitationLink}
-              />
-            }
-          />
-        </Routes>
+        <RouteSequenceProvider>
+          <Routes>
+            <Route
+              path="*"
+              element={
+                <CanonicalEntry
+                  initialTextSize={initialTextSize}
+                  passwordResetLink={passwordResetLink}
+                  invitationLink={invitationLink}
+                />
+              }
+            />
+          </Routes>
+        </RouteSequenceProvider>
       </BrowserRouter>
     </EntryDataProvider>
   );
@@ -156,10 +163,16 @@ function CanonicalEntry({
   passwordResetLink,
   invitationLink,
 }: Omit<AppProps, "queryClient">) {
+  const intl = useIntl();
   const state = useAuthenticationBootstrapState();
   const access = useAuthenticatedAccess();
   const mfaEnrollment = useMfaEnrollment();
-  const { continueDeferredAccess } = useSessionActions();
+  const {
+    continueDeferredAccess,
+    beginAuthenticatedLogout,
+    beginRestrictedLogout,
+    beginLinkLogout,
+  } = useSessionActions();
   const location = useLocation();
   const resetState = useSyncExternalStore(
     passwordResetLink.subscribe,
@@ -187,6 +200,9 @@ function CanonicalEntry({
     resetSurface,
     invitation,
     access?.ownProfileView === true,
+  );
+  const admitted = useRouteAdmission(
+    key === null ? null : entryRoutes[key].path,
   );
 
   // These route-local owners exist outside the mounted form. Drop their tokens
@@ -225,6 +241,7 @@ function CanonicalEntry({
       void continueDeferredAccess();
   }, [continueDeferredAccess, invitationLink, passwordResetLink, state]);
 
+  if (!admitted) return <CheckingAccess />;
   if (key === null) {
     return <EntryStateSurface state={state} />;
   }
@@ -235,11 +252,65 @@ function CanonicalEntry({
   }
 
   if (route.gate === "Profile(own MFA)")
-    return <ProfileMfaRoute route={route} />;
+    return <ProfileMfaRoute key={location.key} route={route} />;
 
   const RouteContent = route.component;
+  const parent =
+    invitation?.view.kind === "interstitial"
+      ? null
+      : invitation &&
+          invitation.view.kind !== "form" &&
+          invitation.view.kind !== "preview" &&
+          invitation.view.kind !== "checking" &&
+          invitation.view.kind !== "preview retry"
+        ? entryRoutes.invitation.parent
+        : route.parent;
+  const parentLink =
+    parent === null ? null : (
+      <RouteDepartureLink
+        to={parent.path}
+        className="mt-6 inline-block rounded-md bg-white px-3 py-2 text-sm font-semibold text-gray-900 shadow-xs inset-ring inset-ring-gray-300 hover:bg-gray-50 focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-indigo-600"
+        onDepart={(explain) => {
+          if (explain) {
+            explain();
+            return;
+          }
+          passwordResetLink.depart();
+          if (!invitationPaths.some((path) => path === parent.path))
+            invitationLink.depart();
+        }}
+      >
+        {intl.formatMessage(parent.label)}
+      </RouteDepartureLink>
+    );
+  const signOut =
+    state.kind === "Authenticated"
+      ? beginAuthenticatedLogout
+      : state.kind === "MFA required" || state.kind === "Password change"
+        ? beginRestrictedLogout
+        : state.kind === "Access deferred"
+          ? beginLinkLogout
+          : null;
+  const recoveryActions = (
+    <>
+      {parentLink}
+      {signOut ? (
+        <button
+          type="button"
+          onClick={signOut}
+          className="rounded-md px-2 py-1.5 text-sm font-medium text-yellow-800 hover:bg-yellow-100 focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-yellow-600"
+        >
+          {intl.formatMessage(messages.logoutButton)}
+        </button>
+      ) : null}
+    </>
+  );
   const content = (
-    <Suspense fallback={null}>
+    <RouteRecoveryBoundary
+      key={location.key}
+      actions={recoveryActions}
+      {...(key === "restrictedLogout" ? { recovery: <LogoutRecovery /> } : {})}
+    >
       <RouteContent
         initialTextSize={initialTextSize}
         passwordResetLink={passwordResetLink}
@@ -248,7 +319,7 @@ function CanonicalEntry({
           ? { logoutConfirmed: true }
           : {})}
       />
-    </Suspense>
+    </RouteRecoveryBoundary>
   );
   // Home's complete gate is stage plus capabilities; only then does the shared
   // application shell (and its navigation) mount.
@@ -295,6 +366,13 @@ function CanonicalEntry({
     >
       <SessionWarning />
       {content}
+      {invitation &&
+      (invitation.view.kind === "checking" ||
+        invitation.view.kind === "preview retry" ||
+        invitation.view.kind === "preview" ||
+        invitation.view.kind === "form")
+        ? parentLink
+        : null}
     </SimpleEntrySurface>
   );
 }
@@ -351,6 +429,7 @@ function EntryFailure({
   source: "session" | "capabilities";
 }) {
   const intl = useIntl();
+  const { checkRouteAdmission } = useSessionActions();
   const explanation =
     source === "session"
       ? messages.sessionErrorIntroduction
@@ -361,28 +440,21 @@ function EntryFailure({
       titleMessage={messages.errorPageTitle}
       headingMessage={messages.errorHeading}
     >
-      {/* Tailwind Plus: Application UI > Feedback > Alerts > With description */}
-      {/* Library version: 2026-09-13-083323. MIA adds the required inert raw-error disclosure. */}
-      {/* Its blueprint repeat in MfaRecoveryCodesRoute.tsx carries the duplication marker. */}
-      <div className="mt-8 rounded-md bg-yellow-50 p-4">
-        <div className="flex">
-          <div className="shrink-0">
-            <ExclamationTriangleIcon
-              aria-hidden="true"
-              className="size-5 text-yellow-400"
-            />
-          </div>
-          <div className="ml-3 min-w-0">
-            <h2 className="text-sm font-medium text-yellow-800">
-              {intl.formatMessage(messages.errorSummary)}
-            </h2>
-            <div className="mt-2 text-sm text-yellow-700">
-              <p>{intl.formatMessage(explanation)}</p>
-              <TechnicalErrorDisclosure error={error} />
-            </div>
-          </div>
-        </div>
-      </div>
+      <RouteRecoveryPanel
+        heading={intl.formatMessage(messages.errorSummary)}
+        actions={
+          <button
+            type="button"
+            onClick={() => void checkRouteAdmission()}
+            className="rounded-md px-2 py-1.5 text-sm font-medium text-yellow-800 hover:bg-yellow-100 focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-yellow-600"
+          >
+            {intl.formatMessage(messages.mfaCheckAgain)}
+          </button>
+        }
+      >
+        <p>{intl.formatMessage(explanation)}</p>
+        <TechnicalErrorDisclosure error={error} />
+      </RouteRecoveryPanel>
     </SimpleEntrySurface>
   );
 }

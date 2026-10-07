@@ -131,6 +131,7 @@ export function useAuthenticationBootstrapState(): AuthenticationBootstrapState 
 }
 
 export function useSessionActions(): {
+  readonly checkRouteAdmission: () => Promise<void>;
   readonly stopLifecycleWaiting: () => void;
   readonly continueWorking: () => Promise<void>;
   readonly refreshSession: () => Promise<void>;
@@ -175,6 +176,7 @@ export function useSessionActions(): {
 } {
   const controller = useSessionController();
   return {
+    checkRouteAdmission: () => controller.checkRouteAdmission(),
     stopLifecycleWaiting: () => controller.stopLifecycleWaiting(),
     continueWorking: () => controller.continueWorking(),
     refreshSession: () => controller.refreshSession(),

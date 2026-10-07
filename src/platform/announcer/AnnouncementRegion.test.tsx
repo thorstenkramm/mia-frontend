@@ -1,8 +1,96 @@
 import { render, screen, waitFor } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
 import { useLayoutEffect, useState } from "react";
-import { describe, expect, it } from "vitest";
+import { describe, expect, it, vi } from "vitest";
 import { AnnouncementProvider, useAnnouncer } from "./AnnouncementRegion";
+
+function CompletionTrigger({
+  completed,
+  suppressed,
+}: {
+  readonly completed: () => void;
+  readonly suppressed: () => void;
+}) {
+  const { announce } = useAnnouncer();
+  return (
+    <button
+      type="button"
+      onClick={() => {
+        announce("Route change", "polite", suppressed);
+        announce("Access lost", "auth", completed);
+      }}
+    >
+      Complete winning event
+    </button>
+  );
+}
+
+it("completes arbitration after the winning DOM commit without speaking suppressed copy", async () => {
+  const suppressed = vi.fn();
+  const completed = vi.fn(() =>
+    expect(document.querySelector('[aria-live="assertive"]')).toHaveTextContent(
+      "Access lost",
+    ),
+  );
+  render(
+    <AnnouncementProvider>
+      <CompletionTrigger completed={completed} suppressed={suppressed} />
+    </AnnouncementProvider>,
+  );
+  await userEvent
+    .setup()
+    .click(screen.getByRole("button", { name: "Complete winning event" }));
+  await waitFor(() => expect(completed).toHaveBeenCalledOnce());
+  expect(suppressed).toHaveBeenCalledExactlyOnceWith(false);
+  expect(document.querySelector('[aria-live="polite"]')).toBeEmptyDOMElement();
+});
+
+function RetiringCompletion({
+  completed,
+  retire,
+}: {
+  readonly completed: () => void;
+  readonly retire: () => void;
+}) {
+  const { announce } = useAnnouncer();
+  return (
+    <button
+      type="button"
+      onClick={() => {
+        announce("Departed route", "polite", completed);
+        retire();
+      }}
+    >
+      Retire route
+    </button>
+  );
+}
+
+it("retires pending route completion with its owner", async () => {
+  const completed = vi.fn();
+  function Fixture() {
+    const [active, setActive] = useState(true);
+    return active ? (
+      <RetiringCompletion
+        completed={completed}
+        retire={() => setActive(false)}
+      />
+    ) : (
+      <p>New gate</p>
+    );
+  }
+  render(
+    <AnnouncementProvider>
+      <Fixture />
+    </AnnouncementProvider>,
+  );
+  await userEvent
+    .setup()
+    .click(screen.getByRole("button", { name: "Retire route" }));
+  await waitFor(() => expect(screen.getByText("New gate")).toBeVisible());
+  expect(completed).not.toHaveBeenCalled();
+  expect(document.querySelector('[aria-live="polite"]')).toBeEmptyDOMElement();
+});
 
 function OwnedAnnouncement({
   label,

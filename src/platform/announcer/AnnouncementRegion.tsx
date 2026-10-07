@@ -17,6 +17,11 @@ type Announcement = {
   readonly priority: AnnouncementPriority;
   readonly sequence: number;
   readonly message: string;
+  readonly completions?: readonly {
+    readonly owner: AnnouncementOwner;
+    readonly selected: boolean;
+    readonly complete: (selected: boolean) => void;
+  }[];
 };
 
 type AnnouncerContextValue = {
@@ -24,6 +29,7 @@ type AnnouncerContextValue = {
     owner: AnnouncementOwner,
     message: string,
     priority: AnnouncementPriority,
+    afterCommit?: (selected: boolean) => void,
   ) => void;
   activate: (owner: AnnouncementOwner) => void;
   clear: (owner: AnnouncementOwner) => void;
@@ -31,7 +37,11 @@ type AnnouncerContextValue = {
 };
 
 type OwnedAnnouncerContextValue = {
-  announce: (message: string, priority?: AnnouncementPriority) => void;
+  announce: (
+    message: string,
+    priority?: AnnouncementPriority,
+    afterCommit?: (selected: boolean) => void,
+  ) => void;
   clear: () => void;
 };
 
@@ -47,11 +57,30 @@ export function AnnouncementProvider({ children }: AnnouncementProviderProps) {
   const activeOwners = useRef(new Set<AnnouncementOwner>());
   const flushScheduled = useRef(false);
   const sequence = useRef(0);
+  const committed = useRef(0);
+  useLayoutEffect(() => {
+    if (announcement === null || committed.current === announcement.sequence)
+      return;
+    committed.current = announcement.sequence;
+    // Arbitration completion is distinct from speaking suppressed copy. The
+    // winner completes first; a still-live route may then supply fallback focus
+    // only if no meaningful urgent target has taken it. Retired owners do nothing.
+    for (const completion of announcement.completions ?? [])
+      if (activeOwners.current.has(completion.owner))
+        completion.complete(completion.selected);
+    // Completion closures can reference a route DOM node. Drop them after this
+    // commit rather than retaining retired forms through the live-region state.
+    if (announcement.completions?.length)
+      setAnnouncement((current) =>
+        current === announcement ? { ...current, completions: [] } : current,
+      );
+  }, [announcement]);
 
   const announce = useCallback(function announce(
     owner: AnnouncementOwner,
     message: string,
     priority: AnnouncementPriority,
+    afterCommit?: (selected: boolean) => void,
   ): void {
     if (!activeOwners.current.has(owner)) return;
     sequence.current += 1;
@@ -60,6 +89,9 @@ export function AnnouncementProvider({ children }: AnnouncementProviderProps) {
       priority,
       sequence: sequence.current,
       message,
+      ...(afterCommit
+        ? { completions: [{ owner, selected: true, complete: afterCommit }] }
+        : {}),
     });
     if (flushScheduled.current) return;
     flushScheduled.current = true;
@@ -73,7 +105,21 @@ export function AnnouncementProvider({ children }: AnnouncementProviderProps) {
             : current,
         null,
       );
-      if (winner !== null) setAnnouncement(winner);
+      if (winner !== null)
+        setAnnouncement({
+          ...winner,
+          completions: [
+            ...(winner.completions ?? []),
+            ...candidates
+              .filter((candidate) => candidate !== winner)
+              .flatMap((candidate) =>
+                (candidate.completions ?? []).map((completion) => ({
+                  ...completion,
+                  selected: false,
+                })),
+              ),
+          ],
+        });
     });
   }, []);
 
@@ -87,7 +133,19 @@ export function AnnouncementProvider({ children }: AnnouncementProviderProps) {
     pending.current = pending.current.filter(
       (announcement) => announcement.owner !== owner,
     );
-    setAnnouncement((current) => (current?.owner === owner ? null : current));
+    setAnnouncement((current) => {
+      if (current === null || current.owner === owner) return null;
+      if (
+        !current.completions?.some((completion) => completion.owner === owner)
+      )
+        return current;
+      return {
+        ...current,
+        completions: current.completions.filter(
+          (completion) => completion.owner !== owner,
+        ),
+      };
+    });
   }, []);
   const retire = useCallback(
     function retire(owner: AnnouncementOwner): void {
@@ -114,10 +172,14 @@ export function useAnnouncer(): OwnedAnnouncerContextValue {
   const context = use(AnnouncerContext);
   const owner = useRef<AnnouncementOwner>(Symbol("announcement-owner"));
   const announce = useCallback(
-    (message: string, priority: AnnouncementPriority = "polite"): void => {
+    (
+      message: string,
+      priority: AnnouncementPriority = "polite",
+      afterCommit?: (selected: boolean) => void,
+    ): void => {
       if (context === null)
         throw new Error("MIA announcements require AnnouncementProvider.");
-      context.announce(owner.current, message, priority);
+      context.announce(owner.current, message, priority, afterCommit);
     },
     [context],
   );

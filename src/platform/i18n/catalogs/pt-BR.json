@@ -1,4 +1,10 @@
 {
+  "route.loading": "Carregando esta página…",
+  "route.unavailable": "Não foi possível carregar esta página",
+  "route.loadFailed": "Recarregue a página ou use uma saída disponível. Recarregar não repete a ação enviada.",
+  "route.codesLoadFailed": "Não foi possível carregar a página dos códigos de recuperação. A navegação continua bloqueada até você salvar os códigos. Recarregar no navegador perde esses códigos e eles não podem ser recuperados. Você pode sair.",
+  "route.reload": "Recarregar página",
+  "route.backToInvitation": "Voltar ao convite",
   "session.absoluteWarning": "Seu login não pode ser prolongado e terminará em breve.",
   "session.absoluteHelp": "Saia. A expiração do login não encerra sua sessão de tutoria.",
   "session.retryContinue": "Tentar continuar trabalhando novamente",

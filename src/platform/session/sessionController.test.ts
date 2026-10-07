@@ -6,8 +6,168 @@ import { server } from "../../../test/server";
 import { captureInvitationLink } from "./invitationLink";
 import { capturePasswordResetLink } from "./passwordResetLink";
 import { SessionController } from "./sessionController";
+import {
+  authenticatedSessionResponse,
+  ownProfileCapabilities,
+  mfaErrorResponse,
+} from "../../../test/mfaFixtures";
 
 const mediaType = "application/vnd.api+json";
+
+describe("deliberate route admission", () => {
+  it.each([
+    ["anonymous", anonymousSession, "Signed out"],
+    ["mfa", restrictedSession, "MFA required"],
+    [
+      "password-change",
+      () => stageSession("password-change"),
+      "Password change",
+    ],
+  ] as const)(
+    "a new %s result destroys the old authority without another capability read",
+    async (_, response, state) => {
+      let changed = false;
+      let capabilities = 0;
+      server.use(
+        http.get("/api/v1/auth/session", () =>
+          changed ? response() : authenticatedSessionResponse(),
+        ),
+        http.get("/api/v1/users/me/capabilities", () => {
+          capabilities++;
+          return ownProfileCapabilities();
+        }),
+      );
+      const controller = new SessionController();
+      controller.start();
+      try {
+        await waitFor(() =>
+          expect(controller.getSnapshot().kind).toBe("Authenticated"),
+        );
+        changed = true;
+        await controller.checkRouteAdmission();
+        expect(controller.getSnapshot().kind).toBe(state);
+        expect(controller.getAuthenticatedAccess()).toBeNull();
+        expect(capabilities).toBe(1);
+      } finally {
+        controller.stop();
+      }
+    },
+  );
+
+  it("rechecks in order and fences a superseded discovery without unsafe dispatch", async () => {
+    const ledger: string[] = [];
+    const gate = lifecycleGate();
+    let held = false;
+    server.use(
+      http.get("/api/v1/auth/session", async () => {
+        ledger.push("session");
+        if (held) await gate.promise;
+        return authenticatedSessionResponse();
+      }),
+      http.get("/api/v1/users/me/capabilities", () => {
+        ledger.push("capabilities");
+        return ownProfileCapabilities();
+      }),
+    );
+    const controller = new SessionController();
+    controller.start();
+    try {
+      await waitFor(() =>
+        expect(controller.getSnapshot().kind).toBe("Authenticated"),
+      );
+      held = true;
+      const old = controller.checkRouteAdmission();
+      await waitFor(() => expect(ledger).toHaveLength(3));
+      held = false;
+      await controller.checkRouteAdmission();
+      gate.resolve();
+      await old;
+      expect(ledger).toEqual([
+        "session",
+        "capabilities",
+        "session",
+        "session",
+        "capabilities",
+      ]);
+      expect(controller.getSnapshot().kind).toBe("Authenticated");
+    } finally {
+      controller.stop();
+    }
+  });
+
+  it("destroys held state on current scope loss and on a failed new capability gate", async () => {
+    let own = true;
+    let fail = false;
+    server.use(
+      http.get("/api/v1/auth/session", () => authenticatedSessionResponse()),
+      http.get("/api/v1/users/me/capabilities", () =>
+        fail
+          ? mfaErrorResponse(503, "unavailable")
+          : ownProfileCapabilities("account-id", own),
+      ),
+    );
+    const controller = new SessionController();
+    const scopes: string[] = [];
+    controller.registerSecurityTeardown((scope) => scopes.push(scope));
+    controller.start();
+    try {
+      await waitFor(() =>
+        expect(controller.getSnapshot().kind).toBe("Authenticated"),
+      );
+      own = false;
+      await controller.checkRouteAdmission();
+      expect(controller.getAuthenticatedAccess()?.ownProfileView).toBe(false);
+      expect(scopes).toEqual(["destroy"]);
+      fail = true;
+      await controller.checkRouteAdmission();
+      expect(controller.getSnapshot()).toMatchObject({
+        kind: "Access checking",
+        phase: "failed",
+      });
+      expect(scopes).toEqual(["destroy", "destroy"]);
+      fail = false;
+      await controller.checkRouteAdmission();
+      expect(controller.getSnapshot().kind).toBe("Authenticated");
+    } finally {
+      controller.stop();
+    }
+  });
+
+  it("cannot auto-release a lifecycle shield or move a server-authored deadline", async () => {
+    let discoveries = 0;
+    server.use(
+      http.get("/api/v1/auth/session", () => {
+        discoveries++;
+        return authenticatedSessionResponse();
+      }),
+      http.get("/api/v1/users/me/capabilities", () => ownProfileCapabilities()),
+    );
+    const controller = new SessionController();
+    controller.start();
+    try {
+      await waitFor(() =>
+        expect(controller.getSnapshot().kind).toBe("Authenticated"),
+      );
+      await controller.checkRouteAdmission();
+      expect(discoveries).toBe(2);
+      controller.observeLifecycle();
+      await controller.checkRouteAdmission();
+      expect(discoveries).toBe(2);
+      expect(controller.getSnapshot().kind).toBe("Privacy shield");
+      await controller.refreshSession();
+      expect(discoveries).toBe(3);
+      vi.setSystemTime(new Date("2026-09-27T10:30:00.000Z"));
+      await controller.checkRouteAdmission();
+      expect(discoveries).toBe(3);
+      expect(controller.getSnapshot()).toMatchObject({
+        kind: "Privacy shield",
+        reason: "deadline",
+      });
+    } finally {
+      controller.stop();
+    }
+  });
+});
 
 function lifecycleGate() {
   const pending: { release?: () => void } = {};

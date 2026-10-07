@@ -33,7 +33,7 @@
 # - Epic 1 remains in-progress for recorded acceptance follow-up; do not restart its done stories.
 # - Unstarted story IDs were replaced; planning-artifacts/sprint-change-proposal-2026-10-06.md owns the map.
 generated: 09-19-2026 13:57
-last_updated: 10-06-2026 17:00
+last_updated: 10-07-2026
 project: mia-frontend
 project_key: NOKEY
 tracking_system: file-system
@@ -57,7 +57,7 @@ development_status:
 
   epic-2: in-progress
   2-1-basic-capability-driven-navigation: done
-  2-2-working-routes-and-parent-navigation: backlog
+  2-2-working-routes-and-parent-navigation: done # commit-pending until execution checkpoint confirms SHA
   epic-2-retrospective: optional
 
   epic-3: backlog
