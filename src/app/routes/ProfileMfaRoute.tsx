@@ -73,6 +73,8 @@ export function ProfileMfaRoute({
     );
 
   if (read.kind === "Check failed")
+    // Matching error-shell prefix marker is in AdminInvitationRoute; this
+    // route retains its own MFA authorization, recovery and departure contract.
     return (
       <RouteDepartureProvider fallback={departureFallback ?? null}>
         <SimpleEntrySurface

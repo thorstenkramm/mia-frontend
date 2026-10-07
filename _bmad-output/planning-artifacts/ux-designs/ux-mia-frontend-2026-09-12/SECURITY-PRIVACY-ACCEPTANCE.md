@@ -21,7 +21,7 @@ sources:
   - mia/api-doc/paths/tutoring.yaml
   - mia/api-doc/schemas/json-api/documents.yaml
   - mia/api-doc/schemas/resources/resources.yaml
-updated: 2026-09-13
+updated: 2026-10-07
 ---
 
 # MIA Frontend Security and Privacy Acceptance
@@ -832,7 +832,8 @@ that atomically binds execution to the exact reviewed target state and action me
 meaning cannot change with target state. A precondition failure is changed state: do not mutate, clear confirmation
 input, fetch a fresh representation, and require a new review and confirmation. No invitation Revoke may become
 physical Delete between review and execution. Until `BCG-014` closes, only these controls remain release-blocked by it;
-a second GET, short delay, disabled UI, or client comparison is not an atomic substitute.
+a second GET, short delay, disabled UI, or client comparison is not an atomic substitute. The 2026-10-07
+Story 3.1 decision (`BACKEND-CONTRACT-GAPS.md` §BCG-014) lifts this only for ETag-bound pending invitation Revoke.
 
 If any compared value changes, clear the typed exact-name confirmation and other local confirmation input, replace the
 dialog with the new review state when still authorized, and require the user to review and enter confirmation again. On

@@ -34,10 +34,13 @@ import {
 import { ApplicationShell } from "./ApplicationShell";
 import { CheckingAccess } from "./routes/CheckingAccess";
 import {
-  authenticatedRouteKey,
+  authenticatedRoute,
   entryRoutes,
+  type AuthenticatedRoute,
+  type AuthenticatedRouteAccess,
   type EntryRouteKey,
 } from "./routes/entryRoutes";
+import { AdminInvitationRoute } from "./routes/AdminInvitationRoute";
 import { ProfileMfaRoute } from "./routes/ProfileMfaRoute";
 import { SimpleEntrySurface } from "./routes/SimpleEntrySurface";
 import { SessionPrivacyShield, SessionWarning } from "./SessionLifecycle";
@@ -96,7 +99,7 @@ function routeKey(
   pathname: string,
   resetSurface: PasswordResetSurface | null,
   invitation: InvitationSurface | null,
-  ownProfileView: boolean,
+  authenticated: AuthenticatedRoute,
 ): EntryRouteKey | null {
   if (state.kind === "Privacy shield") return null;
   // A captured reset or invitation link owns its paths until the flow ends;
@@ -127,7 +130,7 @@ function routeKey(
     case "Password change":
       return "passwordChange";
     case "Authenticated":
-      return authenticatedRouteKey(pathname, ownProfileView);
+      return authenticated.key;
     case "Access deferred":
       // Only a link interstitial renders this state; without it, stay neutral.
       return null;
@@ -194,16 +197,26 @@ function CanonicalEntry({
     invitationState,
     location.pathname,
   );
+  const routeAccess: AuthenticatedRouteAccess = {
+    ownProfileView: access?.ownProfileView === true,
+    invitationAdministration: access?.invitationAdministration === true,
+  };
+  const authenticated = authenticatedRoute(location.pathname, routeAccess);
   const key = routeKey(
     state,
     location.pathname,
     resetSurface,
     invitation,
-    access?.ownProfileView === true,
+    authenticated,
   );
-  const admitted = useRouteAdmission(
-    key === null ? null : entryRoutes[key].path,
-  );
+  // The canonical concrete path; parameterized routes keep their own ID.
+  const canonicalPath =
+    key === null
+      ? null
+      : key === authenticated.key
+        ? authenticated.path
+        : entryRoutes[key].path;
+  const admitted = useRouteAdmission(canonicalPath);
 
   // These route-local owners exist outside the mounted form. Drop their tokens
   // synchronously before BFCache capture, including cold/anonymous entry.
@@ -247,12 +260,20 @@ function CanonicalEntry({
   }
 
   const route = entryRoutes[key];
-  if (location.pathname !== route.path) {
-    return <Navigate replace to={route.path} />;
+  if (canonicalPath !== null && location.pathname !== canonicalPath) {
+    return <Navigate replace to={canonicalPath} />;
   }
 
   if (route.gate === "Profile(own MFA)")
     return <ProfileMfaRoute key={location.key} route={route} />;
+  if (route.gate === "Administer(invitations)")
+    return (
+      <AdminInvitationRoute
+        key={location.key}
+        route={route}
+        invitationId={authenticated.invitationId}
+      />
+    );
 
   const RouteContent = route.component;
   const parent =

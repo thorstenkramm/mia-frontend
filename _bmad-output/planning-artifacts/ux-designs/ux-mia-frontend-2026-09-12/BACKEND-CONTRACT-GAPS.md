@@ -1,7 +1,7 @@
 ---
 name: MIA frontend backend contract gaps
 status: draft
-updated: 2026-10-01
+updated: 2026-10-07
 sources:
   - .memlog.md
   - mia/docs/product-requirements.md
@@ -535,6 +535,11 @@ duplicating authorization policy or learning it through denials.
   `authenticated`. It does not authorize broader shell sections or close BCG-003.
 - Bounded retrieval for potentially large assignment scope and the broader mutation, cross-tab, and authorization
   evidence remain deferred release work.
+- Owner decision, 2026-10-07 (Story 3.1 O2): the catalog has no invitation action. For administrator invitation
+  management only, `accounts.administer` with `available: true` and `scope.global: true` is the navigation and route
+  guidance for `Administer(invitations)`. Every invitation operation remains server-authoritative; its declared `403`
+  codes render the fixed unavailable result without probing. This mapping does not close BCG-003 or extend to other
+  `Administer` surfaces. Recorded with the BCG-006 Story 3.1 slice decision.
 
 #### BCG-003 required observable contract
 
@@ -701,6 +706,38 @@ avatar or logo as public merely because ordinary identity UI loads it automatica
   restoration, reload, audio, blobs, and downloads without protected data reappearing before fresh authorization.
 
 ### BCG-006: Pending invitation SMTP ambiguity
+
+Status: **OPEN — Story 3.1 administrator invitation-administration slice approved 2026-10-07; OpenAPI state examples
+and complete release evidence remain.**
+
+#### BCG-006 Story 3.1 invitation-administration slice decision
+
+The mismatch assessment below is stale. Backend commit `66e7035b407c9b656bb1f12e2ac680e5f5b8e058` (2026-09-14) added
+the delivery contract, re-checked against backend revision `63c99925e5995fe2e2467f4f894976dfd4c0d297`:
+
+- `Invitation` requires `delivery_state` (`queued`, `delivered`, `ambiguous`, `failed`), nullable sanitized
+  `delivery_code` (`invitation_delivery_timeout`, `invitation_delivery_ambiguous`, `invitation_delivery_rejected`), and
+  nullable `delivery_attempted_at` (`mia/api-doc/schemas/resources/resources.yaml:488-540`).
+- Create `201` documents queued admission plus read reconciliation; resend `204` documents token rotation plus read
+  reconciliation (`mia/api-doc/paths/invitations.yaml:1-64,118-142`).
+- Timeout and ambiguity never claim delivery or trigger automatic retry; definite failure is faulty
+  (`mia/docs/product-requirements.md:383-417`, `mia/docs/api.md:326-342`).
+
+Owner decisions, 2026-10-07 (Story 3.1 O1/O2; BCG-003, BCG-006, and BCG-014 stay open globally):
+
+1. Story 3.1 may implement, for administrators only, `listInvitations`, `createInvitation` with role `supervisor`,
+   `getInvitation`, `resendInvitation`, and `deleteInvitation` for pending-invitation revocation, on the canonical
+   `/admin/invitations[...]` routes except `/admin/invitations/:invitationId/delete`.
+2. The route and navigation gate is the authenticated stage, then the BCG-003 Story 3.1 `accounts.administer` global
+   mapping, then the invitation resource read where the route has one. Operations remain server-authoritative.
+3. Render the persisted lifecycle and the latest delivery state separately. `queued` and `ambiguous` never mean sent;
+   `delivered` means SMTP acceptance only. No polling, automatic resend, inferred delivery, or claim that an earlier
+   link still works after resend. Create, resend, and revoke outcome unknown reconcile only through a fresh read.
+4. Revocation uses the BCG-014 Story 3.1 invitation-revoke decision. Delete faulty invitation remains outside this
+   slice and is not authorized by this decision.
+
+Other invitation roles, supervisor-owned mentor invitations, and faulty deletion remain later work. This decision
+does not change Story 1-7 preview and acceptance.
 
 #### BCG-006 frontend capability blocked
 
@@ -1162,6 +1199,24 @@ an earlier allowed result as authority, or probe POST. A failed creation remains
   available and no hidden assignment or account information is disclosed.
 
 ### BCG-014: Atomic intent binding for consequential state-dependent mutations
+
+Status: **OPEN — Story 3.1 invitation-revoke slice approved 2026-10-07; every other inventoried operation, including
+Delete faulty invitation, remains blocked.**
+
+#### BCG-014 Story 3.1 invitation-revoke slice decision
+
+The invitation entries in the mismatch assessment below are stale. `GET /api/v1/invitations/{id}` returns a strong
+resource-specific `ETag`; `DELETE` requires it in `If-Match`, returns `428 invitation_precondition_required` or
+`412 invitation_precondition_failed` without change, and its `200` `invitation-deletions` result names the committed
+`effect` (`mia/api-doc/paths/invitations.yaml:65-117`, `mia/api-doc/openapi.yaml:208-210,240-245`,
+`mia/docs/api.md:355-371`). Backend `mia/internal/invitation/invitation.go:299-330,707-711` compares the ETag in the
+mutating transaction, and every invitation mutation increments its version.
+
+Owner decision, 2026-10-07 (Story 3.1 O1): Story 3.1 may revoke a reviewed pending invitation. Final confirmation
+re-reads the target and dispatches once only if it is still pending with the reviewed ETag, sending that ETag in
+`If-Match`. `412`, `428`, or a changed read clears the confirmation and requires a new review. Only `effect: revoked`
+is revocation success; any other effect is an invariant violation handled as outcome unknown with a fresh read. Delete
+faulty invitation is not authorized by this decision.
 
 #### BCG-014 frontend capability blocked
 

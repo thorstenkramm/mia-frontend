@@ -182,9 +182,22 @@ describe("application shell", () => {
     renderAt("/", ...authenticatedHandlers(counts, everyCapability));
     await home();
 
-    expect(linkNames()).toEqual(["Home", "Multi-factor authentication"]);
-    expect(within(navigation()).getAllByRole("list")).toHaveLength(3);
-    for (const absent of [/learn/iu, /prepare/iu, /mentor/iu, /administ/iu])
+    // Story 3.1: global `accounts.administer` adds only invitation management.
+    expect(linkNames()).toEqual([
+      "Home",
+      "Invitations",
+      "Multi-factor authentication",
+    ]);
+    expect(within(navigation()).getAllByRole("list")).toHaveLength(4);
+    const administer = within(navigation()).getByRole("list", {
+      name: "Administer",
+    });
+    expect(
+      within(administer)
+        .getAllByRole("link")
+        .map((link) => link.textContent),
+    ).toEqual(["Invitations"]);
+    for (const absent of [/learn/iu, /prepare/iu, /mentor/iu, /accounts/iu])
       expect(screen.queryByText(absent)).toBeNull();
     expect(screen.queryByRole("combobox")).toBeNull();
     expect(screen.queryByRole("radiogroup")).toBeNull();

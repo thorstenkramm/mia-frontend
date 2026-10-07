@@ -5,6 +5,11 @@ import type { InvitationLink } from "../../platform/session/invitationLink";
 import type { PasswordResetLink } from "../../platform/session/passwordResetLink";
 import { mfaPaths } from "../../platform/session/mfaEnrollment";
 import type { MfaRouteProps } from "../../features/profile/MfaRouteProps";
+import type { InvitationRouteProps } from "../../features/invitations/InvitationRouteProps";
+import {
+  toInvitationId,
+  type InvitationId,
+} from "../../platform/api/invitations";
 
 export type EntryRouteProps = {
   initialTextSize: TextSize;
@@ -49,7 +54,38 @@ type EntryRoute =
       readonly path: (typeof mfaPaths)[keyof typeof mfaPaths];
       readonly gate: "Profile(own MFA)";
       readonly component: LazyExoticComponent<ComponentType<MfaRouteProps>>;
+    })
+  // Story 3.1 decisions 2026-10-07 (BACKEND-CONTRACT-GAPS.md §BCG-003/006/014):
+  // authenticated stage, then globally scoped `accounts.administer`, then the
+  // route's existence-proving invitation resource where it has one.
+  | (EntryRouteBase & {
+      readonly path: (typeof invitationRoutePaths)[keyof typeof invitationRoutePaths];
+      readonly gate: "Administer(invitations)";
+      readonly resource: "invitation list" | "invitation" | null;
+      readonly component: LazyExoticComponent<
+        ComponentType<InvitationRouteProps>
+      >;
     });
+
+// ROUTE-INVENTORY.md §Invitations. `:invitationId` is an opaque backend ID.
+// Delete faulty invitation is outside Story 3.1 and has no entry.
+export const invitationRoutePaths = {
+  list: "/admin/invitations",
+  create: "/admin/invitations/new",
+  detail: "/admin/invitations/:invitationId",
+  resend: "/admin/invitations/:invitationId/resend",
+  revoke: "/admin/invitations/:invitationId/revoke",
+} as const;
+
+// Concrete invitation paths, built only from the route table's templates.
+export function invitationPath(
+  template: (typeof invitationRoutePaths)[keyof typeof invitationRoutePaths],
+  id: InvitationId | null = null,
+): string {
+  return id === null
+    ? template
+    : template.replace(":invitationId", encodeURIComponent(id));
+}
 
 export const entryRoutes = {
   signedOut: {
@@ -174,12 +210,84 @@ export const entryRoutes = {
       () => import("../../features/profile/MfaRecoveryCodesRoute"),
     ),
   },
+  invitationList: {
+    parent: { path: "/", label: messages.invitationsBackToHome },
+    path: invitationRoutePaths.list,
+    gate: "Administer(invitations)",
+    resource: "invitation list",
+    titleMessage: messages.invitationsListPageTitle,
+    headingMessage: messages.invitationsListHeading,
+    component: lazy(
+      () => import("../../features/invitations/InvitationListRoute"),
+    ),
+  },
+  invitationCreate: {
+    parent: {
+      path: invitationRoutePaths.list,
+      label: messages.invitationsBackToList,
+    },
+    path: invitationRoutePaths.create,
+    gate: "Administer(invitations)",
+    resource: null,
+    titleMessage: messages.invitationsCreatePageTitle,
+    headingMessage: messages.invitationsCreateHeading,
+    component: lazy(
+      () => import("../../features/invitations/InvitationCreateRoute"),
+    ),
+  },
+  invitationDetail: {
+    parent: {
+      path: invitationRoutePaths.list,
+      label: messages.invitationsBackToList,
+    },
+    path: invitationRoutePaths.detail,
+    gate: "Administer(invitations)",
+    resource: "invitation",
+    titleMessage: messages.invitationsDetailPageTitle,
+    headingMessage: messages.invitationsDetailHeading,
+    component: lazy(
+      () => import("../../features/invitations/InvitationDetailRoute"),
+    ),
+  },
+  invitationResend: {
+    parent: {
+      path: invitationRoutePaths.detail,
+      label: messages.invitationsBackToDetail,
+    },
+    path: invitationRoutePaths.resend,
+    gate: "Administer(invitations)",
+    resource: "invitation",
+    titleMessage: messages.invitationsResendPageTitle,
+    headingMessage: messages.invitationsResendHeading,
+    component: lazy(
+      () => import("../../features/invitations/InvitationResendRoute"),
+    ),
+  },
+  invitationRevoke: {
+    parent: {
+      path: invitationRoutePaths.detail,
+      label: messages.invitationsBackToDetail,
+    },
+    path: invitationRoutePaths.revoke,
+    gate: "Administer(invitations)",
+    resource: "invitation",
+    titleMessage: messages.invitationsRevokePageTitle,
+    headingMessage: messages.invitationsRevokeHeading,
+    component: lazy(
+      () => import("../../features/invitations/InvitationRevokeRoute"),
+    ),
+  },
 } as const satisfies Record<string, EntryRoute>;
 
 export type EntryRouteKey = keyof typeof entryRoutes;
 export type ProfileMfaEntryRoute = Extract<
   (typeof entryRoutes)[EntryRouteKey],
   { readonly gate: "Profile(own MFA)" }
+>;
+
+export type InvitationEntryRoute = Extract<
+  (typeof entryRoutes)[EntryRouteKey],
+  { readonly gate: "Administer(invitations)" }
 >;
 
 const profileMfaRouteKeys = [
@@ -189,15 +297,85 @@ const profileMfaRouteKeys = [
   "mfaRecoveryCodes",
 ] as const satisfies readonly EntryRouteKey[];
 
-// Path-aware dispatch for the authenticated stage. A profile MFA path needs
-// own-scope `profile.view`; without it the Home route is the safe fallback.
-export function authenticatedRouteKey(
+// The gate decisions the authenticated route dispatch needs.
+export type AuthenticatedRouteAccess = {
+  readonly ownProfileView: boolean;
+  readonly invitationAdministration: boolean;
+};
+
+export type AuthenticatedRoute = {
+  readonly key: EntryRouteKey;
+  // The canonical concrete path for this location.
+  readonly path: string;
+  readonly invitationId: InvitationId | null;
+};
+
+const home: AuthenticatedRoute = {
+  key: "home",
+  path: entryRoutes.home.path,
+  invitationId: null,
+};
+
+// Path-aware dispatch for the authenticated stage. A route whose capability
+// and scope the current gate decision lacks falls back to Home, as does any
+// unknown path.
+export function authenticatedRoute(
   pathname: string,
-  ownProfileView: boolean,
-): EntryRouteKey {
-  if (!ownProfileView) return "home";
-  return (
-    profileMfaRouteKeys.find((key) => entryRoutes[key].path === pathname) ??
-    "home"
+  access: AuthenticatedRouteAccess,
+): AuthenticatedRoute {
+  if (access.invitationAdministration) {
+    const invitation = invitationRoute(pathname);
+    if (invitation !== null) return invitation;
+  }
+  if (!access.ownProfileView) return home;
+  const key = profileMfaRouteKeys.find(
+    (candidate) => entryRoutes[candidate].path === pathname,
   );
+  return key === undefined
+    ? home
+    : { key, path: entryRoutes[key].path, invitationId: null };
+}
+
+const invitationActionKeys = {
+  resend: "invitationResend",
+  revoke: "invitationRevoke",
+} as const;
+
+function invitationRoute(pathname: string): AuthenticatedRoute | null {
+  const prefix = `${invitationRoutePaths.list}`;
+  if (pathname === prefix)
+    return { key: "invitationList", path: prefix, invitationId: null };
+  if (pathname === invitationRoutePaths.create)
+    return {
+      key: "invitationCreate",
+      path: invitationRoutePaths.create,
+      invitationId: null,
+    };
+  if (!pathname.startsWith(`${prefix}/`)) return null;
+  const [segment = "", action, ...rest] = pathname
+    .slice(prefix.length + 1)
+    .split("/");
+  if (rest.length > 0) return null;
+  let decoded: string;
+  try {
+    decoded = decodeURIComponent(segment);
+  } catch {
+    return null;
+  }
+  // `new` is the create route, never an invitation ID.
+  if (decoded === "" || decoded === "new") return null;
+  const invitationId = toInvitationId(decoded);
+  if (action === undefined)
+    return {
+      key: "invitationDetail",
+      path: invitationPath(invitationRoutePaths.detail, invitationId),
+      invitationId,
+    };
+  if (action !== "resend" && action !== "revoke") return null;
+  const key = invitationActionKeys[action];
+  return {
+    key,
+    path: invitationPath(entryRoutes[key].path, invitationId),
+    invitationId,
+  };
 }

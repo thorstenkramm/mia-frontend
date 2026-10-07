@@ -6,6 +6,7 @@ import {
 } from "@headlessui/react";
 import {
   Bars3Icon,
+  EnvelopeIcon,
   HomeIcon,
   ShieldCheckIcon,
   XMarkIcon,
@@ -31,7 +32,10 @@ import {
   type RouteDeparture,
 } from "../platform/ui/routeDeparture";
 import { RouteDepartureLink } from "../platform/ui/RouteDepartureLink";
-import { entryRoutes } from "./routes/entryRoutes";
+import {
+  entryRoutes,
+  type AuthenticatedRouteAccess,
+} from "./routes/entryRoutes";
 import {
   BuildIdentifier,
   BypassLink,
@@ -58,11 +62,25 @@ const homeLink: ShellLink = {
 // Only implemented destinations whose capability and scope the current gate
 // decision grants. Learn, Prepare, Mentor, and Administer join as their
 // features land; an empty group is never shown.
-function authorizedGroups(ownProfileView: boolean): readonly ShellGroup[] {
+function authorizedGroups(
+  access: AuthenticatedRouteAccess,
+): readonly ShellGroup[] {
   const groups: ShellGroup[] = [
     {
+      label: messages.shellAdministerGroup,
+      links: access.invitationAdministration
+        ? [
+            {
+              to: entryRoutes.invitationList.path,
+              label: messages.shellInvitationsLink,
+              icon: EnvelopeIcon,
+            },
+          ]
+        : [],
+    },
+    {
       label: messages.shellProfileSecurityGroup,
-      links: ownProfileView
+      links: access.ownProfileView
         ? [
             {
               to: entryRoutes.mfaOverview.path,
@@ -263,7 +281,10 @@ function ShellNavigation({
   const intl = useIntl();
   const groupIdPrefix = useId();
   const access = useAuthenticatedAccess();
-  const groups = authorizedGroups(access?.ownProfileView === true);
+  const groups = authorizedGroups({
+    ownProfileView: access?.ownProfileView === true,
+    invitationAdministration: access?.invitationAdministration === true,
+  });
 
   return (
     <nav

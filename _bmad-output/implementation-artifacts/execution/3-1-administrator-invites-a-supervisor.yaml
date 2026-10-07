@@ -1,0 +1,166 @@
+story: 3-1-administrator-invites-a-supervisor
+phase: commit-pending
+spec: _bmad-output/implementation-artifacts/spec-3-1-administrator-invites-a-supervisor.md
+baseline_commit: cc135de863a6e436c73ec484335c0d2def46cf89
+pre_existing_changes:
+  - .opencode/agents/epic-solver.md
+  - .opencode/story-execution.md
+  - _bmad-output/implementation-artifacts/execution/2-1-basic-capability-driven-navigation.yaml
+  - _bmad-output/implementation-artifacts/execution/2-2-working-routes-and-parent-navigation.yaml
+  - _bmad-output/implementation-artifacts/sprint-status.yaml
+  - _bmad-output/implementation-artifacts/epic-2-retro-2026-10-07.md
+files:
+  - _bmad-output/implementation-artifacts/spec-3-1-administrator-invites-a-supervisor.md
+  - _bmad-output/implementation-artifacts/execution/3-1-administrator-invites-a-supervisor.yaml
+  - src/features/invitations/InvitationCreateRoute.tsx
+  - src/features/invitations/InvitationDetailRoute.tsx
+  - src/features/invitations/InvitationListRoute.tsx
+  - src/features/invitations/InvitationResendRoute.tsx
+  - src/features/invitations/InvitationRevokeRoute.tsx
+  - src/features/invitations/InvitationRouteProps.ts
+  - src/features/invitations/InvitationStatus.tsx
+  - src/platform/api/invitations.ts
+  - src/platform/api/invitations.test.ts
+  - src/app/routes/AdminInvitationRoute.tsx
+  - src/app/routes/invitationAdministration.test.tsx
+  - src/platform/ui/DiscardChangesDialog.tsx
+  - src/platform/ui/routeDeparture.test.tsx
+  - e2e/invitationAdministration.spec.ts
+  - e2e/invitationFixtures.ts
+  - src/app/routes/entryRoutes.tsx
+  - src/app/App.tsx
+  - src/app/ApplicationShell.tsx
+  - src/platform/api/client.ts
+  - src/platform/api/entry.ts
+  - src/platform/session/sessionController.ts
+  - src/platform/session/SessionProvider.tsx
+  - src/platform/ui/routeDeparture.tsx
+  - src/platform/ui/RouteDepartureLink.tsx
+  - src/platform/i18n/messages.ts
+  - src/platform/i18n/catalogs/de-DE.json
+  - src/platform/i18n/catalogs/en-US.json
+  - src/platform/i18n/catalogs/es-AR.json
+  - src/platform/i18n/catalogs/es-ES.json
+  - src/platform/i18n/catalogs/fr-FR.json
+  - src/platform/i18n/catalogs/pt-BR.json
+  - src/platform/i18n/catalogs/pt-PT.json
+  - src/app/ApplicationShell.test.tsx
+  - e2e/applicationShell.spec.ts
+  - scripts/check-route-secret-hygiene.mjs
+  - scripts/route-secret-hygiene-cases.ts
+  - playwright.route-secret-hygiene.config.ts
+worker_session: ses_ee88b4a56ffePE1oJByimaLiNE
+reviewer_session: ses_ee88080fdffeSrD4J111haeayf
+models:
+  prepare: anthropic/claude-opus-5-5#high
+  implement_initial: anthropic/claude-opus-5-5#high
+  implement_resume: openai/gpt-6.1-sol#high
+  implement_recovery: mistral/mistral-medium-2604#high
+  review: openai/gpt-6-astra#high
+  fix_batch_1: mistral/mistral-medium-2604#high
+  fix_batch_2: openai/gpt-6.1-sol#high
+completed_blocks:
+  - Owner approved O1 invitation transport reconciliation and O2 global accounts.administer mapping.
+  - Detailed spec ready; narrow authoritative contract updates recorded by worker.
+  - Bounded preparation and tool/contract inventory complete; no application edits.
+  - Owner authorized separate verified story commits for Epic 3 only; no push.
+  - Solver retains declared Stay/Discard requirement; no deviation authorized.
+  - Faulty-invitation deletion stays outside the declared resend/revoke slice.
+  - D1 Ordered gate and route registration implemented (5 routes, gate label, param-aware keys).
+  - D2 API module implemented (zod schemas, branded types, ETag validation, pagination).
+  - D3 Mutations and outcome states implemented (create, resend, revoke with ETag binding).
+  - D4 Shell navigation implemented (Administer group with Invitations link, O2 capability).
+  - D5 Exact Tailwind Plus blueprints bound and recorded in all new files.
+  - D6 Least data and privacy enforced (email escaped text only, never in URL/title/state).
+  - D7 Dirty create form with machine 18 Stay/Discard and native unload implemented.
+  - Worker reports implementation complete; acceptance remains subject to independent review and final gate.
+  - Targeted test evidence received; overlapping run totals require correction before review.
+  - Secret-bearing inventory added; actual deliberate-failure scan evidence not yet supplied.
+  - Route secret hygiene cases updated with Story 3.1 inventory.
+repair_queue:
+  - id: R1
+    finding: Unit request assertion can expose generated email in failure output.
+    disposition: Repaired and reviewer-cleared with content-free observations and executed deliberate-failure scan.
+  - id: R2
+    finding: Expected and existence-hidden backend errors drop required technical disclosure.
+    disposition: Repaired and reviewer-cleared; neutral hidden-result teardown and original error disclosure preserved.
+  - id: R3
+    finding: Ambiguous delivery guidance contradicts terminal invitation status.
+    disposition: Repaired and reviewer-cleared with lifecycle regression evidence.
+  - id: R4
+    finding: Discard dialog consequence lacks accessible association.
+    disposition: Repaired and reviewer-cleared with associated description and browser focus checks.
+  - id: evidence
+    finding: Mobile drawer/privacy closure, Forward departure and actual hygiene scan evidence missing.
+    disposition: Executed focused browser and hygiene checks reviewed and cleared; spec/history and evidence corrections accepted.
+last_verification:
+  status: passed
+  command: ./run-all-tests.sh
+  attempt: 3
+  exit_code: 0
+  fingerprint: 435cb2aaebe02ea53ed009c749e56643c21d10a028cb1e2193ef09dbda19a8b1
+  unit_tests: 645
+  browser_tests: 143
+  skipped: []
+  build_count: 1
+  trivy_executed: true
+  log: tmp/agent-execution/3-1-administrator-invites-a-supervisor/logs/attempt3-gate.log
+  report: tmp/agent-execution/3-1-administrator-invites-a-supervisor/verify-attempt3-report.md
+  detailed_evidence: tmp/agent-execution/3-1-administrator-invites-a-supervisor/proposed-checkpoint-closure.json
+  advisories: Unchanged LOW KaTeX and static-country-code false positive substantiated; prior authorized dispositions reused.
+resume_attempts: 2
+commit:
+  intended_message: "feat: add administrator supervisor invitation management"
+  sha: null
+next_action: Worker commits exact verified story manifest and solver-approved Story 3.1 tracking hunks; preserve unrelated existing tracking changes.
+duplication_repair:
+  report: tmp/agent-execution/3-1-administrator-invites-a-supervisor/duplication-fix-report.md
+  delta: tmp/agent-execution/3-1-administrator-invites-a-supervisor/duplication-repair.diff
+  reported_result: Zero clones; static checks and 74 focused tests passed.
+  review: pass; no blocking findings or reproduction requests; R1-R4 remain closed.
+gate_attempt_2:
+  result: failed
+  reason: Seven JSCPD clones.
+  completed: 640 unit tests, 143 browser tests, one build, static checks and all-case hygiene (36 cases/44 checkpoints, zero leaks).
+  not_reached: Audit, Trivy, catalog and Markdown stages.
+  fingerprint: a0d7c41344495fc7c50015cc80f4fe7550555bd55f7c5e4a3ba6eed42f9fe1c0
+  formatting: Two-file structural comparison matched; existing review clearance retained for formatting only.
+gate_attempt_1:
+  result: failed
+  reason: Prettier formatting in InvitationStatus.tsx and DiscardChangesDialog.tsx.
+  completed: Typecheck, coverage canaries and lint passed.
+  not_reached: Tests, build, hygiene and Trivy.
+  repair_authorized: Formatter-only changes in the two flagged files; review clearance retained only with structural-equivalence evidence.
+repair_batch: 2
+repair_recheck:
+  batch_1: not-cleared
+  batch_2: pass
+  remaining: No blocking findings or reproduction requests.
+  evidence_integrity: Corrected repair delta and executed test/hygiene evidence independently reviewed.
+batch_2_report:
+  path: tmp/agent-execution/3-1-administrator-invites-a-supervisor/fix-report.md
+  focused_results: 69 unit/component, overlapping 44 integration, 12 invitation browser and 3 recovery-code browser tests passed.
+  hygiene: Actual unit assertion failure and 18 browser checkpoint failures plus early-failure canary executed; zero marker leaks reported.
+  inputs: tmp/agent-execution/3-1-administrator-invites-a-supervisor/batch2-inputs.json
+blocked_on: null
+implementation_manifest: _bmad-output/implementation-artifacts/spec-3-1-administrator-invites-a-supervisor.md
+prepare_report: tmp/agent-execution/3-1-administrator-invites-a-supervisor/prepare-report.md
+implement_report: tmp/agent-execution/3-1-administrator-invites-a-supervisor/implement-report.md
+scoped_diff: tmp/agent-execution/3-1-administrator-invites-a-supervisor/implementation.diff
+review_manifest: tmp/agent-execution/3-1-administrator-invites-a-supervisor/manifest.json
+provider_incident:
+  message: msg_116d7e1760010lsH1YAD1B4h3c
+  failure: provider.rate-limit
+  http_status: 429
+  observed_retry_attempt: 5
+  recovery: Interrupted successfully; worker absent from active sessions before fallback dispatch.
+  fallback_policy: Explicit OpenAI worker model on every remaining Epic 3 dispatch or resume.
+transport_incident:
+  previous_worker: ses_ee96da600ffe5M6IMsTjRMAnb4
+  message: msg_11728fd3b001CregrVeITGPbRq
+  failure: provider.transport
+  detail: Timed out waiting for WebSocket data
+  observed_retry_attempt: 4
+  recovery: Interrupt succeeded; cancelled notification received; active map confirms prior worker stopped.
+  continuity: Fresh bounded Mistral context reuses existing implementation and checks; no concurrent writer.
+  fallback_policy: Explicit Mistral worker selection for remaining Epic 3 work; supersedes prior incident policy.

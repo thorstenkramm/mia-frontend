@@ -12,7 +12,7 @@ sources:
   - BACKEND-CONTRACT-GAPS.md
   - .working/source-constraint-extract.md
   - REQUIREMENT-FLOW-MATRIX.md
-updated: 2026-09-13
+updated: 2026-10-07
 ---
 
 # MIA Surface State Matrix
@@ -460,6 +460,12 @@ invitation stays pending and usable with unconfirmed delivery and no automatic r
 that independent ambiguity, so affected list/detail/create/resend treatment remains blocked by `BCG-006`.
 Invitation lifecycle content and unaffected actions remain available. `BCG-014` separately blocks Revoke and Delete
 faulty until either action cannot change meaning between confirmation and execution.
+
+Story 3.1 owner decisions, 2026-10-07 (`BACKEND-CONTRACT-GAPS.md` §BCG-006 and §BCG-014 Story 3.1 slice decisions):
+current OpenAPI represents delivery as `queued`, `delivered`, `ambiguous`, or `failed` beside the lifecycle state, so
+the `BCG-006` blocks above no longer apply to administrator supervisor-invitation create, list, detail, and resend.
+Pending Revoke is ETag-bound and no longer blocked by `BCG-014`. Delete faulty invitation remains blocked and outside
+Story 3.1. The rows keep their profiles; the decisions own the slice boundary.
 
 ### Course administration
 

@@ -13,7 +13,11 @@ if (!outputDir || !selected)
 const escaped = selected.title.replace(/[.*+?^${}()|[\]\\]/gu, "\\$&");
 export default defineConfig({
   testDir: "./e2e",
-  testMatch: ["routeNavigation.spec.ts", "routeRecovery.spec.ts"],
+  testMatch: [
+    "routeNavigation.spec.ts",
+    "routeRecovery.spec.ts",
+    "invitationAdministration.spec.ts",
+  ],
   grep: new RegExp(`${escaped}$`, "u"),
   retries: 0,
   workers: 1,

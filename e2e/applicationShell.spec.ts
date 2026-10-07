@@ -146,8 +146,10 @@ test("desktop shell keyboard order reaches each destination and Sign out", async
     "aria-current",
     "page",
   );
+  // Global `accounts.administer` adds invitation management (Story 3.1).
   await expect(navigation.getByRole("link")).toHaveText([
     "Home",
+    "Invitations",
     "Multi-factor authentication",
   ]);
   await expect(
@@ -161,6 +163,10 @@ test("desktop shell keyboard order reaches each destination and Sign out", async
   ).toBeFocused();
   await page.keyboard.press("Tab");
   await expect(navigation.getByRole("link", { name: "Home" })).toBeFocused();
+  await page.keyboard.press("Tab");
+  await expect(
+    navigation.getByRole("link", { name: "Invitations" }),
+  ).toBeFocused();
   await page.keyboard.press("Tab");
   const mfa = navigation.getByRole("link", {
     name: "Multi-factor authentication",

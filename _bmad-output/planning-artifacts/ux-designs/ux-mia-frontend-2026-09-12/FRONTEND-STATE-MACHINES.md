@@ -15,7 +15,7 @@ sources:
   - mia/api-doc/openapi.yaml
   - mia/api-doc/paths/*.yaml
   - mia/api-doc/schemas/**/*.yaml
-updated: 2026-09-13
+updated: 2026-10-07
 ---
 
 <!-- markdownlint-disable MD013 -->
@@ -695,7 +695,8 @@ final dispatch, reread the target representation and account/scope epoch. Bind c
 mutation atomically to a server version or state precondition covering identity, state, cascade, and blockers. A changed
 or failed precondition clears exact-name input and requires new review. A GET followed by an unconditional mutation is
 insufficient. This atomic transport guarantee is `BLOCKED` on
-`BCG-014: Atomic intent binding for consequential state-dependent mutations`.
+`BCG-014: Atomic intent binding for consequential state-dependent mutations`. The 2026-10-07 Story 3.1 decision
+(`BACKEND-CONTRACT-GAPS.md` §BCG-014) lifts this only for pending invitation Revoke bound by the reviewed ETag.
 
 Other mutations are not blocked by BCG-014. They use their own authorization, stale-state, eligibility, ambiguity, and
 domain contracts; machine 22 must not add a general precondition requirement to them.
@@ -873,6 +874,12 @@ frontend never maps all pending invitations to sent, automatically resends, or c
 Revoke and Delete faulty remain independently `BLOCKED` on
 `BCG-014: Atomic intent binding for consequential state-dependent mutations`; invitation reads and unrelated actions
 remain available.
+
+Story 3.1 owner decisions, 2026-10-07 (`BACKEND-CONTRACT-GAPS.md` §BCG-006 and §BCG-014 Story 3.1 slice decisions)
+lift these blocks for administrator supervisor-invitation create, list, detail, resend, and pending Revoke only.
+Pending confirmed and Pending unconfirmed map to the authoritative `delivery_state`: `queued` (admitted, no result yet),
+`delivered` (SMTP acceptance only), and `ambiguous` (unconfirmed, with its sanitized code). Machine 22 governs Revoke
+with the reviewed ETag as its precondition. Delete faulty stays `BLOCKED` and outside Story 3.1.
 
 Invitation acceptance is never replayed automatically. Before dispatch, failure means no server attempt and permits an
 explicit retry while the route-local token remains. At first-byte dispatch, drop the application-reachable token;

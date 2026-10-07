@@ -11,6 +11,8 @@ import { MfaEnrollment } from "./mfaEnrollment";
 import {
   SessionController,
   type AuthenticatedAccess,
+  type AuthenticatedMutationResult,
+  type AuthenticatedReadResult,
   type AuthenticationBootstrapState,
   type MfaRoute,
   type PublicMutationResult,
@@ -173,9 +175,21 @@ export function useSessionActions(): {
     isCurrent: () => boolean,
     signal: AbortSignal,
   ) => Promise<PublicMutationResult>;
+  // A route-resource or dependent read; never refreshes idle expiry.
+  readonly readAuthenticated: <T>(
+    read: (signal: AbortSignal) => Promise<T>,
+  ) => Promise<AuthenticatedReadResult<T>>;
+  // One authenticated unsafe request, dispatched at most once, never replayed.
+  readonly runAuthenticatedMutation: <T>(
+    request: { send: ((csrf: string) => Promise<T>) | null },
+    isCurrent: () => boolean,
+  ) => Promise<AuthenticatedMutationResult<T>>;
 } {
   const controller = useSessionController();
   return {
+    readAuthenticated: (read) => controller.readAuthenticated(read),
+    runAuthenticatedMutation: (request, isCurrent) =>
+      controller.runAuthenticatedMutation(request, isCurrent),
     checkRouteAdmission: () => controller.checkRouteAdmission(),
     stopLifecycleWaiting: () => controller.stopLifecycleWaiting(),
     continueWorking: () => controller.continueWorking(),

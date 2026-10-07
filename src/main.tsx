@@ -22,6 +22,7 @@ import {
   capturePasswordResetLink,
   passwordResetPath,
 } from "./platform/session/passwordResetLink";
+import { holdGuardedHistoryTraversals } from "./platform/ui/routeDeparture";
 
 // The first application instructions: capture and strip a reset or invitation
 // link fragment before any render, router start, request, or diagnostic can
@@ -33,6 +34,8 @@ const passwordResetLink = capturePasswordResetLink(
 const invitationLink = captureInvitationLink(window.location, window.history);
 // Lives as long as the document; it never reads or retains a fragment itself.
 reloadOnLateFragment(window, [passwordResetPath, ...invitationPaths]);
+// Before the router starts listening, so unsaved input can hold Back/Forward.
+holdGuardedHistoryTraversals(window);
 
 const rootElement = document.getElementById("root");
 

@@ -90,9 +90,40 @@ export async function readJsonApi<T>({
   signal,
 }: ReadJsonApiOptions<T>): Promise<T> {
   void initiator;
-  let response: Response;
+  return parseJsonApiResponse(await getJsonApi(path, signal), schema);
+}
+
+declare const strongETagBrand: unique symbol;
+// The exact strong validator of one reviewed representation (`StrongETag`).
+export type StrongETag = string & { readonly [strongETagBrand]: "StrongETag" };
+const strongETagPattern = /^"[0-9a-f]{64}"$/u;
+
+// A resource read whose state-dependent mutation needs the reviewed `ETag`.
+// A missing or malformed validator is a protocol failure, never a guess.
+export async function readJsonApiResource<T>({
+  path,
+  schema,
+  initiator,
+  signal,
+}: ReadJsonApiOptions<T>): Promise<{
+  readonly value: T;
+  readonly etag: StrongETag;
+}> {
+  void initiator;
+  const response = await getJsonApi(path, signal);
+  const value = await parseJsonApiResponse(response, schema);
+  const etag = response.headers.get("ETag");
+  if (etag === null || !strongETagPattern.test(etag))
+    throw new ApiProtocolError();
+  return { value, etag: etag as StrongETag };
+}
+
+async function getJsonApi(
+  path: string,
+  signal: AbortSignal | undefined,
+): Promise<Response> {
   try {
-    response = await fetch(path, {
+    return await fetch(path, {
       cache: "no-store",
       credentials: "same-origin",
       headers: { Accept: jsonApiMediaType },
@@ -102,8 +133,6 @@ export async function readJsonApi<T>({
   } catch (error) {
     throw new ApiTransportError(error);
   }
-
-  return parseJsonApiResponse(response, schema);
 }
 
 // Any other success status than the operation's declared one is malformed.
@@ -146,6 +175,8 @@ type UnsafeRequestOptions = {
   readonly csrfToken: string;
   readonly signal?: AbortSignal;
   readonly body?: string;
+  // The reviewed strong validator for a state-dependent mutation.
+  readonly ifMatch?: StrongETag;
 };
 
 export async function sendUnsafeRequest({
@@ -154,6 +185,7 @@ export async function sendUnsafeRequest({
   csrfToken,
   signal,
   body,
+  ifMatch,
 }: UnsafeRequestOptions): Promise<Response> {
   try {
     return await fetch(path, {
@@ -163,6 +195,7 @@ export async function sendUnsafeRequest({
         Accept: jsonApiMediaType,
         "X-CSRF-Token": csrfToken,
         ...(body === undefined ? {} : { "Content-Type": jsonApiMediaType }),
+        ...(ifMatch === undefined ? {} : { "If-Match": ifMatch }),
       },
       method,
       ...(signal === undefined ? {} : { signal }),

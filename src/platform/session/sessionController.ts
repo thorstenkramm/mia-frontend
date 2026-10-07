@@ -128,6 +128,7 @@ type SecurityTeardown = (scope: SecurityTeardownScope) => void;
 export type AuthenticatedAccess = {
   readonly accountId: AccountId;
   readonly ownProfileView: boolean;
+  readonly invitationAdministration: boolean;
   readonly epoch: number;
 };
 export type AuthenticatedReadResult<T> =
@@ -1452,6 +1453,7 @@ export class SessionController {
           this.access = {
             accountId: session.accountId,
             ownProfileView: capabilities.ownProfileView,
+            invitationAdministration: capabilities.invitationAdministration,
             epoch: this.securityEpoch,
           };
           this.setState({ kind: "Authenticated" });

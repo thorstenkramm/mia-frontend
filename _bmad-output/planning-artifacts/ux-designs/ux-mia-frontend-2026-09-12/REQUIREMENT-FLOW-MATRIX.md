@@ -11,7 +11,7 @@ sources:
   - SECURITY-PRIVACY-ACCEPTANCE.md
   - BACKEND-CONTRACT-GAPS.md
   - .working/source-constraint-extract.md
-updated: 2026-09-13
+updated: 2026-10-07
 ---
 
 # MIA Requirement Flow Matrix
@@ -362,7 +362,9 @@ Diego is an administrator inviting a new supervisor; the same scoped rules apply
 
 Failure path: token holders receive one invalid-invitation result for revoked, faulty, accepted, and unknown tokens. A
 faulty invitation can be physically deleted, while accepted/revoked deletion is rejected. SMTP ambiguity is blocked by
-`BCG-006`; atomically preserving the reviewed Revoke or Delete faulty intent is blocked by `BCG-014`.
+`BCG-006`; atomically preserving the reviewed Revoke or Delete faulty intent is blocked by `BCG-014`. The 2026-10-07
+Story 3.1 decisions (`BACKEND-CONTRACT-GAPS.md` §BCG-006, §BCG-014) lift both for supervisor-invitation create,
+resend, and pending Revoke; Delete faulty stays blocked.
 
 ### SF-8: Pablo requests and revisits generated speech
 

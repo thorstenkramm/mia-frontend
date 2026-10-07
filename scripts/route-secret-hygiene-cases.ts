@@ -77,4 +77,62 @@ export const routeHygieneCases = [
     title: `route recovery remains operable at actual ${zoom}% browser zoom in all text modes`,
     checkpoints: ["complete"],
   })),
+  // Story 3.1 invitation administration (e2e/invitationAdministration.spec.ts).
+  {
+    id: "invitation-mobile-discard",
+    title:
+      "mobile dirty confirmation names its consequence and security closure cancels deferred departure",
+    checkpoints: ["invitation-email", "complete"],
+  },
+  {
+    id: "invitation-forward",
+    title:
+      "dirty Forward stays without requests or discards exactly one traversal",
+    checkpoints: ["invitation-email", "complete"],
+  },
+  {
+    id: "invitation-create",
+    title:
+      "administrator invites a supervisor with one dispatch and reaches its persisted detail",
+    checkpoints: ["invitation-email", "invitation-detail", "complete"],
+  },
+  {
+    id: "invitation-discard",
+    title:
+      "dirty create form asks Stay or Discard for shell, browser Back and Reload departures",
+    checkpoints: ["invitation-email", "complete"],
+  },
+  {
+    id: "invitation-unknown",
+    title:
+      "unknown create, resend and revoke outcomes never replay and reconcile on request",
+    checkpoints: ["invitation-error", "complete"],
+  },
+  {
+    id: "invitation-revoke-stale",
+    title:
+      "revoke binds the reviewed ETag and sends nothing after a concurrent change",
+    checkpoints: ["complete"],
+  },
+  {
+    id: "invitation-accessibility",
+    title: "invitation surfaces pass axe with visible keyboard focus",
+    checkpoints: ["complete"],
+  },
+  ...["standard", "large", "extra-large"].map((size) => ({
+    id: `invitation-reflow-${size}`,
+    title: `invitation surfaces reflow at 320 CSS pixels with ${size} text`,
+    checkpoints: ["complete"],
+  })),
+  {
+    id: "invitation-locales",
+    title:
+      "invitation surfaces stay operable without page scroll in every launch locale",
+    checkpoints: ["complete"],
+  },
+  {
+    id: "invitation-zoom",
+    title: "invitation management remains operable at actual 200% browser zoom",
+    checkpoints: ["complete"],
+  },
 ];

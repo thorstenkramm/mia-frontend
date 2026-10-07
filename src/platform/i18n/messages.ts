@@ -1322,6 +1322,514 @@ export const messages = defineMessages({
     defaultMessage:
       "Recovery codes are no longer available. They are shown only once and cannot be retrieved. Only a future replacement of this factor issues new codes.",
   },
+  shellAdministerGroup: {
+    id: "shell.navigation.administer",
+    defaultMessage: "Administer",
+  },
+  shellInvitationsLink: {
+    id: "shell.navigation.invitations",
+    defaultMessage: "Invitations",
+  },
+  unsavedStay: {
+    id: "unsaved.stay",
+    defaultMessage: "Stay on this page",
+  },
+  unsavedDiscard: {
+    id: "unsaved.discard",
+    defaultMessage: "Discard and leave",
+  },
+  invitationsDiscardTitle: {
+    id: "invitations.discard.title",
+    defaultMessage: "Discard this invitation?",
+  },
+  invitationsDiscardDescription: {
+    id: "invitations.discard.description",
+    defaultMessage:
+      "The email address you entered has not been sent. If you leave this page, it is discarded.",
+  },
+  invitationsListPageTitle: {
+    id: "invitations.list.pageTitle",
+    defaultMessage: "Invitations | MIA",
+  },
+  invitationsListHeading: {
+    id: "invitations.list.heading",
+    defaultMessage: "Invitations",
+  },
+  invitationsCreatePageTitle: {
+    id: "invitations.create.pageTitle",
+    defaultMessage: "Create invitation | MIA",
+  },
+  invitationsCreateHeading: {
+    id: "invitations.create.heading",
+    defaultMessage: "Invite a supervisor",
+  },
+  invitationsDetailPageTitle: {
+    id: "invitations.detail.pageTitle",
+    defaultMessage: "Invitation details | MIA",
+  },
+  invitationsDetailHeading: {
+    id: "invitations.detail.heading",
+    defaultMessage: "Invitation details",
+  },
+  invitationsResendPageTitle: {
+    id: "invitations.resend.pageTitle",
+    defaultMessage: "Resend invitation | MIA",
+  },
+  invitationsResendHeading: {
+    id: "invitations.resend.heading",
+    defaultMessage: "Resend invitation",
+  },
+  invitationsRevokePageTitle: {
+    id: "invitations.revoke.pageTitle",
+    defaultMessage: "Revoke invitation | MIA",
+  },
+  invitationsRevokeHeading: {
+    id: "invitations.revoke.heading",
+    defaultMessage: "Revoke invitation",
+  },
+  invitationsBackToHome: {
+    id: "invitations.backToHome",
+    defaultMessage: "Back to Home",
+  },
+  invitationsBackToList: {
+    id: "invitations.backToList",
+    defaultMessage: "Back to invitations",
+  },
+  invitationsBackToDetail: {
+    id: "invitations.backToDetail",
+    defaultMessage: "Back to invitation details",
+  },
+  invitationsCheckFailed: {
+    id: "invitations.checkFailed",
+    defaultMessage:
+      "Invitation information could not be loaded. Check again, or use an available exit.",
+  },
+  invitationsUnavailablePageTitle: {
+    id: "invitations.unavailable.pageTitle",
+    defaultMessage: "Not available | MIA",
+  },
+  invitationsUnavailableHeading: {
+    id: "invitations.unavailable.heading",
+    defaultMessage: "Not available",
+  },
+  invitationsUnavailableSummary: {
+    id: "invitations.unavailable.summary",
+    defaultMessage: "This item is not available",
+  },
+  invitationsUnavailable: {
+    id: "invitations.unavailable.body",
+    defaultMessage: "It may not exist, or you may not have access to it.",
+  },
+  invitationsStatusPending: {
+    id: "invitations.status.pending",
+    defaultMessage: "Pending",
+  },
+  invitationsStatusAccepted: {
+    id: "invitations.status.accepted",
+    defaultMessage: "Accepted",
+  },
+  invitationsStatusRevoked: {
+    id: "invitations.status.revoked",
+    defaultMessage: "Revoked",
+  },
+  invitationsStatusFaulty: {
+    id: "invitations.status.faulty",
+    defaultMessage: "Faulty",
+  },
+  invitationsDeliveryQueued: {
+    id: "invitations.delivery.queued",
+    defaultMessage: "Delivery queued",
+  },
+  invitationsDeliveryDelivered: {
+    id: "invitations.delivery.delivered",
+    defaultMessage: "Accepted by mail server",
+  },
+  invitationsDeliveryAmbiguous: {
+    id: "invitations.delivery.ambiguous",
+    defaultMessage: "Delivery unconfirmed",
+  },
+  invitationsDeliveryFailed: {
+    id: "invitations.delivery.failed",
+    defaultMessage: "Delivery failed",
+  },
+  invitationsDeliveryQueuedHelp: {
+    id: "invitations.delivery.queuedHelp",
+    defaultMessage:
+      "MIA has admitted the email for sending but has not recorded a result yet. It may not have been sent.",
+  },
+  invitationsDeliveryDeliveredHelp: {
+    id: "invitations.delivery.deliveredHelp",
+    defaultMessage:
+      "The mail server accepted the email. This does not confirm that it arrived or was read.",
+  },
+  invitationsDeliveryAmbiguousHelp: {
+    id: "invitations.delivery.ambiguousHelp",
+    defaultMessage:
+      "MIA could not confirm whether the email was sent. The invitation is still usable, and MIA does not retry automatically. You can resend it.",
+  },
+  invitationsDeliveryFailedHelp: {
+    id: "invitations.delivery.failedHelp",
+    defaultMessage:
+      "The mail server definitively rejected the email. This invitation cannot be used.",
+  },
+  invitationsDeliveryLifecycleNeutral: {
+    id: "invitations.delivery.lifecycleNeutral",
+    defaultMessage:
+      "MIA recorded the delivery state at the time of the last update. The current state may have changed.",
+  },
+  invitationsDeliveryCode: {
+    id: "invitations.delivery.code",
+    defaultMessage: "Reason: {reason}",
+  },
+  invitationsDeliveryCodeTimeout: {
+    id: "invitations.delivery.code.timeout",
+    defaultMessage: "the mail server did not answer in time",
+  },
+  invitationsDeliveryCodeAmbiguous: {
+    id: "invitations.delivery.code.ambiguous",
+    defaultMessage: "the mail server’s answer was inconclusive",
+  },
+  invitationsDeliveryCodeRejected: {
+    id: "invitations.delivery.code.rejected",
+    defaultMessage: "the mail server rejected the email",
+  },
+  invitationsFieldEmail: {
+    id: "invitations.field.email",
+    defaultMessage: "Email address",
+  },
+  invitationsFieldRole: {
+    id: "invitations.field.role",
+    defaultMessage: "Role",
+  },
+  invitationsFieldStatus: {
+    id: "invitations.field.status",
+    defaultMessage: "Status",
+  },
+  invitationsFieldDelivery: {
+    id: "invitations.field.delivery",
+    defaultMessage: "Latest delivery",
+  },
+  invitationsFieldAttempted: {
+    id: "invitations.field.attempted",
+    defaultMessage: "Latest delivery attempt",
+  },
+  invitationsFieldFailureCode: {
+    id: "invitations.field.failureCode",
+    defaultMessage: "Failure code",
+  },
+  invitationsFieldCreated: {
+    id: "invitations.field.created",
+    defaultMessage: "Created",
+  },
+  invitationsNoAttempt: {
+    id: "invitations.noAttempt",
+    defaultMessage: "No completed attempt recorded yet",
+  },
+  invitationsSummaryHeading: {
+    id: "invitations.summary.heading",
+    defaultMessage: "Invitation",
+  },
+  invitationsLastChecked: {
+    id: "invitations.lastChecked",
+    defaultMessage: "Last checked {time}",
+  },
+  invitationsRefresh: {
+    id: "invitations.refresh",
+    defaultMessage: "Refresh",
+  },
+  invitationsChecking: {
+    id: "invitations.checking",
+    defaultMessage: "Checking…",
+  },
+  invitationsListIntroduction: {
+    id: "invitations.list.introduction",
+    defaultMessage:
+      "Invitations you can manage, with their persisted status and latest delivery. MIA sends no notifications when these change; use Refresh.",
+  },
+  invitationsListSectionHeading: {
+    id: "invitations.list.sectionHeading",
+    defaultMessage: "Invitation list",
+  },
+  invitationsTableCaption: {
+    id: "invitations.list.caption",
+    defaultMessage: "Invitations",
+  },
+  invitationsInviteSupervisor: {
+    id: "invitations.inviteSupervisor",
+    defaultMessage: "Invite a supervisor",
+  },
+  invitationsEmptyHeading: {
+    id: "invitations.empty.heading",
+    defaultMessage: "No invitations",
+  },
+  invitationsEmpty: {
+    id: "invitations.empty.body",
+    defaultMessage: "No invitations are available to you yet.",
+  },
+  invitationsEmptyPageHeading: {
+    id: "invitations.emptyPage.heading",
+    defaultMessage: "No invitations on this page",
+  },
+  invitationsEmptyPage: {
+    id: "invitations.emptyPage.body",
+    defaultMessage: "Use Previous to return to earlier invitations.",
+  },
+  invitationsPagination: {
+    id: "invitations.pagination",
+    defaultMessage: "Invitation pages",
+  },
+  invitationsPreviousPage: {
+    id: "invitations.previousPage",
+    defaultMessage: "Previous",
+  },
+  invitationsNextPage: {
+    id: "invitations.nextPage",
+    defaultMessage: "Next",
+  },
+  invitationsListUpdated: {
+    id: "invitations.list.updated",
+    defaultMessage: "Invitation list updated.",
+  },
+  invitationsListLoadFailed: {
+    id: "invitations.list.loadFailed",
+    defaultMessage: "The invitation list could not be loaded",
+  },
+  invitationsShowingOld: {
+    id: "invitations.showingOld",
+    defaultMessage:
+      "The information shown is from the last successful check and may be out of date.",
+  },
+  invitationsCheckStateFailed: {
+    id: "invitations.checkStateFailed",
+    defaultMessage: "The current state could not be checked",
+  },
+  invitationsStateChanged: {
+    id: "invitations.stateChanged",
+    defaultMessage: "The invitation state has changed.",
+  },
+  invitationsStateUnchanged: {
+    id: "invitations.stateUnchanged",
+    defaultMessage: "Checked. The invitation state has not changed.",
+  },
+  invitationsCheckCurrentState: {
+    id: "invitations.checkCurrentState",
+    defaultMessage: "Check current state",
+  },
+  invitationsNoActions: {
+    id: "invitations.noActions",
+    defaultMessage: "No actions are available for an invitation in this state.",
+  },
+  invitationsFaultyHelp: {
+    id: "invitations.faultyHelp",
+    defaultMessage:
+      "This invitation cannot be used or resent. To invite this address again, create a new invitation.",
+  },
+  invitationsViewInvitation: {
+    id: "invitations.viewInvitation",
+    defaultMessage: "View invitation",
+  },
+  invitationsStopWaiting: {
+    id: "invitations.stopWaiting",
+    defaultMessage: "Stop waiting",
+  },
+  invitationsNothingChanged: {
+    id: "invitations.nothingChanged",
+    defaultMessage: "MIA did not make this change. You can try again.",
+  },
+  invitationsCreateIntroduction: {
+    id: "invitations.create.introduction",
+    defaultMessage:
+      "MIA emails an invitation link to this address. The invited person chooses a username and password when accepting. No account exists until then.",
+  },
+  invitationsEmailLabel: {
+    id: "invitations.email.label",
+    defaultMessage: "Supervisor’s email address",
+  },
+  invitationsEmailHelp: {
+    id: "invitations.email.help",
+    defaultMessage:
+      "The invitation is for the supervisor role. Use an address that has no MIA account and no pending invitation.",
+  },
+  invitationsEmailRequired: {
+    id: "invitations.email.required",
+    defaultMessage: "Enter the supervisor’s email address.",
+  },
+  invitationsEmailTooLong: {
+    id: "invitations.email.tooLong",
+    defaultMessage: "Enter an email address of at most 254 characters.",
+  },
+  invitationsEmailInvalid: {
+    id: "invitations.email.invalid",
+    defaultMessage:
+      "MIA did not accept this email address. Check it and try again.",
+  },
+  invitationsEmailConflict: {
+    id: "invitations.email.conflict",
+    defaultMessage:
+      "This address already has a MIA account or a pending invitation. No new invitation was created.",
+  },
+  invitationsSendInvitation: {
+    id: "invitations.send",
+    defaultMessage: "Send invitation",
+  },
+  invitationsCreating: {
+    id: "invitations.creating",
+    defaultMessage: "Sending invitation…",
+  },
+  invitationsCreatedHeading: {
+    id: "invitations.created.heading",
+    defaultMessage: "Invitation created",
+  },
+  invitationsCreated: {
+    id: "invitations.created.body",
+    defaultMessage:
+      "MIA created a pending supervisor invitation. Email delivery is queued: MIA has not confirmed that the email was sent or read, and no account exists until the invitation is accepted.",
+  },
+  invitationsInviteAnother: {
+    id: "invitations.inviteAnother",
+    defaultMessage: "Invite another supervisor",
+  },
+  invitationsNotCreated: {
+    id: "invitations.notCreated",
+    defaultMessage: "The invitation was not created",
+  },
+  invitationsNotCreatedHelp: {
+    id: "invitations.notCreated.help",
+    defaultMessage:
+      "Nothing was created. Your entry is kept, so you can try again.",
+  },
+  invitationsCreateUnknownHeading: {
+    id: "invitations.createUnknown.heading",
+    defaultMessage: "Invitation not confirmed",
+  },
+  invitationsCreateUnknown: {
+    id: "invitations.createUnknown.body",
+    defaultMessage:
+      "MIA could not confirm whether the invitation was created. Do not assume it was sent. Review the invitation list. A new attempt for the same address is rejected if the earlier one exists.",
+  },
+  invitationsReviewList: {
+    id: "invitations.reviewList",
+    defaultMessage: "Review invitations",
+  },
+  invitationsNewAttempt: {
+    id: "invitations.newAttempt",
+    defaultMessage: "Start a new invitation",
+  },
+  invitationsResendAction: {
+    id: "invitations.resend.action",
+    defaultMessage: "Resend invitation",
+  },
+  invitationsRevokeAction: {
+    id: "invitations.revoke.action",
+    defaultMessage: "Revoke invitation",
+  },
+  invitationsResendPanelHeading: {
+    id: "invitations.resend.panelHeading",
+    defaultMessage: "Resend this invitation?",
+  },
+  invitationsResendConsequence: {
+    id: "invitations.resend.consequence",
+    defaultMessage:
+      "MIA sends a new link to the same address. Any link sent earlier stops working immediately. MIA does not retry automatically.",
+  },
+  invitationsResending: {
+    id: "invitations.resending",
+    defaultMessage: "Resending…",
+  },
+  invitationsResentHeading: {
+    id: "invitations.resent.heading",
+    defaultMessage: "Invitation resent",
+  },
+  invitationsResent: {
+    id: "invitations.resent.body",
+    defaultMessage:
+      "MIA admitted a new link for delivery, and the earlier link no longer works. The delivery state shown is the latest MIA has recorded; it does not confirm that the email was read.",
+  },
+  invitationsResendNotPendingHeading: {
+    id: "invitations.resend.notPendingHeading",
+    defaultMessage: "Invitation not resent",
+  },
+  invitationsResendNotPending: {
+    id: "invitations.resend.notPending",
+    defaultMessage:
+      "This invitation is no longer pending, so it cannot be resent. Its current state is shown.",
+  },
+  invitationsResendUnknownHeading: {
+    id: "invitations.resend.unknownHeading",
+    defaultMessage: "Resend not confirmed",
+  },
+  invitationsResendUnknown: {
+    id: "invitations.resend.unknown",
+    defaultMessage:
+      "MIA could not confirm whether the invitation was resent. The earlier link may no longer work, and the delivery state is unknown. MIA does not retry automatically. Check the current state before deciding again.",
+  },
+  invitationsResendUnknownReconciled: {
+    id: "invitations.resend.unknownReconciled",
+    defaultMessage:
+      "The current state is shown. It does not confirm whether the earlier resend happened.",
+  },
+  invitationsNotResentHeading: {
+    id: "invitations.notResent.heading",
+    defaultMessage: "Invitation not resent",
+  },
+  invitationsRevokePanelHeading: {
+    id: "invitations.revoke.panelHeading",
+    defaultMessage: "Revoke this invitation?",
+  },
+  invitationsRevokeConsequence: {
+    id: "invitations.revoke.consequence",
+    defaultMessage:
+      "The invitation record is kept and marked revoked. Its link stops working immediately and cannot be used to create an account. This cannot be undone.",
+  },
+  invitationsRevoking: {
+    id: "invitations.revoking",
+    defaultMessage: "Revoking…",
+  },
+  invitationsRevokedHeading: {
+    id: "invitations.revoked.heading",
+    defaultMessage: "Invitation revoked",
+  },
+  invitationsRevoked: {
+    id: "invitations.revoked.body",
+    defaultMessage:
+      "The invitation is kept as revoked. Its link no longer works.",
+  },
+  invitationsRevokeChangedHeading: {
+    id: "invitations.revoke.changedHeading",
+    defaultMessage: "This invitation changed",
+  },
+  invitationsRevokeChanged: {
+    id: "invitations.revoke.changed",
+    defaultMessage:
+      "The invitation changed since you reviewed it, so MIA made no change. Review its current state before deciding again.",
+  },
+  invitationsNotRevokedHeading: {
+    id: "invitations.notRevoked.heading",
+    defaultMessage: "Invitation not revoked",
+  },
+  invitationsRevokeUnknownHeading: {
+    id: "invitations.revoke.unknownHeading",
+    defaultMessage: "Revocation not confirmed",
+  },
+  invitationsRevokeUnknown: {
+    id: "invitations.revoke.unknown",
+    defaultMessage:
+      "MIA could not confirm whether the invitation was revoked. MIA does not retry automatically. Check the current state.",
+  },
+  invitationsRevokeNotConfirmedHeading: {
+    id: "invitations.revoke.notConfirmedHeading",
+    defaultMessage: "Revocation not confirmed",
+  },
+  invitationsRevokeNotConfirmed: {
+    id: "invitations.revoke.notConfirmed",
+    defaultMessage:
+      "The current state is shown. It does not confirm whether the earlier attempt revoked the invitation. Any new revocation needs a new review.",
+  },
+  invitationsRevokeNotPending: {
+    id: "invitations.revoke.notPending",
+    defaultMessage:
+      "Only a pending invitation can be revoked. This invitation’s current state is shown.",
+  },
 });
 
 export type MessageId = (typeof messages)[keyof typeof messages]["id"];

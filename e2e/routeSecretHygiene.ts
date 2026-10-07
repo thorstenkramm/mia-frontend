@@ -17,6 +17,8 @@ type Fixture = {
   readonly totpSecret: string;
   readonly codes: readonly string[];
   readonly rawError: string;
+  // A synthetic invitee address: protected personal data, never a test name.
+  readonly email: string;
 };
 const fixtures = new WeakMap<Page, Fixture>();
 
@@ -48,6 +50,7 @@ export function routeSecretFixture(page: Page): Fixture {
       totpSecret: totpSecretFixture(),
       codes: recoveryCodesFixture(),
       rawError: `fixture-body-${randomBytes(24).toString("hex")}`,
+      email: `invitee-${randomBytes(12).toString("hex")}@example.test`,
     };
   } else {
     const value: unknown = JSON.parse(seed);
@@ -66,6 +69,8 @@ export function routeSecretFixture(page: Page): Fixture {
       typeof value.totpSecret !== "string" ||
       !("rawError" in value) ||
       typeof value.rawError !== "string" ||
+      !("email" in value) ||
+      typeof value.email !== "string" ||
       !("codes" in value) ||
       !Array.isArray(value.codes) ||
       value.codes.length !== 10 ||
@@ -79,6 +84,7 @@ export function routeSecretFixture(page: Page): Fixture {
       mfaCode: value.mfaCode,
       totpSecret: value.totpSecret,
       rawError: value.rawError,
+      email: value.email,
       codes: value.codes,
     };
   }
@@ -148,8 +154,24 @@ export async function routeHygieneCheckpoint(
         fixture.totpSecret,
       ),
     ).toBe(true);
+  } else if (point === "invitation-email") {
+    expect(
+      (await page
+        .getByLabel("Supervisor’s email address", { exact: true })
+        .inputValue()) === fixture.email,
+    ).toBe(true);
+  } else if (point === "invitation-detail") {
+    expect(
+      await page.evaluate(
+        (marker) =>
+          document.querySelector("main")?.textContent?.includes(marker) ===
+          true,
+        fixture.email,
+      ),
+    ).toBe(true);
   } else if (
     point === "read-failure" ||
+    point === "invitation-error" ||
     point === "logout-unconfirmed" ||
     (point === "codes-held" && item.id === "recovery-codes-read")
   ) {

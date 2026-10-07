@@ -157,6 +157,10 @@ export type AccountCapabilities = {
   readonly accountId: AccountId;
   // `profile.view` is available in the current account's own scope.
   readonly ownProfileView: boolean;
+  // `accounts.administer` is available with global scope: the Story 3.1
+  // navigation and route guidance for administrator invitation management
+  // (BACKEND-CONTRACT-GAPS.md §BCG-003, owner decision 2026-10-07).
+  readonly invitationAdministration: boolean;
 };
 
 export function toAccountId(id: string): AccountId {
@@ -322,10 +326,15 @@ export async function getCurrentAccountCapabilities(
   const profileView = document.data.attributes.capabilities.find(
     (capability) => capability.action === "profile.view",
   );
+  const administer = document.data.attributes.capabilities.find(
+    (capability) => capability.action === "accounts.administer",
+  );
   return {
     accountId: toAccountId(document.data.id),
     ownProfileView:
       profileView?.available === true && profileView.scope.own_resource,
+    invitationAdministration:
+      administer?.available === true && administer.scope.global,
   };
 }
 

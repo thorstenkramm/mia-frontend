@@ -37,6 +37,7 @@ function makeFixture() {
       randomAlphabet("0123456789ABCDEFGHJKMNPQRSTVWXYZ", 16),
     ),
     rawError: `fixture-body-${randomBytes(24).toString("hex")}`,
+    email: `invitee-${randomBytes(12).toString("hex")}@example.test`,
   };
   const uri = `otpauth://totp/MIA%20(127.0.0.1:4173):example.learner?secret=${fixture.totpSecret}&issuer=MIA`;
   return {
@@ -48,6 +49,7 @@ function makeFixture() {
       fixture.mfaCode,
       fixture.totpSecret,
       fixture.rawError,
+      fixture.email,
       uri,
       ...fixture.codes,
       ...fixture.codes.map((code) => code.replace(/(.{4})(?=.)/gu, "$1-")),
@@ -81,6 +83,7 @@ export async function checkRouteSecretHygiene() {
       "test",
       "e2e/routeNavigation.spec.ts",
       "e2e/routeRecovery.spec.ts",
+      "e2e/invitationAdministration.spec.ts",
       "--list",
       "--reporter=json",
     ],
@@ -96,17 +99,25 @@ export async function checkRouteSecretHygiene() {
     throw new Error(
       "The route-hygiene inventory does not cover every actual new browser test exactly once.",
     );
+  const scope = process.env.MIA_ROUTE_HYGIENE_SCOPE;
+  if (scope !== undefined && scope !== "invitations")
+    throw new Error("Unknown route-hygiene scope.");
+  const selected =
+    scope === "invitations"
+      ? routeHygieneCases.filter((item) => item.id.startsWith("invitation-"))
+      : routeHygieneCases;
   const root = await mkdtemp(join(tmpdir(), "mia-route-hygiene-"));
   const evidence = [];
   try {
-    const probes = routeHygieneCases.flatMap((item) =>
+    const probes = selected.flatMap((item) =>
       item.checkpoints.map((point) => ({ item, point, early: false })),
     );
-    const first = routeHygieneCases.find(
-      (item) => item.id === "navigation-invitation",
-    );
+    const first =
+      scope === "invitations"
+        ? selected[0]
+        : routeHygieneCases.find((item) => item.id === "navigation-invitation");
     if (!first) throw new Error("Missing route-hygiene early-failure canary.");
-    probes.push({ item: first, point: "invitation-form", early: true });
+    probes.push({ item: first, point: first.checkpoints[0], early: true });
     for (const [index, { item, point, early }] of probes.entries()) {
       const directory = join(root, String(index));
       const artifacts = join(directory, "artifacts");
@@ -229,7 +240,7 @@ export async function checkRouteSecretHygiene() {
       await rm(directory, { recursive: true, force: true });
     }
     console.log(
-      `Actual route-test hygiene passed: ${inventory.length} tests, ${probes.length - 1} secret checkpoints, early-failure canary rejected.`,
+      `Actual route-test hygiene passed: ${selected.length} tests, ${probes.length - 1} secret checkpoints, early-failure canary rejected.`,
     );
   } finally {
     const destination = process.env.MIA_ROUTE_HYGIENE_REPORT;
@@ -240,6 +251,8 @@ export async function checkRouteSecretHygiene() {
           {
             phase: "scoped-deliberate-failure-scan",
             actualTestCount: inventory.length,
+            selectedTestCount: selected.length,
+            scope: scope ?? "all",
             evidence,
           },
           null,

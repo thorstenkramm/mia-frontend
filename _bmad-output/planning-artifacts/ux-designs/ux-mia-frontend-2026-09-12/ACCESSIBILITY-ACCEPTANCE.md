@@ -1,7 +1,7 @@
 ---
 name: MIA Frontend Accessibility Acceptance Contract
 status: draft
-updated: 2026-09-13
+updated: 2026-10-07
 sources:
   - .memlog.md
   - DESIGN.md
@@ -1101,7 +1101,7 @@ evidence cell is `Planned` and therefore is not release evidence.
 | `CP-10/SUC` | `LP-SUC` + `PS-10` | `CV-S` | Planned: `EP-SUC` | `BCG-005`, `006`, `014` | Blocked |
 | `CP-10/VAL` | `LP-VAL` + `PS-10` | `CV-S` | Planned: `EP-VAL` | None | Not run |
 | `CP-10/ERR` | `LP-ERR` + `PS-10` | `CV-S` | Planned: `EP-ERR` | `BCG-007` | Blocked |
-| `CP-10/UNK` | `LP-UNK` + `PS-10` | `CV-S` | Planned: `EP-UNK` | `BCG-006` | Blocked |
+| `CP-10/UNK` | `LP-UNK` + `PS-10` | `CV-S` | Planned: `EP-UNK` | None (Story 3.1 slice) | Not run |
 | `CP-10/STA` | `LP-STA` + `PS-10` | `CV-S` | Planned: `EP-STA` | `BCG-014` | Blocked |
 | `CP-10/AUT` | `LP-AUT` + `PS-10` | `CV-S` | Planned: `EP-AUT` | `BCG-003`, `005` | Blocked |
 | `CP-10/EXT` | `LP-EXT` + `PS-10` | `CV-S` | Planned: `EP-EXT` | None | Not run |
@@ -1185,7 +1185,7 @@ another action's blocker.
 | `CP-09/A01` | Set temporary student password | `PS-09` + `LP-SUC`; `EP-SUC` | None | Not run |
 | `CP-09/A02` | Reset student or staff MFA | `PS-09` + `LP-UNK`; `EP-UNK` | `BCG-010` | Blocked |
 | `CP-09/A03` | Ban or unban student | `PS-09` + `LP-SUC`; `EP-SUC` | None | Not run |
-| `CP-10/A01` | Create or resend invitation | `PS-10` + `LP-UNK`; `EP-UNK` | `BCG-006` | Blocked |
+| `CP-10/A01` | Create or resend invitation | `PS-10` + `LP-UNK`; `EP-UNK` | None (Story 3.1 slice) | Not run |
 | `CP-10/A02` | Accept invitation | `PS-10` + `LP-UNK`; `EP-UNK` | None | Not run |
 | `CP-10/A03` | Revoke or delete faulty invitation | `PS-10` + `LP-STA`; `EP-STA` | `BCG-014` | Blocked |
 | `CP-11/A01` | Request or retry speech | `PS-11` + `LP-UNK`; `EP-UNK` | None | Not run |
@@ -1202,6 +1202,12 @@ another action's blocker.
 | `CP-14/A01` | List or inspect private material | `PS-14` + `LP-SUC`; `EP-SUC` | None | Not run |
 | `CP-14/A02` | Download authorized private material | `PS-14` + `LP-SUC`; `EP-SUC` | `BCG-005` | Blocked |
 | `CP-14/A03` | Return to managed-student context | `PS-14` + `LP-EXT`; `EP-EXT` | None | Not run |
+
+Story 3.1 owner decisions, 2026-10-07 (`BACKEND-CONTRACT-GAPS.md` §BCG-006 and §BCG-014 Story 3.1 slice decisions):
+administrator supervisor-invitation create, list, detail, resend, and their outcome-unknown states are no longer
+blocked by `BCG-006`, so `CP-10/UNK` and `CP-10/A01` are `Not run`. Pending-invitation Revoke is no longer blocked by
+`BCG-014`; `CP-10/STA` and `CP-10/A03` stay `Blocked` only for Delete faulty invitation. `CP-10/SUC` stays blocked
+by `BCG-005` and by `BCG-014` for faulty deletion. Other roles' invitation creation remains later work.
 
 Pairwise sampling MAY reduce combinations only after every process has passed at 320 effective CSS pixels in all three
 text modes and every locale has passed representative long-content fixtures. The sampling rule and uncovered
@@ -1412,7 +1418,7 @@ The complete blocker alignment is:
 | `BCG-003` | Authorized shell and scope in `CP-02` through `CP-14` |
 | `BCG-004` | `CP-05`, `CP-06` |
 | `BCG-005` | Sensitive or protected responses in `CP-01` through `CP-14` |
-| `BCG-006` | `CP-10` |
+| `BCG-006` | `CP-10`; Story 3.1 slice approved 2026-10-07 |
 | `BCG-007` | Backend-error states in `CP-01` through `CP-14` |
 | `BCG-008` | `CP-12` |
 | `BCG-009` | `CP-01`, `CP-08` |
