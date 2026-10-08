@@ -170,7 +170,7 @@ export async function parseJsonApiResponse<T>(
 }
 
 type UnsafeRequestOptions = {
-  readonly method: "POST" | "DELETE";
+  readonly method: "POST" | "PATCH" | "DELETE";
   readonly path: string;
   readonly csrfToken: string;
   readonly signal?: AbortSignal;

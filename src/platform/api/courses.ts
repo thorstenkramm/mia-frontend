@@ -80,7 +80,161 @@ export type CoursePage = {
   readonly previousOffset: number | null;
   readonly nextOffset: number | null;
 };
+export type CourseTeachingField =
+  "description" | "curriculum" | "learningGoals" | "instructions" | "language";
+const teachingAttributes = {
+  description: "description",
+  curriculum: "curriculum",
+  learningGoals: "learning_goals",
+  instructions: "ai_tutor_instructions",
+  language: "language",
+} as const;
+const blockerId = z.enum([
+  "learning_goals",
+  "ai_tutor_instructions",
+  "language",
+  "supervisor_presence",
+  "qualifying_material",
+]);
+const preparationSchema = courseSchema.extend({
+  attributes: courseSchema.shape.attributes.extend({
+    description: z.string().nullable(),
+    curriculum: z.string().nullable(),
+    learning_goals: z.string().nullable(),
+    ai_tutor_instructions: z.string().nullable(),
+    language: z.string().nullable(),
+    readiness: z.object({
+      state: z.enum([
+        "inactive_incomplete",
+        "inactive_activatable",
+        "active_accepting",
+        "active_not_accepting",
+      ]),
+      blockers: z.array(
+        z.object({ id: blockerId, link: z.string().nullable() }),
+      ),
+    }),
+  }),
+});
+const preparationDocument = z.object({
+  errors: z.never().optional(),
+  data: preparationSchema,
+}) satisfies z.ZodType<{
+  data: CourseProjection & {
+    attributes: Pick<
+      CourseDocument["data"]["attributes"],
+      | "name"
+      | "state"
+      | "created_at"
+      | "description"
+      | "curriculum"
+      | "learning_goals"
+      | "ai_tutor_instructions"
+      | "language"
+    > & {
+      readiness: Pick<
+        CourseDocument["data"]["attributes"]["readiness"],
+        "state" | "blockers"
+      >;
+    };
+  };
+}>;
+export type CoursePreparation = {
+  readonly course: Course;
+  readonly fields: Readonly<Record<CourseTeachingField, string | null>>;
+  readonly readiness: {
+    readonly state: z.infer<
+      typeof preparationSchema
+    >["attributes"]["readiness"]["state"];
+    readonly blockers: readonly {
+      readonly id: z.infer<typeof blockerId>;
+      readonly field: CourseTeachingField | null;
+    }[];
+  };
+};
 const path = "/api/v1/courses";
+
+function toPreparation(
+  resource: z.infer<typeof preparationSchema>,
+): CoursePreparation {
+  const { attributes } = resource;
+  const readiness = attributes.readiness;
+  if (
+    new Set(readiness.blockers.map((item) => item.id)).size !==
+    readiness.blockers.length
+  )
+    throw new ApiProtocolError();
+  const course = toCourse(resource);
+  const fieldBlockers = {
+    learning_goals: "learningGoals",
+    ai_tutor_instructions: "instructions",
+    language: "language",
+    supervisor_presence: null,
+    qualifying_material: null,
+  } as const;
+  return {
+    course,
+    fields: {
+      description: attributes.description,
+      curriculum: attributes.curriculum,
+      learningGoals: attributes.learning_goals,
+      instructions: attributes.ai_tutor_instructions,
+      language: attributes.language,
+    },
+    readiness: {
+      state: readiness.state,
+      blockers: readiness.blockers.map((item) => ({
+        id: item.id,
+        // API resource links never become navigation hrefs. The approved slice
+        // permits only this exact course link + stable field ID mapping.
+        field:
+          item.link === `${path}/${encodeURIComponent(course.id)}`
+            ? fieldBlockers[item.id]
+            : null,
+      })),
+    },
+  };
+}
+export async function getCoursePreparation(
+  id: CourseId,
+  signal: AbortSignal,
+): Promise<CoursePreparation> {
+  const document = await readJsonApi({
+    path: `${path}/${encodeURIComponent(id)}`,
+    schema: preparationDocument,
+    initiator: "user",
+    signal,
+  });
+  if (document.data.id !== id) throw new ApiProtocolError();
+  return toPreparation(document.data);
+}
+export async function updateCourseTeachingField(
+  id: CourseId,
+  field: CourseTeachingField,
+  value: string | null,
+  csrfToken: string,
+): Promise<CoursePreparation> {
+  const body = {
+    data: {
+      type: "courses",
+      id,
+      attributes: { [teachingAttributes[field]]: value },
+    },
+  } satisfies operations["updateCourse"]["requestBody"]["content"][typeof jsonApiMediaType];
+  const response = await sendUnsafeRequest({
+    method: "PATCH",
+    path: `${path}/${encodeURIComponent(id)}`,
+    csrfToken,
+    body: JSON.stringify(body),
+  });
+  const document = await parseJsonApiResponse(
+    response,
+    preparationDocument,
+    200,
+  );
+  if (document.data.id !== id) throw new ApiProtocolError();
+  return toPreparation(document.data);
+}
 
 function toCourse(resource: z.infer<typeof courseSchema>): Course {
   const supervisors = resource.relationships.supervisors.data.map((user) =>

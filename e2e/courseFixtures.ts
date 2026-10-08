@@ -34,6 +34,32 @@ export async function courseRoutes(page: Page) {
       | "server-error"
       | "supervisor-invalid",
     release: null as Promise<void> | null,
+    patches: 0,
+    expectedPatch: null as Record<string, string | null> | null,
+    patchValid: false,
+    patchOutcome: "success" as
+      "success" | "lose" | "reject" | "malformed" | "server-error",
+    patchRelease: null as Promise<void> | null,
+    readUnavailable: false,
+    readRelease: null as Promise<void> | null,
+    readiness: "inactive_incomplete" as
+      | "inactive_incomplete"
+      | "inactive_activatable"
+      | "active_accepting"
+      | "active_not_accepting",
+    blockers: [
+      { id: "learning_goals", link: "/api/v1/courses/course_1" },
+      { id: "ai_tutor_instructions", link: "/api/v1/courses/course_1" },
+      { id: "language", link: "/api/v1/courses/course_1" },
+      { id: "qualifying_material", link: "/api/v1/courses/course_1/materials" },
+    ] as { id: string; link: string | null }[],
+    teaching: {
+      description: null,
+      curriculum: null,
+      learning_goals: null,
+      ai_tutor_instructions: null,
+      language: null,
+    } as Record<string, string | null>,
   };
   const actions = [
     "profile.view",
@@ -71,6 +97,25 @@ export async function courseRoutes(page: Page) {
       name: fixture.courseName,
       state: "inactive",
       created_at: "2026-10-08T10:00:00.000000Z",
+      ...control.teaching,
+      activated_at: null,
+      deactivated_at: null,
+      updated_at: null,
+      logo_url: null,
+      readiness: {
+        state: control.readiness,
+        blockers: control.blockers,
+        activation: {
+          eligible: control.readiness === "inactive_activatable",
+          blockers: control.blockers.map((item) => item.id),
+          consequences: ["activate_course"],
+        },
+        new_session: {
+          eligible: false,
+          blockers: ["course_membership_required"],
+          consequences: ["start_tutoring_session"],
+        },
+      },
     },
     relationships: {
       supervisors: { data: [{ type: "users", id: "supervisor_1" }] },
@@ -83,8 +128,10 @@ export async function courseRoutes(page: Page) {
       else control.collectionReads++;
     }
     if (path === "/api/v1/users") control.candidateReads++;
-    if (path.startsWith("/api/v1/courses/"))
+    if (path.startsWith("/api/v1/courses/") && request.method() === "GET")
       control.detailReads.push(path.slice("/api/v1/courses/".length));
+    if (path.startsWith("/api/v1/courses/") && request.method() === "PATCH")
+      control.patches++;
   });
   await page.route("**/api/v1/users/me/capabilities", (route) =>
     json(route, {
@@ -175,14 +222,42 @@ export async function courseRoutes(page: Page) {
           meta: { has_more: false },
         });
   });
-  await page.route("**/api/v1/courses/*", (route) =>
-    control.denial
-      ? fail(route, 404, "course_not_found")
-      : json(route, {
-          data: resource(
-            new URL(route.request().url()).pathname.split("/").at(-1),
-          ),
-        }),
-  );
+  await page.route("**/api/v1/courses/*", async (route) => {
+    if (control.denial) return fail(route, 404, "course_not_found");
+    const id = new URL(route.request().url()).pathname.split("/").at(-1);
+    if (route.request().method() === "PATCH") {
+      control.patchValid =
+        control.expectedPatch !== null &&
+        Object.keys(control.expectedPatch).length === 1 &&
+        Object.keys(control.expectedPatch).every(
+          (key) => key in control.teaching,
+        ) &&
+        JSON.stringify(route.request().postDataJSON()) ===
+          JSON.stringify({
+            data: { type: "courses", id, attributes: control.expectedPatch },
+          }) &&
+        route.request().headers()["x-csrf-token"] === fixture.csrf;
+      if (control.patchRelease) await control.patchRelease;
+      if (control.denial) return fail(route, 404, "course_not_found");
+      if (!control.patchValid || control.patchOutcome === "reject")
+        return fail(route, 422, "course_invalid");
+      if (control.patchOutcome === "server-error")
+        return fail(route, 503, "course_readiness_unavailable");
+      for (const [key, value] of Object.entries(control.expectedPatch ?? {}))
+        control.teaching[key] = value?.trim().normalize("NFC") ?? null;
+      if (control.patchOutcome === "lose") return route.abort("failed");
+      return json(
+        route,
+        control.patchOutcome === "malformed"
+          ? { data: null }
+          : { data: resource(id) },
+      );
+    }
+    if (control.readRelease) await control.readRelease;
+    if (control.denial) return fail(route, 404, "course_not_found");
+    return control.readUnavailable
+      ? fail(route, 503, "course_readiness_unavailable")
+      : json(route, { data: resource(id) });
+  });
   return control;
 }

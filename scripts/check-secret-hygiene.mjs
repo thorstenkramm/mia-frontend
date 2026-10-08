@@ -198,12 +198,16 @@ async function runFailures(runner, earlyId) {
 }
 
 async function checkCourseUnitHygiene() {
-  const probes = courseUnitCases.flatMap((item) =>
+  const selected =
+    process.env.MIA_SECRET_HYGIENE_SCOPE === "preparation-unit"
+      ? courseUnitCases.filter((item) => item.title.startsWith("preparation "))
+      : courseUnitCases;
+  const probes = selected.flatMap((item) =>
     item.points.map((point) => ({ item, point, early: false })),
   );
   probes.push({
-    item: courseUnitCases[0],
-    point: courseUnitCases[0].points[0],
+    item: selected[0],
+    point: selected[0].points[0],
     early: true,
   });
   for (const [index, { item, point, early }] of probes.entries()) {
@@ -215,6 +219,7 @@ async function checkCourseUnitHygiene() {
       username: `supervisor.${randomUUID().slice(0, 12)}`,
       csrf: randomUUID(),
       rawError: `body-${randomUUID()}`,
+      teachingText: `teaching-${randomUUID()}`,
     };
     const result = spawnSync(
       join(process.cwd(), "node_modules", ".bin", "vitest"),
@@ -237,6 +242,7 @@ async function checkCourseUnitHygiene() {
           MIA_COURSE_UNIT_USERNAME: fixture.username,
           MIA_COURSE_UNIT_CSRF: fixture.csrf,
           MIA_COURSE_UNIT_RAW: fixture.rawError,
+          MIA_COURSE_UNIT_TEXT: fixture.teachingText,
           MIA_COURSE_UNIT_POINT: point,
           MIA_COURSE_UNIT_EARLY: early ? "1" : "0",
           MIA_SECRET_HYGIENE_EVIDENCE: directory,
@@ -276,16 +282,22 @@ async function checkCourseUnitHygiene() {
         message.includes(`ControlledCourseUnitFailure:${point}`),
       );
     if (early ? accepted || checkpoint !== null : !accepted)
-      throw new Error("Course unit checkpoint/failure inventory mismatch.");
+      throw new Error(
+        `Course unit checkpoint/failure inventory mismatch: ${item.title}/${point}; checkpointReached=${checkpoint === point}; failureIdentity=${accepted}; failures=${failures.length}; early=${early}.`,
+      );
   }
   console.log(
-    `Course unit hygiene: ${courseUnitCases.length} actual tests, ${probes.length - 1} checkpoints; early-failure canary rejected; zero marker leaks.`,
+    `Course unit hygiene: ${selected.length} actual tests, ${probes.length - 1} checkpoints; early-failure canary rejected; zero marker leaks.`,
   );
 }
 
 try {
   await checkCourseUnitHygiene();
-  if (process.env.MIA_SECRET_HYGIENE_SCOPE !== "course-unit") {
+  if (
+    !["course-unit", "preparation-unit"].includes(
+      process.env.MIA_SECRET_HYGIENE_SCOPE,
+    )
+  ) {
     for (const [runner, cases] of [
       ["playwright", browserCases],
       ["vitest", unitCases],

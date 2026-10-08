@@ -206,6 +206,7 @@ function CanonicalEntry({
     courseCreate: access?.courseCreate === true,
     supervisorAssignments: access?.supervisorAssignments === true,
     courseSupervision: access?.courseSupervision === true,
+    supervisedCourseIds: access?.supervisedCourseIds ?? [],
   };
   const authenticated = authenticatedRoute(location.pathname, routeAccess);
   const key = routeKey(
@@ -294,6 +295,7 @@ function CanonicalEntry({
       <PrepareCourseRoute
         key={`${location.key}:${access?.epoch}`}
         route={route}
+        courseId={authenticated.courseId ?? null}
       />
     );
   const RouteContent = route.component;

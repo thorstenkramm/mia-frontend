@@ -1068,9 +1068,25 @@ confirmed success, automatically retry an ambiguous reset, or reveal why an out-
 
 ### BCG-011: Course readiness and session-start eligibility
 
+#### Story 4.2 readiness slice decision — 2026-10-08
+
+Owner approved resumption of the assigned-supervisor preparation hub and teaching-field read/edit slice only.
+Current `mia/api-doc/paths/courses.yaml#/course` GET and PATCH return `CourseReadiness` from
+`mia/api-doc/schemas/resources/resources.yaml`, including the four readiness states, separate activation/new-session
+eligibility and viewer-safe stable prerequisite blockers with nullable links. The historical missing-representation
+finding below no longer describes this transport. No separate readiness operation or frontend rule reconstruction is needed.
+
+Use current `courses.supervise.scope.course_ids` before an addressed course read. Map only same-course API-resource
+field blocker links to implemented canonical client field routes; never navigate arbitrary returned link text. Show
+unmet material/supervisor blockers truthfully but without links to unimplemented destinations. Story 4.2 exposes no
+activation, student session-start, assignment management or material controls. Broader BCG-011 action/concurrency/release
+evidence remains open; this decision is not full closure or an accessibility Pass. Machine 12, the Prepare surface matrix
+and CP-03 evidence notes reference this slice.
+
 #### BCG-011 frontend capability blocked
 
-The course preparation hub, readiness review, truthful activation action, and student new-session action are blocked.
+Outside the approved Story 4.2 hub/read/edit slice, readiness review, truthful activation action, and student new-session
+action remain blocked pending their applicable reconciliation and evidence.
 Course state alone cannot distinguish incomplete preparation, activation eligibility, or an active course that currently
 accepts no new sessions.
 
@@ -1083,7 +1099,7 @@ accepts no new sessions.
 - Deactivation immediately prevents new tutoring sessions, while existing sessions may finish
   (`mia/docs/product-requirements.md:755-766`).
 
-#### BCG-011 current docs/OpenAPI mismatch
+#### BCG-011 historical docs/OpenAPI mismatch (superseded for the Story 4.2 slice above)
 
 - `Course` exposes descriptive fields, supervisor relationships, and `inactive` or `active`, but no readiness,
   prerequisite, activation-eligibility, or session-start-eligibility state

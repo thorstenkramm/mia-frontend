@@ -21,6 +21,7 @@ type Fixture = {
   readonly email: string;
   readonly courseName: string;
   readonly supervisorUsername: string;
+  readonly teachingText: string;
 };
 const fixtures = new WeakMap<Page, Fixture>();
 
@@ -55,6 +56,7 @@ export function routeSecretFixture(page: Page): Fixture {
       email: `invitee-${randomBytes(12).toString("hex")}@example.test`,
       courseName: `درس course-${randomUUID()}`,
       supervisorUsername: `supervisor.${randomUUID().slice(0, 12)}`,
+      teachingText: `تعليم teaching-${randomUUID()}`,
     };
   } else {
     const value: unknown = JSON.parse(seed);
@@ -80,6 +82,8 @@ export function routeSecretFixture(page: Page): Fixture {
       typeof value.courseName !== "string" ||
       !("supervisorUsername" in value) ||
       typeof value.supervisorUsername !== "string" ||
+      !("teachingText" in value) ||
+      typeof value.teachingText !== "string" ||
       !Array.isArray(value.codes) ||
       value.codes.length !== 10 ||
       !value.codes.every((code: unknown) => typeof code === "string")
@@ -96,6 +100,7 @@ export function routeSecretFixture(page: Page): Fixture {
       codes: value.codes,
       courseName: value.courseName,
       supervisorUsername: value.supervisorUsername,
+      teachingText: value.teachingText,
     };
   }
   fixtures.set(page, fixture);
@@ -146,7 +151,24 @@ export async function routeHygieneCheckpoint(
   // Confirm exposure with boolean assertions only. No marker enters a matcher,
   // checkpoint, test name, exception or report. Cookie-only tests use public
   // settled-state assertions in their original bodies before `complete`.
-  if (point === "course-input") {
+  if (point === "preparation-input" || point === "preparation-unknown") {
+    expect(
+      (await page.locator("#teaching-field").inputValue()).includes(
+        fixture.teachingText,
+      ),
+    ).toBe(true);
+  } else if (point === "preparation-persisted") {
+    await expect
+      .poll(() =>
+        page.evaluate(
+          (marker) =>
+            document.querySelector("main")?.textContent?.includes(marker) ===
+            true,
+          fixture.courseName,
+        ),
+      )
+      .toBe(true);
+  } else if (point === "course-input") {
     expect(
       (await page.locator("#course-name").inputValue()) === fixture.courseName,
     ).toBe(true);
@@ -161,15 +183,22 @@ export async function routeHygieneCheckpoint(
         ),
       )
       .toBe(true);
-  } else if (point === "course-error") {
+  } else if (point === "course-error" || point === "preparation-error") {
     await page
       .getByRole("button", { name: "Technical details", exact: true })
       .click();
     expect(
       await page
         .locator("main pre")
-        .textContent()
-        .then((text) => text?.includes(fixture.rawError) === true),
+        .evaluateAll(
+          (nodes, marker) =>
+            nodes.some(
+              (node) =>
+                node.getClientRects().length > 0 &&
+                node.textContent?.includes(marker) === true,
+            ),
+          fixture.rawError,
+        ),
     ).toBe(true);
   } else if (point === "onboarding-acceptance-input") {
     for (const selector of ["#new-password", "#password-confirmation"])

@@ -8,6 +8,8 @@ import type { MfaRouteProps } from "../../features/profile/MfaRouteProps";
 import type { InvitationRouteProps } from "../../features/invitations/InvitationRouteProps";
 import type { CourseRouteProps } from "../../features/courses/CourseRouteProps";
 import { toCourseId, type CourseId } from "../../platform/api/entry";
+import type { CourseTeachingField } from "../../platform/api/courses";
+import { courseTeachingFields } from "../../features/courses/courseTeachingFields";
 import {
   toInvitationId,
   type InvitationId,
@@ -71,7 +73,8 @@ type EntryRoute =
   | (EntryRouteBase & {
       readonly path: (typeof courseRoutePaths)[keyof typeof courseRoutePaths];
       readonly gate: "Administer(courses)" | "Prepare(courses)";
-      readonly resource: "list" | "detail" | "create" | "prepare";
+      readonly resource:
+        "list" | "detail" | "create" | "prepare" | "hub" | CourseTeachingField;
       readonly component: LazyExoticComponent<ComponentType<CourseRouteProps>>;
     });
 
@@ -80,7 +83,50 @@ export const courseRoutePaths = {
   create: "/admin/courses/new",
   detail: "/admin/courses/:courseId",
   prepare: "/prepare/courses",
+  hub: "/prepare/courses/:courseId",
+  description: "/prepare/courses/:courseId/details",
+  curriculum: "/prepare/courses/:courseId/curriculum",
+  learningGoals: "/prepare/courses/:courseId/learning-goals",
+  instructions: "/prepare/courses/:courseId/ai-instructions",
+  language: "/prepare/courses/:courseId/language",
 } as const;
+export function prepareCoursePath(
+  id: CourseId,
+  field: CourseTeachingField | null = null,
+): string {
+  return courseRoutePaths[field ?? "hub"].replace(
+    ":courseId",
+    encodeURIComponent(id),
+  );
+}
+const preparationHubRoute = {
+  parent: {
+    path: courseRoutePaths.prepare,
+    label: messages.coursesPrepareHeading,
+  },
+  path: courseRoutePaths.hub,
+  gate: "Prepare(courses)",
+  resource: "hub",
+  titleMessage: messages.preparationHubTitle,
+  headingMessage: messages.preparationHub,
+  component: lazy(
+    () => import("../../features/courses/CoursePreparationRoute"),
+  ),
+} as const;
+function teachingRoute<Field extends CourseTeachingField>(field: Field) {
+  const descriptor = courseTeachingFields[field];
+  return {
+    parent: { path: courseRoutePaths.hub, label: messages.preparationHub },
+    path: courseRoutePaths[field],
+    gate: "Prepare(courses)",
+    resource: field,
+    titleMessage: descriptor.title,
+    headingMessage: descriptor.heading,
+    component: lazy(
+      () => import("../../features/courses/CourseTeachingFieldRoute"),
+    ),
+  } as const;
+}
 export function courseDetailPath(id: CourseId): string {
   return courseRoutePaths.detail.replace(":courseId", encodeURIComponent(id));
 }
@@ -106,6 +152,12 @@ export function invitationPath(
 }
 
 export const entryRoutes = {
+  preparationHub: preparationHubRoute,
+  preparationDescription: teachingRoute("description"),
+  preparationCurriculum: teachingRoute("curriculum"),
+  preparationGoals: teachingRoute("learningGoals"),
+  preparationInstructions: teachingRoute("instructions"),
+  preparationLanguage: teachingRoute("language"),
   signedOut: {
     parent: null,
     path: "/login",
@@ -365,6 +417,7 @@ export type AuthenticatedRouteAccess = {
   readonly courseCreate: boolean;
   readonly supervisorAssignments: boolean;
   readonly courseSupervision: boolean;
+  readonly supervisedCourseIds?: readonly CourseId[];
 };
 
 export type AuthenticatedRoute = {
@@ -380,6 +433,14 @@ const home: AuthenticatedRoute = {
   path: entryRoutes.home.path,
   invitationId: null,
 };
+const preparationKeys = [
+  "preparationHub",
+  "preparationDescription",
+  "preparationCurriculum",
+  "preparationGoals",
+  "preparationInstructions",
+  "preparationLanguage",
+] as const;
 
 // Path-aware dispatch for the authenticated stage. A route whose capability
 // and scope the current gate decision lacks falls back to Home, as does any
@@ -394,6 +455,39 @@ export function authenticatedRoute(
       path: courseRoutePaths.prepare,
       invitationId: null,
     };
+  if (
+    access.courseSupervision &&
+    pathname.startsWith(`${courseRoutePaths.prepare}/`)
+  ) {
+    const [segment = "", action, ...rest] = pathname
+      .slice(courseRoutePaths.prepare.length + 1)
+      .split("/");
+    if (segment !== "" && rest.length === 0) {
+      try {
+        const id = toCourseId(decodeURIComponent(segment));
+        if (id !== "" && access.supervisedCourseIds?.includes(id)) {
+          const key = preparationKeys.find((candidate) =>
+            action === undefined
+              ? candidate === "preparationHub"
+              : entryRoutes[candidate].path.split("/").at(-1) === action,
+          );
+          if (key !== undefined)
+            return {
+              key,
+              path: entryRoutes[key].path.replace(
+                ":courseId",
+                encodeURIComponent(id),
+              ),
+              courseId: id,
+              invitationId: null,
+            };
+        }
+      } catch {
+        return home;
+      }
+    }
+    return home;
+  }
   if (pathname === courseRoutePaths.create)
     return access.courseCreate && access.supervisorAssignments
       ? {

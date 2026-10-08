@@ -23,6 +23,7 @@ import {
   courseDetailPath,
   courseRoutePaths,
   invitationRoutePaths,
+  prepareCoursePath,
   type CourseEntryRoute,
 } from "./entryRoutes";
 import { SimpleEntrySurface } from "./SimpleEntrySurface";
@@ -68,6 +69,12 @@ export function AdminCourseRoute({
                 : null,
             };
           case "prepare":
+          case "hub":
+          case "description":
+          case "curriculum":
+          case "learningGoals":
+          case "instructions":
+          case "language":
             throw new Error("Prepare requires scoped resource admission.");
         }
       }}
@@ -81,9 +88,11 @@ export function AdminCourseRoute({
 export function CourseResourceHost({
   route,
   load,
+  courseId = null,
 }: {
   readonly route: CourseEntryRoute;
   readonly load: (signal: AbortSignal) => Promise<CourseRouteResource>;
+  readonly courseId?: CourseId | null;
 }) {
   const intl = useIntl();
   const access = useAuthenticatedAccess();
@@ -113,7 +122,13 @@ export function CourseResourceHost({
       active = false;
     };
   }, []);
-  const parent = route.parent;
+  const parent = {
+    ...route.parent,
+    path:
+      courseId === null
+        ? route.parent.path
+        : route.parent.path.replace(":courseId", encodeURIComponent(courseId)),
+  };
   const exit = (
     <RouteDepartureLink to={parent.path} className={actionClass}>
       {intl.formatMessage(parent.label)}
@@ -193,6 +208,7 @@ export function CourseResourceHost({
             list: courseRoutePaths.list,
             create: courseRoutePaths.create,
             detail: courseDetailPath,
+            preparation: prepareCoursePath,
             invitation: access?.invitationAdministration
               ? invitationRoutePaths.create
               : null,

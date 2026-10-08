@@ -303,6 +303,13 @@ links or accepting/start claims. The broader row's readiness states and other Pr
 
 ### Course content
 
+Story 4.2 owner decision, 2026-10-08, at `BACKEND-CONTRACT-GAPS.md` §Story 4.2 readiness slice decision resumes the
+assigned-supervisor hub and the five teaching-field surfaces below using authoritative course GET/PATCH readiness.
+All authoritative unmet blockers may be shown, but only implemented field destinations are linked; materials, brief,
+assignment and activation controls do not land in this slice. G/F/D/W, dirty/stale reconciliation, exact error disclosure,
+scope teardown and accessibility requirements still apply. Broader BCG-011 readiness-review/activation/start evidence is
+not closed, and no unexecuted surface is marked Pass.
+
 | Surface | Profiles | Domain states | Exit | Companion |
 | --- | --- | --- | --- | --- |
 | Course details | `G,F,D` | incomplete/complete; inactive/active | hub | `MATERIAL,INPUT` |

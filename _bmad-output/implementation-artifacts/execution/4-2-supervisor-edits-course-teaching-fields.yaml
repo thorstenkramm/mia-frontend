@@ -1,0 +1,87 @@
+story: 4-2-supervisor-edits-course-teaching-fields
+phase: commit-pending
+spec: _bmad-output/implementation-artifacts/spec-4-2-supervisor-edits-course-teaching-fields.md
+baseline_commit: 821e57a47481b0ad912ee9a2b36bdf2599a84fa9
+worker_session: ses_ee4d84c1fffehFN0wEGVld5VyG
+reviewer_session: ses_ee487da74ffewqPVetwTB41IXH
+models:
+  prepare: openai/gpt-6.1-sol#high
+  implement: openai/gpt-6.1-sol#high
+  review: openai/gpt-6-astra#high
+files: []
+completed_blocks:
+  - Detailed spec ready; contract, blueprint, tooling and baseline checks complete; no unknown overlaps or remaining decisions.
+  - Prerequisite Story 4.1 committed and verified.
+  - Owner approved narrow BCG-011 readiness reconciliation for Story 4.2 on 2026-10-08; unrelated contract gaps remain open.
+  - Per-story reviewed verified commits authorized for Epic 4; no push; stop before Epic 5.
+repair_queue:
+  - id: R1
+    severity: high
+    finding: Stop waiting suppresses applicable late course-access denial for PATCH and reconciliation GET.
+    disposition: Repaired and reviewer-cleared; stopped PATCH/GET denials tear down current content while success/departure/epoch fences remain.
+  - id: R2
+    severity: medium
+    finding: Reconciliation control locking removes dirty-draft departure and native unload protection.
+    disposition: Repaired and reviewer-cleared; pending reconciliation retains dirty departure/unload guards and security override.
+  - id: R3
+    severity: medium
+    finding: Post-save newer message claims persisted values visible while only draft is rendered.
+    disposition: Repaired and reviewer-cleared; authoritative current values displayed separately from retained draft.
+repair_batch: 1
+last_verification:
+  status: passed-with-documented-restart-continuation
+  command: ./run-all-tests.sh
+  original_exit_code: null
+  continuation_exit_codes: [0, 0]
+  stages_completed: 17
+  skipped: []
+  unit_tests: 688
+  browser_tests: 175
+  build_count: 1
+  bundle_gzip_bytes: 253224
+  frontend_fingerprint: 47ba70d34bc4a1ac7476fefa661ab96938a2ce96657c0f1e12ef2bc5e573cc1b
+  combined_fingerprint: bb40e28d9b63ff9a723a826161ea276b5aee86ec0c409b904db65d138d9f8afb
+  report: tmp/agent-execution/4-2-supervisor-edits-course-teaching-fields/verify-report.json
+  qualification: Original run interrupted by server restart; unfinished stages resumed on unchanged inputs. No uninterrupted exit-zero claim.
+  hygiene: All-case probes and canaries passed with zero leaks; prefix detailed stream hashes unavailable as recorded in report.
+  advisories: Existing KaTeX LOW and static-country-code false positive substantiated; no new findings.
+resume_attempts: 0
+commit:
+  intended_message: "feat: add course teaching fields and preparation readiness"
+  sha: null
+next_action: Commit verified Story 4.2 and approved tracking hunk, preserving documented continuation qualification.
+repair_evidence:
+  report: tmp/agent-execution/4-2-supervisor-edits-course-teaching-fields/fix-report.json
+  delta: tmp/agent-execution/4-2-supervisor-edits-course-teaching-fields/repair.diff
+  checks: 55 focused unit tests, 12 Chromium tests and static/format/duplication checks passed.
+  hygiene: 23 unit and 30 browser checkpoints passed with zero marker leaks.
+  bundle_gzip_bytes: 253224
+  review: pass; no remaining blocking findings or reproduction requests.
+review_handoff:
+  changed_paths: 41
+  bundle_gzip_bytes: 253213
+  bundle_limit: 256000
+  languages_retained: 7
+  mitigation: locales.ts and tests; no async loader, configuration or bootstrap changes.
+  targeted_results: 16 additional unit and 25 browser tests passed with static/format/i18n/duplication checks.
+  diff: tmp/agent-execution/4-2-supervisor-edits-course-teaching-fields/story.diff
+implementation_progress:
+  completed: Blocks 0-3 implemented; 46 focused unit and 34 browser tests, hygiene and static/format/API/duplication checks passed.
+  budget_before_mitigation: 262677 bytes gzip exceeds fixed 256000 limit.
+  report: tmp/agent-execution/4-2-supervisor-edits-course-teaching-fields/implement-report.json
+  scope_expansion: Approved by owner; worker resumed with decision, no outstanding approval required.
+implementation_manifest: tmp/agent-execution/4-2-supervisor-edits-course-teaching-fields/manifest.json
+prepare_report: tmp/agent-execution/4-2-supervisor-edits-course-teaching-fields/prepare-report.json
+blocked_on: null
+owner_decisions:
+  bundle_mitigation:
+    date: 2026-10-08
+    status: approved
+    scope: Bounded expansion beyond the original manifest to reduce initial JavaScript, potentially through locale loading or build configuration.
+    constraints: Retain all seven languages and the fixed 256000-byte gzip budget; preserve existing behavior and security contracts.
+    observed_initial_gzip_bytes: 262677
+  readiness_reconciliation:
+    date: 2026-10-08
+    status: approved
+    scope: Reconcile frontend BCG-011 readiness blocker against existing readiness API for Story 4.2 preparation hub only.
+    exclusions: Unrelated contract gaps and later-story functionality remain outside this approval.

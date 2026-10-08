@@ -40,6 +40,7 @@ function makeFixture() {
     email: `invitee-${randomBytes(12).toString("hex")}@example.test`,
     courseName: `درس course-${randomUUID()}`,
     supervisorUsername: `supervisor.${randomUUID().slice(0, 12)}`,
+    teachingText: `تعليم teaching-${randomUUID()}`,
   };
   const uri = `otpauth://totp/MIA%20(127.0.0.1:4173):example.learner?secret=${fixture.totpSecret}&issuer=MIA`;
   return {
@@ -54,6 +55,7 @@ function makeFixture() {
       fixture.email,
       fixture.courseName,
       fixture.supervisorUsername,
+      fixture.teachingText,
       uri,
       ...fixture.codes,
       ...fixture.codes.map((code) => code.replace(/(.{4})(?=.)/gu, "$1-")),
@@ -89,6 +91,7 @@ export async function checkRouteSecretHygiene() {
       "e2e/routeRecovery.spec.ts",
       "e2e/invitationAdministration.spec.ts",
       "e2e/courseAdministration.spec.ts",
+      "e2e/coursePreparation.spec.ts",
       "--list",
       "--reporter=json",
     ],
@@ -126,17 +129,22 @@ export async function checkRouteSecretHygiene() {
     scope !== undefined &&
     scope !== "invitations" &&
     scope !== "supervisor-onboarding" &&
-    scope !== "courses"
+    scope !== "courses" &&
+    scope !== "preparation"
   )
     throw new Error("Unknown route-hygiene scope.");
   const selected =
-    scope === "invitations"
-      ? routeHygieneCases.filter((item) => item.id.startsWith("invitation-"))
-      : scope === "supervisor-onboarding"
-        ? routeHygieneCases.filter((item) => item.id.startsWith("supervisor-"))
-        : scope === "courses"
-          ? routeHygieneCases.filter((item) => item.id.startsWith("course-"))
-          : routeHygieneCases;
+    scope === "preparation"
+      ? routeHygieneCases.filter((item) => item.id.startsWith("preparation-"))
+      : scope === "invitations"
+        ? routeHygieneCases.filter((item) => item.id.startsWith("invitation-"))
+        : scope === "supervisor-onboarding"
+          ? routeHygieneCases.filter((item) =>
+              item.id.startsWith("supervisor-"),
+            )
+          : scope === "courses"
+            ? routeHygieneCases.filter((item) => item.id.startsWith("course-"))
+            : routeHygieneCases;
   const root = await mkdtemp(join(tmpdir(), "mia-route-hygiene-"));
   const evidence = [];
   try {
@@ -237,6 +245,25 @@ export async function checkRouteSecretHygiene() {
           throw new Error("Could not read route-hygiene checkpoint.");
       }
       record.checkpointReached = checkpoint === id;
+      // Retain only public source coordinates and content-free classifications,
+      // never messages/stacks/bodies. An absent checkpoint must be diagnosable.
+      record.failureCategory = errors.some((error) =>
+        error.message?.includes("Timeout"),
+      )
+        ? "timeout"
+        : errors.some((error) => error.message?.includes("AssertionError"))
+          ? "assertion"
+          : "other";
+      record.failureSourceLocations = [
+        ...new Set(
+          errors.flatMap(
+            (error) =>
+              (error.stack ?? error.message ?? "").match(
+                /(?:e2e|src)\/[\w./-]+:\d+:\d+/gu,
+              ) ?? [],
+          ),
+        ),
+      ];
       record.expectedFailureIdentity =
         results.length === 1 &&
         result.title === item.title &&
@@ -261,7 +288,7 @@ export async function checkRouteSecretHygiene() {
         if (!record.checkpointReached || !record.expectedFailureIdentity) {
           record.status = "wrong-failure";
           throw new Error(
-            `Missing intended checkpoint/failure identity for ${item.id}/${point}.`,
+            `Missing intended checkpoint/failure identity for ${item.id}/${point}; checkpointReached=${record.checkpointReached}; failureIdentity=${record.expectedFailureIdentity}; category=${record.failureCategory}.`,
           );
         }
         record.status = "pass";

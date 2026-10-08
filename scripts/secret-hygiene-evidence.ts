@@ -26,6 +26,98 @@ export const unitCases = [
 type CaseId = (typeof browserCases)[number] | (typeof unitCases)[number];
 
 export const courseUnitCases = [
+  ...["PATCH", "GET"].map((operation) => ({
+    title: `preparation stopped ${operation} denial still destroys current protected input`,
+    file: "src/app/routes/coursePreparation.test.tsx",
+    points: [
+      `preparation-stopped-${operation}`,
+      `preparation-stopped-hidden-${operation}`,
+    ],
+  })),
+  {
+    title:
+      "preparation stopped denial remains applicable after a newer same-resource check",
+    file: "src/app/routes/coursePreparation.test.tsx",
+    points: ["preparation-same-resource-denial"],
+  },
+  {
+    title:
+      "preparation pending dirty read guards departure and fences departed denial",
+    file: "src/app/routes/coursePreparation.test.tsx",
+    points: ["preparation-read-stay", "preparation-read-discard"],
+  },
+  {
+    title:
+      "preparation security departure fences an in-flight save before protected completion",
+    file: "src/app/routes/coursePreparation.test.tsx",
+    points: ["preparation-late-cleared"],
+  },
+  {
+    title:
+      "preparation gates assigned identities before any dependent course request",
+    file: "src/app/routes/coursePreparation.test.tsx",
+    points: ["preparation-gate"],
+  },
+  {
+    title:
+      "preparation validates Unicode bounds then installs persisted distinct teaching values",
+    file: "src/app/routes/coursePreparation.test.tsx",
+    points: ["preparation-input", "preparation-persisted"],
+  },
+  {
+    title:
+      "preparation backend validation retains correction and clears invalid associations",
+    file: "src/app/routes/coursePreparation.test.tsx",
+    points: ["preparation-error"],
+  },
+  {
+    title:
+      "preparation unknown save reconciles matching or differing values without replay",
+    file: "src/app/routes/coursePreparation.test.tsx",
+    points: ["preparation-unknown", "preparation-reconciled"],
+  },
+  {
+    title:
+      "preparation hidden PATCH denial unmounts draft preview and keeps collapsed disclosure",
+    file: "src/app/routes/coursePreparation.test.tsx",
+    points: ["preparation-hidden"],
+  },
+  {
+    title:
+      "preparation dirty dialog loses input on lifecycle security override without requests",
+    file: "src/app/routes/coursePreparation.test.tsx",
+    points: ["preparation-cleared"],
+  },
+  {
+    title:
+      "preparation Stop waiting fences late save success and a newer read preserves draft",
+    file: "src/app/routes/coursePreparation.test.tsx",
+    points: ["preparation-newer"],
+  },
+  {
+    title:
+      "preparation unsafe PATCH dispatch is single and cannot inherit read retries",
+    file: "src/platform/api/client.test.ts",
+    points: ["preparation-client"],
+  },
+  {
+    title:
+      "preparation reads readiness and persists only the chosen teaching field",
+    file: "src/platform/api/courses.test.ts",
+    points: ["preparation-read", "preparation-patch"],
+  },
+  {
+    title:
+      "preparation rejects malformed readiness and never follows unsafe blocker links",
+    file: "src/platform/api/courses.test.ts",
+    points: ["preparation-links"],
+  },
+  {
+    title:
+      "preparation lost PATCH response never replays and preserves error identity",
+    file: "src/platform/api/courses.test.ts",
+    points: ["preparation-unknown", "preparation-error"],
+  },
   {
     title:
       "rejects wrong state, missing role, private fields and malformed pagination",
@@ -111,6 +203,8 @@ export function courseUnitFixture() {
       `supervisor.${randomUUID().slice(0, 12)}`,
     csrf: process.env.MIA_COURSE_UNIT_CSRF ?? randomUUID(),
     rawError: process.env.MIA_COURSE_UNIT_RAW ?? `body-${randomUUID()}`,
+    teachingText:
+      process.env.MIA_COURSE_UNIT_TEXT ?? `teaching-${randomUUID()}`,
   };
 }
 export function courseUnitCheckpoint(point: string): void {

@@ -1988,6 +1988,210 @@ export const messages = defineMessages({
     defaultMessage:
       "Only a pending invitation can be revoked. This invitation’s current state is shown.",
   },
+  preparationHub: {
+    id: "preparation.hub",
+    defaultMessage: "Course preparation",
+  },
+  preparationCheckFailed: {
+    id: "preparation.checkFailed",
+    defaultMessage:
+      "Current course values could not be confirmed. This is not an empty result.",
+  },
+  preparationUnsaved: {
+    id: "preparation.unsaved",
+    defaultMessage: "Unsaved teaching-field changes",
+  },
+  preparationDiscardHelp: {
+    id: "preparation.discardHelp",
+    defaultMessage:
+      "Your local teaching-field input will be discarded. Persisted course values will not change.",
+  },
+  preparationHubTitle: {
+    id: "preparation.hubTitle",
+    defaultMessage: "Course preparation | MIA",
+  },
+  preparationDetails: {
+    id: "preparation.details",
+    defaultMessage: "Course details",
+  },
+  preparationDetailsTitle: {
+    id: "preparation.detailsTitle",
+    defaultMessage: "Course details | MIA",
+  },
+  preparationDescription: {
+    id: "preparation.description",
+    defaultMessage: "Course description",
+  },
+  preparationCurriculum: {
+    id: "preparation.curriculum",
+    defaultMessage: "Curriculum",
+  },
+  preparationCurriculumTitle: {
+    id: "preparation.curriculumTitle",
+    defaultMessage: "Curriculum | MIA",
+  },
+  preparationGoals: {
+    id: "preparation.goals",
+    defaultMessage: "Learning goals",
+  },
+  preparationGoalsTitle: {
+    id: "preparation.goalsTitle",
+    defaultMessage: "Learning goals | MIA",
+  },
+  preparationInstructions: {
+    id: "preparation.instructions",
+    defaultMessage: "AI instructions",
+  },
+  preparationInstructionsTitle: {
+    id: "preparation.instructionsTitle",
+    defaultMessage: "AI instructions | MIA",
+  },
+  preparationLanguage: {
+    id: "preparation.language",
+    defaultMessage: "Course language",
+  },
+  preparationLanguageTitle: {
+    id: "preparation.languageTitle",
+    defaultMessage: "Course language | MIA",
+  },
+  preparationReadiness: {
+    id: "preparation.readiness",
+    defaultMessage: "Preparation prerequisites",
+  },
+  preparationIncomplete: {
+    id: "preparation.incomplete",
+    defaultMessage: "Inactive — preparation is incomplete",
+  },
+  preparationActivatable: {
+    id: "preparation.activatable",
+    defaultMessage: "Inactive — ready for activation",
+  },
+  preparationAccepting: {
+    id: "preparation.accepting",
+    defaultMessage: "Active — accepting new tutoring sessions",
+  },
+  preparationBlocked: {
+    id: "preparation.blocked",
+    defaultMessage:
+      "Active — not accepting new tutoring sessions; existing sessions may finish",
+  },
+  preparationSupervisor: {
+    id: "preparation.supervisor",
+    defaultMessage: "At least one assigned supervisor is needed.",
+  },
+  preparationMaterial: {
+    id: "preparation.material",
+    defaultMessage:
+      "Approved, ready, file-backed course-wide material is needed. Processing readiness and educational approval are separate.",
+  },
+  preparationUnmet: {
+    id: "preparation.unmet",
+    defaultMessage: "This prerequisite is not satisfied.",
+  },
+  preparationNoBlockers: {
+    id: "preparation.noBlockers",
+    defaultMessage: "No unmet preparation prerequisites were reported.",
+  },
+  preparationTextHelp: {
+    id: "preparation.textHelp",
+    defaultMessage:
+      "Plain text, up to {points, number} Unicode code points and {bytes, number} UTF-8 bytes before normalization. An empty value removes this optional field.",
+  },
+  preparationLanguageHelp: {
+    id: "preparation.languageHelp",
+    defaultMessage:
+      "Enter a non-private-use BCP 47 language tag, for example en-GB or ja. This sets the course language, not the interface language. Leave empty to remove it.",
+  },
+  preparationCounts: {
+    id: "preparation.counts",
+    defaultMessage: "{points, number} code points; {bytes, number} UTF-8 bytes",
+  },
+  preparationPrivacy: {
+    id: "preparation.privacy",
+    defaultMessage:
+      "Do not include passwords, secrets, or unnecessary personal data. Learning goals describe outcomes; AI instructions guide the tutor’s behavior.",
+  },
+  preparationExample: {
+    id: "preparation.example",
+    defaultMessage: "Show an example",
+  },
+  preparationPreview: {
+    id: "preparation.preview",
+    defaultMessage: "Exact plain-text preview",
+  },
+  preparationDescriptionExample: {
+    id: "preparation.descriptionExample",
+    defaultMessage: "An introductory course with guided practice.",
+  },
+  preparationCurriculumExample: {
+    id: "preparation.curriculumExample",
+    defaultMessage: "Context: introductory concepts, then practical exercises.",
+  },
+  preparationGoalsExample: {
+    id: "preparation.goalsExample",
+    defaultMessage:
+      "Learners will explain a concept and apply it to a new example.",
+  },
+  preparationInstructionsExample: {
+    id: "preparation.instructionsExample",
+    defaultMessage:
+      "Ask one guiding question at a time. Invite the learner to explain their reasoning.",
+  },
+  preparationLanguageExample: {
+    id: "preparation.languageExample",
+    defaultMessage: "en-GB",
+  },
+  preparationBoundsError: {
+    id: "preparation.boundsError",
+    defaultMessage: "Shorten this text to stay within both displayed limits.",
+  },
+  preparationRejected: {
+    id: "preparation.rejected",
+    defaultMessage:
+      "The change was not accepted. Check this field and its requirements, then save again.",
+  },
+  preparationActiveError: {
+    id: "preparation.activeError",
+    defaultMessage:
+      "This change would remove an active-course prerequisite. Keep the required teaching fields valid.",
+  },
+  preparationSave: { id: "preparation.save", defaultMessage: "Save changes" },
+  preparationSaved: {
+    id: "preparation.saved",
+    defaultMessage: "Changes saved. The confirmed values are shown.",
+  },
+  preparationUnknown: {
+    id: "preparation.unknown",
+    defaultMessage:
+      "Save outcome unknown. Submitted values are unconfirmed. Check the current course before deciding; MIA does not replay the request.",
+  },
+  preparationReconcile: {
+    id: "preparation.reconcile",
+    defaultMessage: "Check current course",
+  },
+  preparationMatches: {
+    id: "preparation.matches",
+    defaultMessage:
+      "The current course matches the submitted value. This confirms the current value, not the earlier request’s outcome.",
+  },
+  preparationDiffers: {
+    id: "preparation.differs",
+    defaultMessage:
+      "Current course values differ. Your submitted value remains unconfirmed. Review the current value or discard your local input.",
+  },
+  preparationCurrent: {
+    id: "preparation.current",
+    defaultMessage: "Current persisted value",
+  },
+  preparationUseCurrent: {
+    id: "preparation.useCurrent",
+    defaultMessage: "Discard local input and use current value",
+  },
+  preparationNewer: {
+    id: "preparation.newer",
+    defaultMessage:
+      "Newer persisted values are shown. Local edits were not replaced; review before saving.",
+  },
 });
 
 export type MessageId = (typeof messages)[keyof typeof messages]["id"];

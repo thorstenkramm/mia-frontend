@@ -428,7 +428,12 @@ Technical state and approval remain independent. Material rows never determine c
 | Active blocked | Server blocks starts | Existing work continues | Continue existing | Fresh readiness |
 | Access lost | Hidden denial | Clear course state | Safe navigation | Authorize parent |
 
-These states are `BLOCKED` on `BCG-011: Course readiness and session-start eligibility`. Do not count material rows,
+Owner decision, 2026-10-08 (Story 4.2): BCG-011's approved assigned-supervisor hub/read/edit slice may render these
+server-authored readiness states from course GET/PATCH and link only implemented field destinations. It exposes no Activate
+or Start action. See `BACKEND-CONTRACT-GAPS.md` §Story 4.2 readiness slice decision; broader action/evidence obligations
+remain blocked. No full-machine or release Pass is implied.
+
+Outside that slice these states are `BLOCKED` on `BCG-011: Course readiness and session-start eligibility`. Do not count material rows,
 inspect nullable fields, or probe activation or session creation to discover readiness.
 
 ## 13. Tutor Attempt Lineage and Stable DOM

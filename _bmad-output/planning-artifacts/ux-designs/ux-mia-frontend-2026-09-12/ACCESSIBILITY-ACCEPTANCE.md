@@ -1040,6 +1040,11 @@ evidence cell is `Planned` and therefore is not release evidence.
 | `CP-03/ERR` | `LP-ERR` + `PS-03` | `CV-C` | Planned: `EP-ERR` | `BCG-007` | Blocked |
 | `CP-03/UNK` | `LP-UNK` + `PS-03` | `CV-C` | Planned: `EP-UNK` | None | Not run |
 | `CP-03/STA` | `LP-STA` + `PS-03` | `CV-C` | Planned: `EP-STA` | `BCG-011` | Blocked |
+
+Story 4.2 owner decision, 2026-10-08 (`BACKEND-CONTRACT-GAPS.md` §Story 4.2 readiness slice decision), removes the
+historical missing-readiness transport block only for assigned-supervisor preparation hub/teaching-field read and edit.
+This subset's accessibility evidence is **Not run** until its actual checks execute, not Pass. CP-03's wider readiness
+review, material/approval and activation process evidence and manual supported-browser/AT matrices remain outstanding.
 | `CP-03/AUT` | `LP-AUT` + `PS-03` | `CV-C` | Planned: `EP-AUT` | `BCG-003`, `005` | Blocked |
 | `CP-03/EXT` | `LP-EXT` + `PS-03` | `CV-C` | Planned: `EP-EXT` | None | Not run |
 | `CP-04/CHK` | `LP-CHK` + `PS-04` | `CV-S` | Planned: `EP-CHK` | `BCG-001`, `003` | Blocked |

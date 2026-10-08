@@ -1,11 +1,10 @@
 import deDE from "./catalogs/de-DE.json";
-import enUS from "./catalogs/en-US.json";
 import esAR from "./catalogs/es-AR.json";
 import esES from "./catalogs/es-ES.json";
 import frFR from "./catalogs/fr-FR.json";
 import ptBR from "./catalogs/pt-BR.json";
 import ptPT from "./catalogs/pt-PT.json";
-import type { MessageId } from "./messages";
+import { messages, type MessageId } from "./messages";
 
 export const locales = [
   "en-US",
@@ -20,6 +19,17 @@ export const locales = [
 export type Locale = (typeof locales)[number];
 
 type Catalog = Record<MessageId, string>;
+
+// FFR-955: the canonical English catalog matches these defaults (enforced in
+// locales.test.ts). Avoid shipping the same English text table twice. Other
+// locales remain synchronous; loading/switching and bootstrap are unchanged.
+// Every descriptor contributes its ID and string default to this public map;
+// the parity test checks complete keys as well as identical message values.
+const enUS = Object.fromEntries(
+  Object.values(messages).map(
+    ({ id, defaultMessage }) => [id, defaultMessage] as const,
+  ),
+) satisfies Catalog;
 
 export const catalogs = {
   "en-US": enUS,

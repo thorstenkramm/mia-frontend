@@ -18,8 +18,8 @@ import { useRouteActivity } from "../../platform/ui/useRouteActivity";
 
 // Tailwind Plus: Application UI > Lists > Tables > Simple; Feedback > Empty
 // States > Simple (CourseTable/CourseEmpty). Library 2026-09-13-083323,
-// v4/react-light.jsx. O2 delta: neutral discovery, no hub/readiness link or
-// server total/pagination. Explicit known-ID batches are at most 25.
+// v4/react-light.jsx. O2 delta: no server total/pagination; known-ID batches
+// are at most 25. Story 4.2 adds only the implemented assigned hub destination.
 export default function PrepareCourseListRoute({
   resource,
   links,
@@ -78,7 +78,7 @@ export default function PrepareCourseListRoute({
       {courses.length === 0 ? (
         <CourseEmpty text={intl.formatMessage(messages.coursesPrepareEmpty)} />
       ) : (
-        <CourseTable courses={courses} />
+        <CourseTable courses={courses} detail={links.preparation} />
       )}
       {state.kind === "Failed" ? (
         <>

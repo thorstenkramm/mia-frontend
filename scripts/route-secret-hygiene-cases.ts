@@ -2,6 +2,90 @@
 // R1 repair. IDs/checkpoints are fixed public labels, never fixture-derived.
 export const routeHygieneCases = [
   {
+    id: "preparation-stopped-denial",
+    title:
+      "preparation stopped operations retain applicable hidden denial teardown",
+    checkpoints: [
+      "preparation-stop-PATCH",
+      "preparation-hidden-PATCH",
+      "preparation-stop-GET",
+      "preparation-hidden-GET",
+      "complete",
+    ],
+  },
+  {
+    id: "preparation-pending-draft",
+    title:
+      "preparation pending dirty reads guard hub Home Back unload and yield to security",
+    checkpoints: [
+      "preparation-read-pending",
+      "preparation-read-stay",
+      "preparation-read-discard",
+      "preparation-read-cleared",
+      "complete",
+    ],
+  },
+  {
+    id: "preparation-mobile",
+    title:
+      "preparation mobile departure preserves focus then security clears delayed save",
+    checkpoints: ["complete"],
+  },
+  {
+    id: "preparation-connected",
+    title:
+      "preparation connected fields persist independently without invented readiness",
+    checkpoints: ["preparation-input", "preparation-persisted", "complete"],
+  },
+  {
+    id: "preparation-scope",
+    title:
+      "preparation scope gates prevent reads and changed assignments tear down drafts",
+    checkpoints: ["complete"],
+  },
+  {
+    id: "preparation-readiness",
+    title:
+      "preparation authoritative readiness and safe blocker links remain distinct",
+    checkpoints: ["preparation-error", "complete"],
+  },
+  {
+    id: "preparation-hidden",
+    title:
+      "preparation hidden save denial removes preview and reveals only inert technical error",
+    checkpoints: ["preparation-error", "complete"],
+  },
+  {
+    id: "preparation-unknown",
+    title:
+      "preparation unknown PATCH reconciles current values without unsafe replay",
+    checkpoints: ["preparation-unknown", "complete"],
+  },
+  {
+    id: "preparation-stopped",
+    title:
+      "preparation Stop waiting fences late success and dirty history guards navigation",
+    checkpoints: ["preparation-persisted", "preparation-newer", "complete"],
+  },
+  {
+    id: "preparation-invalid",
+    title:
+      "preparation invalid fields have corrective semantics and measured contrast",
+    checkpoints: ["preparation-error", "complete"],
+  },
+  {
+    id: "preparation-reflow",
+    title:
+      "preparation reflows across all locales text modes spacing and forced colors",
+    checkpoints: ["complete"],
+  },
+  {
+    id: "preparation-zoom",
+    title:
+      "preparation connected process remains usable at real 200 percent zoom",
+    checkpoints: ["preparation-input", "preparation-persisted", "complete"],
+  },
+  {
     id: "course-boundaries",
     title:
       "course enabled unfocused boundaries and collection landmarks are accessible",

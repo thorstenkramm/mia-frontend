@@ -38,7 +38,8 @@ export function CourseCheckedAt({ time }: { readonly time: number }) {
 // Tailwind Plus: Application UI > Lists > Tables > Simple; Navigation >
 // Pagination > Simple card footer; Feedback > Empty States > Simple.
 // Library 2026-09-13-083323, v4/react-light.jsx. MIA: route owns h1; only
-// name/state and admin detail links; wrapping cells, no totals/hidden columns.
+// name/state and admitted admin-detail or preparation-hub links; wrapping cells,
+// no totals/hidden columns. Each caller owns the already-authorized destination.
 export function CourseTable({
   courses,
   detail,

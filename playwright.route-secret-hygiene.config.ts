@@ -19,6 +19,7 @@ export default defineConfig({
     "routeRecovery.spec.ts",
     "invitationAdministration.spec.ts",
     "courseAdministration.spec.ts",
+    "coursePreparation.spec.ts",
   ],
   grep: new RegExp(`${escaped}$`, "u"),
   retries: 0,

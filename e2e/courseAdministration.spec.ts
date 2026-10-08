@@ -397,9 +397,15 @@ test(
       backend.collectionReads === 0 &&
         backend.detailReads.at(-1) === "course_1",
     ).toBe(true);
+    // Story 4.2 now owns the assigned hub; no future action routes are exposed.
+    await expect
+      .poll(() =>
+        page.locator("main a[href='/prepare/courses/course_1']").count(),
+      )
+      .toBe(1);
     expect(
       await page.locator("main a[href^='/prepare/courses/']").count(),
-    ).toBe(0);
+    ).toBe(1);
   }),
 );
 
