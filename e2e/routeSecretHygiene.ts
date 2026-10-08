@@ -136,7 +136,20 @@ export async function routeHygieneCheckpoint(
   // Confirm exposure with boolean assertions only. No marker enters a matcher,
   // checkpoint, test name, exception or report. Cookie-only tests use public
   // settled-state assertions in their original bodies before `complete`.
-  if (point === "invitation-form") {
+  if (point === "onboarding-acceptance-input") {
+    for (const selector of ["#new-password", "#password-confirmation"])
+      expect(
+        (await page.locator(selector).inputValue()) === fixture.password,
+      ).toBe(true);
+  } else if (point === "onboarding-login-input") {
+    expect(
+      (await page.locator("#password").inputValue()) === fixture.password,
+    ).toBe(true);
+  } else if (point === "onboarding-mfa-input") {
+    expect(
+      (await page.locator("#mfa-code").inputValue()) === fixture.mfaCode,
+    ).toBe(true);
+  } else if (point === "invitation-form") {
     expect(
       (await page
         .getByLabel("New password (required)", { exact: true })
@@ -171,6 +184,7 @@ export async function routeHygieneCheckpoint(
     ).toBe(true);
   } else if (
     point === "read-failure" ||
+    point === "onboarding-gate-error" ||
     point === "invitation-error" ||
     point === "logout-unconfirmed" ||
     (point === "codes-held" && item.id === "recovery-codes-read")

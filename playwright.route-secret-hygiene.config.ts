@@ -14,6 +14,7 @@ const escaped = selected.title.replace(/[.*+?^${}()|[\]\\]/gu, "\\$&");
 export default defineConfig({
   testDir: "./e2e",
   testMatch: [
+    "scaffold.spec.ts",
     "routeNavigation.spec.ts",
     "routeRecovery.spec.ts",
     "invitationAdministration.spec.ts",

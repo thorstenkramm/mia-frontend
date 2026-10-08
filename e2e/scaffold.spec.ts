@@ -3,10 +3,25 @@ import { mkdtemp, rm } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { fileURLToPath } from "node:url";
-import { expect, test, type Locator, type Page } from "@playwright/test";
+import {
+  expect,
+  test,
+  type Browser,
+  type Locator,
+  type Page,
+  type Route,
+} from "@playwright/test";
 import AxeBuilder from "@axe-core/playwright";
 import { chromium } from "playwright";
 import { expectRetainedSecret } from "./secretAssertions";
+import { invitationBackend } from "./invitationFixtures";
+import { ownProfileCapabilities } from "../test/mfaFixtures";
+import {
+  injectRouteEarlyFailure,
+  releaseRouteFixture,
+  routeHygieneCheckpoint,
+  routeSecretFixture,
+} from "./routeSecretHygiene";
 
 const locales = [
   "en-US",
@@ -1829,7 +1844,14 @@ type InvitationMock = {
 };
 
 // One mutable protocol fake for every invitation state.
-async function installInvitationMocks(page: Page): Promise<InvitationMock> {
+async function installInvitationMocks(
+  page: Page,
+  connection?: {
+    readonly csrf: string;
+    readonly canPreview: (route: Route) => boolean;
+    readonly accept: (route: Route) => Promise<void>;
+  },
+): Promise<InvitationMock> {
   await page.clock.setFixedTime(new Date("2026-09-27T10:00:00.000Z"));
   const mock: InvitationMock = {
     stage: "anonymous",
@@ -1838,11 +1860,13 @@ async function installInvitationMocks(page: Page): Promise<InvitationMock> {
     previews: 0,
     acceptances: 0,
   };
-  await page
-    .context()
-    .addCookies([
-      { name: "mia_csrf", value: crypto.randomUUID(), url: appUrl },
-    ]);
+  await page.context().addCookies([
+    {
+      name: "mia_csrf",
+      value: connection?.csrf ?? crypto.randomUUID(),
+      url: appUrl,
+    },
+  ]);
   const error = (status: number, code: string, retryAfter?: string) => ({
     status,
     contentType: mediaType,
@@ -1876,6 +1900,8 @@ async function installInvitationMocks(page: Page): Promise<InvitationMock> {
   });
   await page.route("**/api/v1/invitation-previews", async (route) => {
     mock.previews++;
+    if (connection !== undefined && !connection.canPreview(route))
+      return route.fulfill(error(422, "invitation_invalid"));
     switch (mock.preview) {
       case "valid":
         return route.fulfill({
@@ -1899,6 +1925,7 @@ async function installInvitationMocks(page: Page): Promise<InvitationMock> {
   });
   await page.route("**/api/v1/invitation-acceptances", async (route) => {
     mock.acceptances++;
+    if (connection !== undefined) return connection.accept(route);
     switch (mock.acceptance) {
       case "created":
         return route.fulfill({
@@ -1938,12 +1965,31 @@ async function tabTo(page: Page, control: Locator): Promise<void> {
   throw new Error("The control is not reachable with Tab.");
 }
 
-async function acceptByKeyboard(page: Page, password: string): Promise<void> {
-  await tabTo(page, page.getByRole("link", { name: "Accept invitation" }));
+async function acceptByKeyboard(
+  page: Page,
+  password: string,
+  hooks?: {
+    readonly localized?: boolean;
+    readonly beforeFields?: () => Promise<void>;
+    readonly beforeSubmit?: () => Promise<void>;
+  },
+): Promise<void> {
+  await tabTo(
+    page,
+    hooks?.localized
+      ? page.locator("main a[href='/invitation/accept']")
+      : page.getByRole("link", { name: "Accept invitation" }),
+  );
   await page.keyboard.press("Enter");
   await expect(
-    page.getByRole("heading", { level: 1, name: "Create your MIA account" }),
+    hooks?.localized
+      ? page.locator("main h1")
+      : page.getByRole("heading", {
+          level: 1,
+          name: "Create your MIA account",
+        }),
   ).toBeFocused();
+  await hooks?.beforeFields?.();
   await tabTo(page, page.locator("#username"));
   await page.keyboard.type("example.supervisor");
   await tabTo(page, page.locator("#new-password"));
@@ -1951,8 +1997,10 @@ async function acceptByKeyboard(page: Page, password: string): Promise<void> {
   await tabTo(page, page.locator("#password-confirmation"));
   await page.keyboard.type(password);
   await tabTo(page, page.locator("#country"));
-  await page.keyboard.type("Germany");
+  if (hooks?.localized) await page.locator("#country").selectOption("DE");
+  else await page.keyboard.type("Germany");
   await expect(page.locator("#country")).toHaveValue("DE");
+  await hooks?.beforeSubmit?.();
   await tabTo(page, page.locator("button[type=submit]"));
   await page.keyboard.press("Enter");
 }
@@ -2342,6 +2390,731 @@ for (const zoomFactor of [2, 4] as const) {
     }
   });
 }
+
+// Story 3.2: one connected local state, not independently staged successes.
+// The delivery token exists only in this fake email boundary, never in an admin
+// API resource. Returned ledgers contain operation labels/counts/booleans only.
+async function withSupervisorHandoff(
+  page: Page,
+  browser: Browser,
+  body: (
+    handoff: Awaited<ReturnType<typeof installSupervisorHandoff>>,
+  ) => Promise<void>,
+  locale: (typeof locales)[number] = "en-US",
+  textSize: (typeof textSizes)[number] = "standard",
+) {
+  injectRouteEarlyFailure();
+  const administratorContext = await browser.newContext({
+    baseURL: appUrl,
+    viewport: { width: 320, height: 900 },
+  });
+  const administrator = await administratorContext.newPage();
+  try {
+    const handoff = await installSupervisorHandoff(
+      page,
+      administrator,
+      locale,
+      textSize,
+    );
+    await body(handoff);
+    await routeHygieneCheckpoint(page, "complete");
+  } finally {
+    await administratorContext.close();
+    releaseRouteFixture(administrator);
+    await page.close();
+    releaseRouteFixture(page);
+  }
+}
+
+async function installSupervisorHandoff(
+  page: Page,
+  administrator: Page,
+  locale: (typeof locales)[number],
+  textSize: (typeof textSizes)[number],
+) {
+  const now = new Date();
+  const fixture = routeSecretFixture(page);
+  await page.context().grantPermissions(["clipboard-read", "clipboard-write"], {
+    origin: appUrl,
+  });
+  const admin = await invitationBackend(administrator);
+  await administrator.clock.setFixedTime(now);
+  await administrator.goto("/admin/invitations/new");
+  await expect(administrator.locator("main h1")).toBeFocused();
+  await administrator
+    .getByLabel("Supervisor’s email address")
+    .fill(routeSecretFixture(administrator).email);
+  await routeHygieneCheckpoint(administrator, "invitation-email");
+  await administrator.getByRole("button", { name: "Send invitation" }).click();
+  await expect(administrator.getByText("Delivery queued")).toBeVisible();
+  expect(admin.dispatches.create).toBe(1);
+  expect(admin.createdSupervisorForFixtureAddress).toEqual([true]);
+  await administrator.getByRole("link", { name: "View invitation" }).click();
+  await expect(
+    administrator.getByText("Pending", { exact: true }),
+  ).toBeVisible();
+  await routeHygieneCheckpoint(administrator, "invitation-detail");
+  const invitation = admin.invitations[0];
+  if (!invitation)
+    throw new Error("The created invitation fixture is missing.");
+
+  const state = {
+    stage: "anonymous" as "anonymous" | "authenticated" | "mfa",
+    registered: false,
+    activeFactor: false,
+    loseAcceptance: false,
+    failCapabilities: false,
+    releaseCapabilities: null as Promise<void> | null,
+    counts: {
+      previews: 0,
+      acceptances: 0,
+      logins: 0,
+      verifications: 0,
+      capabilities: 0,
+      forbidden: 0,
+    },
+    wire: {
+      preview: false,
+      acceptance: false,
+      login: false,
+      verification: false,
+    },
+    ledger: [] as string[],
+    homeChunks: 0,
+  };
+  const json = (route: Route, document: unknown, status = 200) =>
+    route.fulfill({
+      status,
+      contentType: mediaType,
+      headers: { "Cache-Control": "no-store" },
+      body: JSON.stringify(document),
+    });
+  const rejected = (route: Route, status: number, code: string) =>
+    json(
+      route,
+      {
+        errors: [{ status: String(status), code, detail: fixture.rawError }],
+      },
+      status,
+    );
+  const sessionDocument = () =>
+    state.stage === "anonymous"
+      ? { data: null, meta: { stage: "anonymous" } }
+      : {
+          data: {
+            type: "auth-sessions",
+            id: "supervisor-account",
+            attributes: {
+              stage: state.stage,
+              ...(state.stage === "mfa"
+                ? { mfa_challenge_id: "challenge-id" }
+                : {}),
+              idle_expires_at: new Date(now.getTime() + 30 * 60_000)
+                .toISOString()
+                .replace("Z", "000Z"),
+              absolute_expires_at: new Date(
+                now.getTime() +
+                  (state.stage === "mfa" ? 30 * 60_000 : 12 * 60 * 60_000),
+              )
+                .toISOString()
+                .replace("Z", "000Z"),
+            },
+          },
+        };
+  const validRequest = (route: Route, document: unknown) =>
+    route.request().method() === "POST" &&
+    route.request().headers()["content-type"] === mediaType &&
+    route.request().headers()["x-csrf-token"] === fixture.csrf &&
+    fingerprint(route.request().postData() ?? "") ===
+      fingerprint(JSON.stringify(document));
+  const allowed = new Map([
+    ["/api/v1/auth/session", "session"],
+    ["/api/v1/invitation-previews", "previews"],
+    ["/api/v1/invitation-acceptances", "acceptances"],
+    ["/api/v1/auth/login", "logins"],
+    ["/api/v1/users/me/capabilities", "capabilities"],
+    ["/api/v1/auth/mfa-challenges/challenge-id/verifications", "verifications"],
+  ]);
+  page.on("request", (request) => {
+    const path = new URL(request.url()).pathname;
+    if (path.includes("HomeEntryRoute")) state.homeChunks++;
+    if (!path.startsWith("/api/")) return;
+    const operation = allowed.get(path);
+    state.ledger.push(operation ?? "forbidden");
+    switch (operation) {
+      case "previews":
+        state.counts.previews++;
+        break;
+      case "acceptances":
+        state.counts.acceptances++;
+        break;
+      case "logins":
+        state.counts.logins++;
+        break;
+      case "verifications":
+        state.counts.verifications++;
+        break;
+      case "capabilities":
+        state.counts.capabilities++;
+        break;
+      case "session":
+        break;
+      default:
+        state.counts.forbidden++;
+    }
+  });
+  // Catch unexpected API calls locally rather than contacting a real service.
+  await page.route("**/api/**", (route) => rejected(route, 404, "not_found"));
+  await installInvitationMocks(page, {
+    csrf: fixture.csrf,
+    canPreview: (route) => {
+      state.wire.preview = validRequest(route, {
+        data: {
+          type: "invitation-previews",
+          attributes: { token: fixture.invitationToken },
+        },
+      });
+      return state.wire.preview && invitation.status === "pending";
+    },
+    accept: async (route) => {
+      state.wire.acceptance = validRequest(route, {
+        data: {
+          type: "invitation-acceptances",
+          attributes: {
+            token: fixture.invitationToken,
+            username: "example.supervisor",
+            password: fixture.password,
+            password_confirmation: fixture.password,
+            language: "fr-FR",
+            country: "DE",
+            time_zone: "UTC",
+          },
+        },
+      });
+      if (!state.wire.acceptance)
+        return rejected(route, 422, "auth_invalid_request");
+      if (invitation.status !== "pending")
+        return rejected(route, 422, "invitation_invalid");
+      // Atomic fake account creation consumes this specific created record.
+      state.registered = true;
+      invitation.status = "accepted";
+      if (state.loseAcceptance) return route.abort("connectionfailed");
+      return json(
+        route,
+        { data: { type: "users", id: "supervisor-account", attributes: {} } },
+        201,
+      );
+    },
+  });
+  await page.clock.setFixedTime(now);
+  await page.addInitScript(() => {
+    const clock = performance.now();
+    performance.now = () => clock;
+    const hashes: string[] = [];
+    Object.defineProperty(window, "__miaHandoffHashes", { value: hashes });
+    const fetch = window.fetch.bind(window);
+    window.fetch = (...args) => {
+      hashes.push(location.hash);
+      return fetch(...args);
+    };
+    new MutationObserver((_, observer) => {
+      if (document.getElementById("root")?.firstChild) {
+        hashes.push(location.hash);
+        observer.disconnect();
+      }
+    }).observe(document, { childList: true, subtree: true });
+  });
+  await page.route("**/api/v1/auth/session", (route) =>
+    json(route, sessionDocument()),
+  );
+  await page.route("**/api/v1/auth/login", (route) => {
+    state.wire.login = validRequest(route, {
+      data: {
+        type: "login-attempts",
+        attributes: {
+          username: "example.supervisor",
+          password: fixture.password,
+        },
+      },
+    });
+    if (!state.registered || !state.wire.login)
+      return rejected(route, 401, "auth_invalid_credentials");
+    state.stage = state.activeFactor ? "mfa" : "authenticated";
+    return json(route, sessionDocument());
+  });
+  await page.route("**/api/v1/users/me/capabilities", async (route) => {
+    if (state.releaseCapabilities) await state.releaseCapabilities;
+    if (state.stage !== "authenticated")
+      return rejected(route, 401, "auth_unauthorized");
+    if (state.failCapabilities) return rejected(route, 503, "unavailable");
+    const response = ownProfileCapabilities("supervisor-account", true);
+    return json(route, await response.json());
+  });
+  await page.route(
+    "**/api/v1/auth/mfa-challenges/challenge-id/verifications",
+    (route) => {
+      state.wire.verification = validRequest(route, {
+        data: {
+          type: "mfa-verifications",
+          attributes: { code: fixture.mfaCode },
+        },
+      });
+      if (
+        !state.activeFactor ||
+        state.stage !== "mfa" ||
+        !state.wire.verification
+      )
+        return rejected(route, 422, "auth_invalid_mfa_code");
+      state.stage = "authenticated";
+      return json(route, sessionDocument());
+    },
+  );
+  await page.goto("/login");
+  await page.evaluate(
+    ([nextLocale, size]) => {
+      localStorage.setItem("mia.interface.locale", nextLocale);
+      localStorage.setItem("mia.interface.text-size", size);
+    },
+    [locale, textSize] as const,
+  );
+  return { page, administrator, admin, invitation, state, fixture, locale };
+}
+
+type SupervisorHandoff = Awaited<ReturnType<typeof installSupervisorHandoff>>;
+
+async function acceptSupervisor(
+  handoff: SupervisorHandoff,
+  validate = false,
+  axe = false,
+) {
+  const { page, state, fixture, locale } = handoff;
+  await openInvitationLink(page, fixture.invitationToken);
+  await expect(page.locator("main a[href='/invitation/accept']")).toBeVisible();
+  await expectNoApplicationNavigation(page);
+  expect(
+    await page.evaluate(
+      (email) => document.body.textContent?.includes(email) === true,
+      handoff.invitation.email,
+    ),
+  ).toBe(false);
+  expect(
+    await page.evaluate(() => {
+      const hashes = (window as unknown as { __miaHandoffHashes: string[] })
+        .__miaHandoffHashes;
+      return (
+        hashes.length > 0 &&
+        hashes.every((hash) => hash === "") &&
+        location.hash === ""
+      );
+    }),
+  ).toBe(true);
+  await acceptByKeyboard(page, fixture.password, {
+    localized: locale !== "en-US",
+    beforeFields: async () => {
+      expect((await page.locator("#language").inputValue()) === locale).toBe(
+        true,
+      );
+      expect(
+        (await page.locator("#time_zone").inputValue()) ===
+          (await page.evaluate(
+            () => Intl.DateTimeFormat().resolvedOptions().timeZone,
+          )),
+      ).toBe(true);
+      for (const id of [
+        "username",
+        "new-password",
+        "password-confirmation",
+        "language",
+        "country",
+        "time_zone",
+      ])
+        expect(
+          await page
+            .locator(`#${id}`)
+            .evaluate((element) => element.hasAttribute("required")),
+        ).toBe(true);
+      if (validate) {
+        await page.locator("#username").fill("example.supervisor");
+        await page.locator("#new-password").fill("short");
+        await page.locator("#password-confirmation").fill("short");
+        await page.locator("button[type=submit]").click();
+        expect(state.counts.acceptances).toBe(0);
+        await expect(page.locator("#country-error")).toBeVisible();
+        await page.locator("#username").fill("");
+        await page.locator("#new-password").fill("");
+        await page.locator("#password-confirmation").fill("");
+      }
+    },
+    beforeSubmit: async () => {
+      await page.locator("#language").selectOption("fr-FR");
+      await page.locator("#time_zone").selectOption("UTC");
+      await page.locator("#new-password").fill("");
+      await pasteInto(page, page.locator("#new-password"), fixture.password);
+      await page.locator("#password-confirmation").fill(fixture.password);
+      await routeHygieneCheckpoint(page, "onboarding-acceptance-input");
+      await expectNoPageOverflow(page);
+      if (axe) await expectNoWcagViolations(page);
+    },
+  });
+  await expect(page.locator("main h2[tabindex='-1']")).toBeFocused();
+  await expect(page.locator("#new-password")).toHaveCount(0);
+  expect(state.registered && handoff.invitation.status === "accepted").toBe(
+    true,
+  );
+  expect(state.stage).toBe("anonymous");
+  expect(state.counts).toMatchObject({
+    acceptances: 1,
+    logins: 0,
+    capabilities: 0,
+    forbidden: 0,
+  });
+  expect(state.wire.acceptance && state.wire.preview).toBe(true);
+}
+
+async function signInSupervisor(handoff: SupervisorHandoff) {
+  const { page, fixture, locale } = handoff;
+  await tabTo(page, page.locator("main a[href='/login']"));
+  await page.keyboard.press("Enter");
+  await expect(
+    page.getByRole("heading", { level: 1, name: headings[locale] }),
+  ).toBeFocused();
+  await page.locator("#username").fill("example.supervisor");
+  await pasteInto(page, page.locator("#password"), fixture.password);
+  await routeHygieneCheckpoint(page, "onboarding-login-input");
+  await tabTo(page, page.locator("button[type=submit]"));
+  await page.keyboard.press("Enter");
+}
+
+async function expectSupervisorShell(handoff: SupervisorHandoff) {
+  const { page, state, fixture } = handoff;
+  await expect(page).toHaveURL(/\/$/u);
+  await expect(page.locator("main h1")).toBeFocused();
+  await expect(page.locator("main")).toHaveCount(1);
+  await expect(page.locator("h1")).toHaveCount(1);
+  // At narrow/zoomed widths the authorized navigation is in the drawer.
+  if ((await page.evaluate(() => innerWidth)) < 1024) {
+    await page.locator("header button:visible").first().click();
+    await expect(
+      page.locator("[role='dialog'] a[href='/profile/security/mfa']"),
+    ).toBeVisible();
+    await page.keyboard.press("Escape");
+    await expect(page.getByRole("dialog")).toHaveCount(0);
+  } else {
+    await expect(
+      page.locator("nav a[href='/profile/security/mfa']"),
+    ).toBeVisible();
+  }
+  if (handoff.locale === "en-US")
+    await expect(
+      page.getByRole("button", { name: "Sign out", exact: true }),
+    ).toBeVisible();
+  await expect(page.locator("a[href='/admin/invitations']")).toHaveCount(0);
+  await expect(page.locator("a[href^='/prepare']")).toHaveCount(0);
+  expect(state.counts.forbidden).toBe(0);
+  expect(state.wire.login).toBe(true);
+  expect(
+    await page.evaluate(
+      (markers) => {
+        const outside = JSON.stringify({
+          url: location.href,
+          history: history.state,
+          title: document.title,
+          local: Object.entries(localStorage),
+          session: Object.entries(sessionStorage),
+          body: document.body.innerHTML,
+        });
+        return markers.every((marker) => !outside.includes(marker));
+      },
+      [fixture.invitationToken, fixture.password, handoff.invitation.email],
+    ),
+  ).toBe(true);
+  await expectNoPageOverflow(page);
+}
+
+test.describe("supervisor onboarding handoff", () => {
+  // Worker-side setting also protects manually created recipient/admin contexts;
+  // config-side environment mutation alone does not reach every worker launch.
+  test.beforeEach(() => {
+    process.env.PLAYWRIGHT_NO_COPY_PROMPT = "1";
+  });
+  for (const size of textSizes) {
+    test(`connected supervisor setup reaches password-only shell at 320 pixels with ${size} text`, async ({
+      page,
+      browser,
+    }) => {
+      await page.setViewportSize({ width: 320, height: 900 });
+      await withSupervisorHandoff(
+        page,
+        browser,
+        async (handoff) => {
+          await acceptSupervisor(handoff, true, size === "standard");
+          let release = () => {};
+          handoff.state.releaseCapabilities = new Promise<void>((resolve) => {
+            release = resolve;
+          });
+          await signInSupervisor(handoff);
+          await expect.poll(() => handoff.state.counts.capabilities).toBe(1);
+          await expectNoApplicationNavigation(page);
+          await expect(page).toHaveTitle("MIA");
+          expect(handoff.state.homeChunks).toBe(0);
+          release();
+          await expectSupervisorShell(handoff);
+          if (size === "standard") await expectNoWcagViolations(page);
+          await handoff.administrator
+            .getByRole("button", { name: "Refresh", exact: true })
+            .click();
+          await expect(
+            handoff.administrator.getByText("Accepted", { exact: true }),
+          ).toBeVisible();
+          await page.reload();
+          await expectSupervisorShell(handoff);
+          await page.goBack();
+          await expectSupervisorShell(handoff);
+          expect(handoff.state.counts).toMatchObject({
+            acceptances: 1,
+            logins: 1,
+            verifications: 0,
+            forbidden: 0,
+          });
+        },
+        "en-US",
+        size,
+      );
+    });
+  }
+  test("hidden pending supervisor admission rejects its late result until explicit Refresh", async ({
+    page,
+    browser,
+  }) => {
+    await withSupervisorHandoff(page, browser, async (handoff) => {
+      await acceptSupervisor(handoff);
+      let release = () => {};
+      handoff.state.releaseCapabilities = new Promise<void>((resolve) => {
+        release = resolve;
+      });
+      await signInSupervisor(handoff);
+      await expect.poll(() => handoff.state.counts.capabilities).toBe(1);
+      await page.evaluate(() =>
+        window.dispatchEvent(
+          new PageTransitionEvent("pagehide", { persisted: true }),
+        ),
+      );
+      release();
+      await page.evaluate(() =>
+        window.dispatchEvent(
+          new PageTransitionEvent("pageshow", { persisted: true }),
+        ),
+      );
+      await expect(
+        page.getByRole("button", { name: "Refresh", exact: true }),
+      ).toBeVisible();
+      await expectNoApplicationNavigation(page);
+      expect(handoff.state.counts.capabilities).toBe(1);
+      expect(handoff.state.homeChunks).toBe(0);
+      await page.getByRole("button", { name: "Refresh", exact: true }).click();
+      await expectSupervisorShell(handoff);
+      expect(handoff.state.counts.logins).toBe(1);
+    });
+  });
+  test("failed supervisor admission recovers by read without login replay or administrator scope", async ({
+    page,
+    browser,
+  }) => {
+    await withSupervisorHandoff(page, browser, async (handoff) => {
+      await acceptSupervisor(handoff);
+      handoff.state.failCapabilities = true;
+      await signInSupervisor(handoff);
+      await expect(
+        page.getByRole("button", { name: "Check again", exact: true }),
+      ).toBeVisible();
+      await expectNoApplicationNavigation(page);
+      await routeHygieneCheckpoint(page, "onboarding-gate-error");
+      handoff.state.failCapabilities = false;
+      await page
+        .getByRole("button", { name: "Check again", exact: true })
+        .click();
+      await expectSupervisorShell(handoff);
+      await page.goto("/admin/invitations");
+      await expectSupervisorShell(handoff);
+      expect(handoff.state.counts).toMatchObject({
+        logins: 1,
+        acceptances: 1,
+        forbidden: 0,
+      });
+    });
+  });
+  test("an existing supervisor factor requires its authoritative challenge before shell admission", async ({
+    page,
+    browser,
+  }) => {
+    await withSupervisorHandoff(page, browser, async (handoff) => {
+      await acceptSupervisor(handoff);
+      // This account has an already-active factor; the frontend never enrolls it.
+      handoff.state.activeFactor = true;
+      await signInSupervisor(handoff);
+      await expect(page).toHaveURL(/\/auth\/mfa$/u);
+      await expectNoApplicationNavigation(page);
+      expect(handoff.state.counts.capabilities).toBe(0);
+      expect(handoff.state.homeChunks).toBe(0);
+      await expect(
+        page.getByRole("button", { name: "Sign out", exact: true }),
+      ).toBeVisible();
+      await pasteInto(page, page.locator("#mfa-code"), handoff.fixture.mfaCode);
+      await routeHygieneCheckpoint(page, "onboarding-mfa-input");
+      await page.locator("#mfa-code").press("Enter");
+      await expectSupervisorShell(handoff);
+      expect(handoff.state.counts).toMatchObject({
+        logins: 1,
+        verifications: 1,
+        capabilities: 1,
+        forbidden: 0,
+      });
+      expect(handoff.state.wire.verification).toBe(true);
+    });
+  });
+  test("lost committed supervisor acceptance stays unknown and never replays through a consumed link", async ({
+    page,
+    browser,
+  }) => {
+    await withSupervisorHandoff(page, browser, async (handoff) => {
+      handoff.state.loseAcceptance = true;
+      await acceptSupervisor(handoff);
+      await expect(
+        page.getByRole("heading", { name: "Account creation not confirmed" }),
+      ).toBeVisible();
+      await expect(
+        page.getByText("Your account has been created.", { exact: true }),
+      ).toHaveCount(0);
+      await expect(page.locator("button[type=submit]")).toHaveCount(0);
+      await page.evaluate(() => window.dispatchEvent(new Event("online")));
+      await page.reload();
+      await expect(page).toHaveURL(/\/invitation$/u);
+      await openInvitationLink(page, handoff.fixture.invitationToken);
+      await expect(
+        page.getByRole("heading", {
+          level: 1,
+          name: "This invitation link is invalid or no longer usable",
+        }),
+      ).toBeFocused();
+      await expect(
+        page.getByText("Your account has been created.", { exact: true }),
+      ).toHaveCount(0);
+      expect(handoff.state.counts).toMatchObject({ acceptances: 1, logins: 0 });
+      await signInSupervisor(handoff);
+      await expectSupervisorShell(handoff);
+      expect(handoff.state.counts.acceptances).toBe(1);
+      await handoff.administrator
+        .getByRole("button", { name: "Refresh", exact: true })
+        .click();
+      await expect(
+        handoff.administrator.getByText("Accepted", { exact: true }),
+      ).toBeVisible();
+    });
+  });
+  test("administrator revocation invalidates the delivered supervisor link without public identity", async ({
+    page,
+    browser,
+  }) => {
+    await withSupervisorHandoff(page, browser, async (handoff) => {
+      await handoff.administrator
+        .getByRole("link", { name: "Revoke invitation", exact: true })
+        .click();
+      await handoff.administrator
+        .getByRole("button", { name: "Revoke invitation", exact: true })
+        .click();
+      await expect(
+        handoff.administrator.getByRole("heading", {
+          level: 2,
+          name: "Invitation revoked",
+        }),
+      ).toBeFocused();
+      expect(handoff.admin.dispatches.delete).toBe(1);
+      expect(handoff.invitation.status).toBe("revoked");
+      await openInvitationLink(page, handoff.fixture.invitationToken);
+      await expect(
+        page.getByRole("heading", {
+          level: 1,
+          name: "This invitation link is invalid or no longer usable",
+        }),
+      ).toBeFocused();
+      await expectNoApplicationNavigation(page);
+      expect(
+        await page.evaluate(
+          (email) => document.body.textContent?.includes(email) === true,
+          handoff.invitation.email,
+        ),
+      ).toBe(false);
+      expect(handoff.state.counts).toMatchObject({
+        previews: 1,
+        acceptances: 0,
+        logins: 0,
+        forbidden: 0,
+      });
+    });
+  });
+  test("connected supervisor handoff remains operable in every launch locale and text mode", async ({
+    page,
+    browser,
+  }) => {
+    test.setTimeout(180_000);
+    // Each iteration owns new account/invitation state and isolated contexts.
+    for (const locale of locales)
+      for (const size of textSizes) {
+        const context = await browser.newContext({
+          baseURL: appUrl,
+          viewport: { width: 320, height: 900 },
+        });
+        try {
+          const recipient = await context.newPage();
+          await withSupervisorHandoff(
+            recipient,
+            browser,
+            async (handoff) => {
+              await acceptSupervisor(handoff);
+              await signInSupervisor(handoff);
+              await expectSupervisorShell(handoff);
+              await expect(recipient.locator("html")).toHaveAttribute(
+                "lang",
+                locale,
+              );
+            },
+            locale,
+            size,
+          );
+        } finally {
+          await context.close();
+        }
+      }
+    await page.close();
+  });
+  test("connected supervisor handoff stays usable at actual 200 percent zoom in all text modes", async ({
+    browser,
+  }) => {
+    test.setTimeout(120_000);
+    for (const size of textSizes) {
+      const { context, userDataDirectory } = await launchBrowserZoomContext();
+      try {
+        const page = await context.newPage();
+        await withSupervisorHandoff(
+          page,
+          browser,
+          async (handoff) => {
+            await setActualBrowserZoom(page, 2);
+            expect(await page.evaluate(() => innerWidth)).toBe(640);
+            await acceptSupervisor(handoff);
+            await signInSupervisor(handoff);
+            await expectSupervisorShell(handoff);
+          },
+          "en-US",
+          size,
+        );
+      } finally {
+        await context.close();
+        await rm(userDataDirectory, { force: true, recursive: true });
+      }
+    }
+  });
+});
 
 test.describe("browser locale negotiation", () => {
   test.use({ locale: "pt-BR" });

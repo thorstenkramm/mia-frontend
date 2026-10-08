@@ -1,6 +1,98 @@
 // Actual Story 2.2 browser-test inventory, including cookie-only cases and the
 // R1 repair. IDs/checkpoints are fixed public labels, never fixture-derived.
 export const routeHygieneCases = [
+  // Story 3.2 executes the actual joined cases in scaffold's bounded describe.
+  ...["standard", "large", "extra-large"].map((size) => ({
+    id: `supervisor-handoff-${size}`,
+    title: `connected supervisor setup reaches password-only shell at 320 pixels with ${size} text`,
+    checkpoints: [
+      "invitation-email",
+      "invitation-detail",
+      "onboarding-acceptance-input",
+      "onboarding-login-input",
+      "complete",
+    ],
+  })),
+  {
+    id: "supervisor-gate-hidden",
+    title:
+      "hidden pending supervisor admission rejects its late result until explicit Refresh",
+    checkpoints: [
+      "invitation-email",
+      "invitation-detail",
+      "onboarding-acceptance-input",
+      "onboarding-login-input",
+      "complete",
+    ],
+  },
+  {
+    id: "supervisor-gate-recovery",
+    title:
+      "failed supervisor admission recovers by read without login replay or administrator scope",
+    checkpoints: [
+      "invitation-email",
+      "invitation-detail",
+      "onboarding-acceptance-input",
+      "onboarding-login-input",
+      "onboarding-gate-error",
+      "complete",
+    ],
+  },
+  {
+    id: "supervisor-existing-factor",
+    title:
+      "an existing supervisor factor requires its authoritative challenge before shell admission",
+    checkpoints: [
+      "invitation-email",
+      "invitation-detail",
+      "onboarding-acceptance-input",
+      "onboarding-login-input",
+      "onboarding-mfa-input",
+      "complete",
+    ],
+  },
+  {
+    id: "supervisor-acceptance-unknown",
+    title:
+      "lost committed supervisor acceptance stays unknown and never replays through a consumed link",
+    checkpoints: [
+      "invitation-email",
+      "invitation-detail",
+      "onboarding-acceptance-input",
+      "onboarding-login-input",
+      "complete",
+    ],
+  },
+  {
+    id: "supervisor-revoked-link",
+    title:
+      "administrator revocation invalidates the delivered supervisor link without public identity",
+    checkpoints: ["invitation-email", "invitation-detail", "complete"],
+  },
+  {
+    id: "supervisor-locales",
+    title:
+      "connected supervisor handoff remains operable in every launch locale and text mode",
+    checkpoints: [
+      "invitation-email",
+      "invitation-detail",
+      "onboarding-acceptance-input",
+      "onboarding-login-input",
+      "complete",
+    ],
+  },
+  {
+    id: "supervisor-zoom",
+    title:
+      "connected supervisor handoff stays usable at actual 200 percent zoom in all text modes",
+    checkpoints: [
+      "invitation-email",
+      "invitation-detail",
+      "onboarding-acceptance-input",
+      "onboarding-login-input",
+      "complete",
+    ],
+  },
   {
     id: "navigation-history",
     title:

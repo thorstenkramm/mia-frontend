@@ -91,7 +91,24 @@ export async function checkRouteSecretHygiene() {
   );
   if (listed.error || listed.status !== 0)
     throw new Error("Could not inventory actual route tests.");
-  const actual = specs(parsedReport(listed.stdout).suites)
+  const onboarding = spawnSync(
+    executable,
+    [
+      "test",
+      "e2e/scaffold.spec.ts",
+      "--grep",
+      "supervisor onboarding handoff",
+      "--list",
+      "--reporter=json",
+    ],
+    { encoding: "buffer", timeout: 30_000, maxBuffer: 16 * 1024 * 1024 },
+  );
+  if (onboarding.error || onboarding.status !== 0)
+    throw new Error("Could not inventory actual supervisor handoff tests.");
+  const actual = [
+    ...specs(parsedReport(listed.stdout).suites),
+    ...specs(parsedReport(onboarding.stdout).suites),
+  ]
     .map((spec) => spec.title)
     .sort();
   const inventory = routeHygieneCases.map((item) => item.title).sort();
@@ -100,12 +117,18 @@ export async function checkRouteSecretHygiene() {
       "The route-hygiene inventory does not cover every actual new browser test exactly once.",
     );
   const scope = process.env.MIA_ROUTE_HYGIENE_SCOPE;
-  if (scope !== undefined && scope !== "invitations")
+  if (
+    scope !== undefined &&
+    scope !== "invitations" &&
+    scope !== "supervisor-onboarding"
+  )
     throw new Error("Unknown route-hygiene scope.");
   const selected =
     scope === "invitations"
       ? routeHygieneCases.filter((item) => item.id.startsWith("invitation-"))
-      : routeHygieneCases;
+      : scope === "supervisor-onboarding"
+        ? routeHygieneCases.filter((item) => item.id.startsWith("supervisor-"))
+        : routeHygieneCases;
   const root = await mkdtemp(join(tmpdir(), "mia-route-hygiene-"));
   const evidence = [];
   try {
@@ -113,7 +136,7 @@ export async function checkRouteSecretHygiene() {
       item.checkpoints.map((point) => ({ item, point, early: false })),
     );
     const first =
-      scope === "invitations"
+      scope !== undefined
         ? selected[0]
         : routeHygieneCases.find((item) => item.id === "navigation-invitation");
     if (!first) throw new Error("Missing route-hygiene early-failure canary.");
@@ -134,6 +157,7 @@ export async function checkRouteSecretHygiene() {
           maxBuffer: 16 * 1024 * 1024,
           env: {
             ...process.env,
+            PLAYWRIGHT_NO_COPY_PROMPT: "1",
             NO_COLOR: "1",
             FORCE_COLOR: "0",
             MIA_ROUTE_HYGIENE_CASE: item.id,

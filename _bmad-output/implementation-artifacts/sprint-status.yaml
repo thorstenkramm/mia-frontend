@@ -60,9 +60,9 @@ development_status:
   2-2-working-routes-and-parent-navigation: done # commit-pending until execution checkpoint confirms SHA
   epic-2-retrospective: optional
 
-  epic-3: in-progress
+  epic-3: done
   3-1-administrator-invites-a-supervisor: done
-  3-2-supervisor-account-setup-and-password-only-entry: backlog
+  3-2-supervisor-account-setup-and-password-only-entry: done
   epic-3-retrospective: optional
 
   epic-4: backlog
