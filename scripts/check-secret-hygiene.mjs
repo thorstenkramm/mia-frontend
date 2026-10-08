@@ -3,7 +3,11 @@ import { mkdir, mkdtemp, readdir, readFile, rm } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { spawnSync } from "node:child_process";
-import { browserCases, unitCases } from "./secret-hygiene-evidence.ts";
+import {
+  browserCases,
+  unitCases,
+  courseUnitCases,
+} from "./secret-hygiene-evidence.ts";
 import { checkRouteSecretHygiene } from "./check-route-secret-hygiene.mjs";
 
 const outputDir = await mkdtemp(join(tmpdir(), "mia-secret-hygiene-"));
@@ -193,30 +197,119 @@ async function runFailures(runner, earlyId) {
   return rejected;
 }
 
-try {
-  for (const [runner, cases] of [
-    ["playwright", browserCases],
-    ["vitest", unitCases],
-  ]) {
-    const rejected = await runFailures(runner);
-    if (rejected.length)
-      throw new Error(
-        `Missing checkpoint or deliberate failure identity: ${rejected.join(", ")}.`,
-      );
-    // Preserve the same failed-case count while replacing one intended failure
-    // with an early fixture failure. The identity gate must reject exactly it.
-    const earlyId = cases[0];
-    const earlyRejected = await runFailures(runner, earlyId);
-    if (earlyRejected.length !== 1 || earlyRejected[0] !== earlyId)
-      throw new Error(
-        `The ${runner} early-failure canary was not rejected correctly.`,
-      );
-    console.log(
-      `${runner}: checkpoints and failure identities verified; early-failure canary rejected.`,
+async function checkCourseUnitHygiene() {
+  const probes = courseUnitCases.flatMap((item) =>
+    item.points.map((point) => ({ item, point, early: false })),
+  );
+  probes.push({
+    item: courseUnitCases[0],
+    point: courseUnitCases[0].points[0],
+    early: true,
+  });
+  for (const [index, { item, point, early }] of probes.entries()) {
+    const directory = join(outputDir, `course-unit-${index}`);
+    await mkdir(directory);
+    const reportFile = join(directory, "report.json");
+    const fixture = {
+      name: `course-${randomUUID()}`,
+      username: `supervisor.${randomUUID().slice(0, 12)}`,
+      csrf: randomUUID(),
+      rawError: `body-${randomUUID()}`,
+    };
+    const result = spawnSync(
+      join(process.cwd(), "node_modules", ".bin", "vitest"),
+      [
+        "run",
+        item.file,
+        "-t",
+        `^${item.title}$`,
+        "--reporter=json",
+        `--outputFile=${reportFile}`,
+      ],
+      {
+        encoding: "buffer",
+        timeout: 60_000,
+        maxBuffer: 16 * 1024 * 1024,
+        env: {
+          ...process.env,
+          NO_COLOR: "1",
+          MIA_COURSE_UNIT_NAME: fixture.name,
+          MIA_COURSE_UNIT_USERNAME: fixture.username,
+          MIA_COURSE_UNIT_CSRF: fixture.csrf,
+          MIA_COURSE_UNIT_RAW: fixture.rawError,
+          MIA_COURSE_UNIT_POINT: point,
+          MIA_COURSE_UNIT_EARLY: early ? "1" : "0",
+          MIA_SECRET_HYGIENE_EVIDENCE: directory,
+        },
+      },
     );
+    // Scan the original unredacted process output and every generated artifact.
+    const buffers = [result.stdout, result.stderr];
+    for (const file of await readdir(directory))
+      buffers.push(await readFile(join(directory, file)));
+    if (
+      Object.values(fixture).some((marker) =>
+        buffers.some((bytes) => bytes?.includes(Buffer.from(marker))),
+      )
+    )
+      throw new Error("Course unit hygiene marker leak.");
+    if (result.error || result.status !== 1)
+      throw new Error(
+        "Course unit deliberate failure did not finish normally.",
+      );
+    const report = JSON.parse(await readFile(reportFile, "utf8"));
+    const failures = report.testResults
+      .flatMap((suite) => suite.assertionResults)
+      .filter((test) => test.status === "failed");
+    const checkpoint = await readFile(
+      join(directory, "course.checkpoint"),
+      "utf8",
+    ).catch((error) => {
+      if (error.code === "ENOENT") return null;
+      throw error;
+    });
+    const accepted =
+      failures.length === 1 &&
+      failures[0].title === item.title &&
+      checkpoint === point &&
+      failures[0].failureMessages.some((message) =>
+        message.includes(`ControlledCourseUnitFailure:${point}`),
+      );
+    if (early ? accepted || checkpoint !== null : !accepted)
+      throw new Error("Course unit checkpoint/failure inventory mismatch.");
   }
-  await checkRouteSecretHygiene();
-  console.log("Secret-hygiene deliberate-failure scan passed.");
+  console.log(
+    `Course unit hygiene: ${courseUnitCases.length} actual tests, ${probes.length - 1} checkpoints; early-failure canary rejected; zero marker leaks.`,
+  );
+}
+
+try {
+  await checkCourseUnitHygiene();
+  if (process.env.MIA_SECRET_HYGIENE_SCOPE !== "course-unit") {
+    for (const [runner, cases] of [
+      ["playwright", browserCases],
+      ["vitest", unitCases],
+    ]) {
+      const rejected = await runFailures(runner);
+      if (rejected.length)
+        throw new Error(
+          `Missing checkpoint or deliberate failure identity: ${rejected.join(", ")}.`,
+        );
+      // Preserve the same failed-case count while replacing one intended failure
+      // with an early fixture failure. The identity gate must reject exactly it.
+      const earlyId = cases[0];
+      const earlyRejected = await runFailures(runner, earlyId);
+      if (earlyRejected.length !== 1 || earlyRejected[0] !== earlyId)
+        throw new Error(
+          `The ${runner} early-failure canary was not rejected correctly.`,
+        );
+      console.log(
+        `${runner}: checkpoints and failure identities verified; early-failure canary rejected.`,
+      );
+    }
+    await checkRouteSecretHygiene();
+    console.log("Secret-hygiene deliberate-failure scan passed.");
+  }
 } finally {
   await rm(outputDir, { force: true, recursive: true });
 }

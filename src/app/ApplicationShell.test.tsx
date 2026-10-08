@@ -182,13 +182,16 @@ describe("application shell", () => {
     renderAt("/", ...authenticatedHandlers(counts, everyCapability));
     await home();
 
-    // Story 3.1: global `accounts.administer` adds only invitation management.
+    // Only landed destinations: 3.1 invitations and 4.1 course administration
+    // and exact-scope Prepare discovery; still no future hub or role switcher.
     expect(linkNames()).toEqual([
       "Home",
+      "Courses",
       "Invitations",
+      "Prepare courses",
       "Multi-factor authentication",
     ]);
-    expect(within(navigation()).getAllByRole("list")).toHaveLength(4);
+    expect(within(navigation()).getAllByRole("list")).toHaveLength(5);
     const administer = within(navigation()).getByRole("list", {
       name: "Administer",
     });
@@ -196,8 +199,8 @@ describe("application shell", () => {
       within(administer)
         .getAllByRole("link")
         .map((link) => link.textContent),
-    ).toEqual(["Invitations"]);
-    for (const absent of [/learn/iu, /prepare/iu, /mentor/iu, /accounts/iu])
+    ).toEqual(["Courses", "Invitations"]);
+    for (const absent of [/learn/iu, /mentor/iu, /accounts/iu])
       expect(screen.queryByText(absent)).toBeNull();
     expect(screen.queryByRole("combobox")).toBeNull();
     expect(screen.queryByRole("radiogroup")).toBeNull();

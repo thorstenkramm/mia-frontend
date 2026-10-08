@@ -65,8 +65,8 @@ development_status:
   3-2-supervisor-account-setup-and-password-only-entry: done
   epic-3-retrospective: optional
 
-  epic-4: backlog
-  4-1-administrator-creates-a-course-with-a-supervisor: backlog
+  epic-4: in-progress
+  4-1-administrator-creates-a-course-with-a-supervisor: done
   4-2-supervisor-edits-course-teaching-fields: backlog
   4-3-supervisor-creates-material-and-uploads-files: backlog
   4-4-process-material-and-approve-its-brief: backlog

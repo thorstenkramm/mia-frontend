@@ -6,6 +6,8 @@ import type { PasswordResetLink } from "../../platform/session/passwordResetLink
 import { mfaPaths } from "../../platform/session/mfaEnrollment";
 import type { MfaRouteProps } from "../../features/profile/MfaRouteProps";
 import type { InvitationRouteProps } from "../../features/invitations/InvitationRouteProps";
+import type { CourseRouteProps } from "../../features/courses/CourseRouteProps";
+import { toCourseId, type CourseId } from "../../platform/api/entry";
 import {
   toInvitationId,
   type InvitationId,
@@ -65,7 +67,23 @@ type EntryRoute =
       readonly component: LazyExoticComponent<
         ComponentType<InvitationRouteProps>
       >;
+    })
+  | (EntryRouteBase & {
+      readonly path: (typeof courseRoutePaths)[keyof typeof courseRoutePaths];
+      readonly gate: "Administer(courses)" | "Prepare(courses)";
+      readonly resource: "list" | "detail" | "create" | "prepare";
+      readonly component: LazyExoticComponent<ComponentType<CourseRouteProps>>;
     });
+
+export const courseRoutePaths = {
+  list: "/admin/courses",
+  create: "/admin/courses/new",
+  detail: "/admin/courses/:courseId",
+  prepare: "/prepare/courses",
+} as const;
+export function courseDetailPath(id: CourseId): string {
+  return courseRoutePaths.detail.replace(":courseId", encodeURIComponent(id));
+}
 
 // ROUTE-INVENTORY.md §Invitations. `:invitationId` is an opaque backend ID.
 // Delete faulty invitation is outside Story 3.1 and has no entry.
@@ -277,6 +295,44 @@ export const entryRoutes = {
       () => import("../../features/invitations/InvitationRevokeRoute"),
     ),
   },
+  courseList: {
+    parent: { path: "/", label: messages.invitationsBackToHome },
+    path: courseRoutePaths.list,
+    gate: "Administer(courses)",
+    resource: "list",
+    titleMessage: messages.coursesListTitle,
+    headingMessage: messages.coursesListHeading,
+    component: lazy(() => import("../../features/courses/CourseListRoute")),
+  },
+  courseCreate: {
+    parent: { path: courseRoutePaths.list, label: messages.coursesBackToList },
+    path: courseRoutePaths.create,
+    gate: "Administer(courses)",
+    resource: "create",
+    titleMessage: messages.coursesCreateTitle,
+    headingMessage: messages.coursesCreateHeading,
+    component: lazy(() => import("../../features/courses/CourseCreateRoute")),
+  },
+  courseDetail: {
+    parent: { path: courseRoutePaths.list, label: messages.coursesBackToList },
+    path: courseRoutePaths.detail,
+    gate: "Administer(courses)",
+    resource: "detail",
+    titleMessage: messages.coursesDetailTitle,
+    headingMessage: messages.coursesDetailHeading,
+    component: lazy(() => import("../../features/courses/CourseDetailRoute")),
+  },
+  prepareCourses: {
+    parent: { path: "/", label: messages.invitationsBackToHome },
+    path: courseRoutePaths.prepare,
+    gate: "Prepare(courses)",
+    resource: "prepare",
+    titleMessage: messages.coursesPrepareTitle,
+    headingMessage: messages.coursesPrepareHeading,
+    component: lazy(
+      () => import("../../features/courses/PrepareCourseListRoute"),
+    ),
+  },
 } as const satisfies Record<string, EntryRoute>;
 
 export type EntryRouteKey = keyof typeof entryRoutes;
@@ -288,6 +344,10 @@ export type ProfileMfaEntryRoute = Extract<
 export type InvitationEntryRoute = Extract<
   (typeof entryRoutes)[EntryRouteKey],
   { readonly gate: "Administer(invitations)" }
+>;
+export type CourseEntryRoute = Extract<
+  (typeof entryRoutes)[EntryRouteKey],
+  { readonly gate: "Administer(courses)" | "Prepare(courses)" }
 >;
 
 const profileMfaRouteKeys = [
@@ -301,6 +361,10 @@ const profileMfaRouteKeys = [
 export type AuthenticatedRouteAccess = {
   readonly ownProfileView: boolean;
   readonly invitationAdministration: boolean;
+  readonly courseRecords: boolean;
+  readonly courseCreate: boolean;
+  readonly supervisorAssignments: boolean;
+  readonly courseSupervision: boolean;
 };
 
 export type AuthenticatedRoute = {
@@ -308,6 +372,7 @@ export type AuthenticatedRoute = {
   // The canonical concrete path for this location.
   readonly path: string;
   readonly invitationId: InvitationId | null;
+  readonly courseId?: CourseId;
 };
 
 const home: AuthenticatedRoute = {
@@ -323,6 +388,48 @@ export function authenticatedRoute(
   pathname: string,
   access: AuthenticatedRouteAccess,
 ): AuthenticatedRoute {
+  if (pathname === courseRoutePaths.prepare && access.courseSupervision)
+    return {
+      key: "prepareCourses",
+      path: courseRoutePaths.prepare,
+      invitationId: null,
+    };
+  if (pathname === courseRoutePaths.create)
+    return access.courseCreate && access.supervisorAssignments
+      ? {
+          key: "courseCreate",
+          path: courseRoutePaths.create,
+          invitationId: null,
+        }
+      : home;
+  if (access.courseRecords) {
+    if (pathname === courseRoutePaths.list)
+      return {
+        key: "courseList",
+        path: courseRoutePaths.list,
+        invitationId: null,
+      };
+    const prefix = `${courseRoutePaths.list}/`;
+    if (pathname.startsWith(prefix)) {
+      const segment = pathname.slice(prefix.length);
+      if (segment !== "" && !segment.includes("/")) {
+        try {
+          const decoded = decodeURIComponent(segment);
+          if (decoded !== "new" && decoded !== "") {
+            const courseId = toCourseId(decoded);
+            return {
+              key: "courseDetail",
+              path: courseDetailPath(courseId),
+              courseId,
+              invitationId: null,
+            };
+          }
+        } catch {
+          return home;
+        }
+      }
+    }
+  }
   if (access.invitationAdministration) {
     const invitation = invitationRoute(pathname);
     if (invitation !== null) return invitation;

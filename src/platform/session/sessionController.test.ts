@@ -15,6 +15,77 @@ import {
 const mediaType = "application/vnd.api+json";
 
 describe("deliberate route admission", () => {
+  it("fences pending course reads and replaces supervision scope on fresh admission", async () => {
+    let scope = ["assigned_1"];
+    const actions = [
+      "profile.view",
+      "profile.edit",
+      "accounts.administer",
+      "audit.view",
+      "jobs.view",
+      "courses.create",
+      "course_records.manage",
+      "course_supervisors.manage",
+      "courses.supervise",
+      "students.manage",
+      "students.ban",
+      "students.unban",
+      "learning.participate",
+      "mentoring.fulfill",
+    ];
+    server.use(
+      http.get("/api/v1/auth/session", () => authenticatedSessionResponse()),
+      http.get("/api/v1/users/me/capabilities", () =>
+        HttpResponse.json(
+          {
+            data: {
+              type: "account-capabilities",
+              id: "account-id",
+              attributes: {
+                capabilities: actions.map((action) => ({
+                  action,
+                  available: action === "courses.supervise",
+                  scope: {
+                    global: false,
+                    own_resource: false,
+                    course_ids: action === "courses.supervise" ? scope : [],
+                    student_ids: [],
+                    course_students: [],
+                  },
+                })),
+              },
+            },
+          },
+          { headers: { "Content-Type": mediaType } },
+        ),
+      ),
+    );
+    const controller = new SessionController();
+    const gate = lifecycleGate();
+    controller.start();
+    try {
+      await waitFor(() =>
+        expect(controller.getSnapshot().kind).toBe("Authenticated"),
+      );
+      expect(controller.getAuthenticatedAccess()?.supervisedCourseIds).toEqual([
+        "assigned_1",
+      ]);
+      const pending = controller.readAuthenticated(async () => {
+        await gate.promise;
+        return true;
+      });
+      scope = ["assigned_2"];
+      await controller.checkRouteAdmission();
+      gate.resolve();
+      expect((await pending).kind).toBe("superseded");
+      expect(controller.getAuthenticatedAccess()?.supervisedCourseIds).toEqual([
+        "assigned_2",
+      ]);
+    } finally {
+      gate.resolve();
+      controller.stop();
+    }
+  });
   it.each([
     ["anonymous", anonymousSession, "Signed out"],
     ["mfa", restrictedSession, "MFA required"],

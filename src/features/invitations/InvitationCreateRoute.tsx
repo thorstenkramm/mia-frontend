@@ -22,7 +22,7 @@ import {
   alertActionClass,
   primaryActionClass,
 } from "./InvitationStatus";
-import { useInvitationActivity } from "./useInvitationActivity";
+import { useRouteActivity } from "../../platform/ui/useRouteActivity";
 
 const maxEmailLength = 254;
 
@@ -72,7 +72,7 @@ export default function InvitationCreateRoute({
   const { runAuthenticatedMutation } = useSessionActions();
   const [email, setEmail] = useState("");
   const { state, stateRef, mounted, update } =
-    useInvitationActivity<CreateState>(formReady);
+    useRouteActivity<CreateState>(formReady);
   const inputRef = useRef<HTMLInputElement>(null);
   const outcomeRef = useRef<HTMLHeadingElement>(null);
 

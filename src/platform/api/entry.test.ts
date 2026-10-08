@@ -33,6 +33,63 @@ function jsonApiResponse(body: JsonBodyType): HttpResponse<JsonBodyType> {
 }
 
 describe("continuation transport", () => {
+  it("projects course actions independently and retains only authoritative supervision IDs", async () => {
+    const actions = [
+      "profile.view",
+      "profile.edit",
+      "accounts.administer",
+      "audit.view",
+      "jobs.view",
+      "courses.create",
+      "course_records.manage",
+      "course_supervisors.manage",
+      "courses.supervise",
+      "students.manage",
+      "students.ban",
+      "students.unban",
+      "learning.participate",
+      "mentoring.fulfill",
+    ];
+    server.use(
+      http.get("/api/v1/users/me/capabilities", () =>
+        jsonApiResponse({
+          data: {
+            type: "account-capabilities",
+            id: "account-id",
+            attributes: {
+              capabilities: actions.map((action) => ({
+                action,
+                available: [
+                  "courses.create",
+                  "courses.supervise",
+                  "course_records.manage",
+                ].includes(action),
+                scope: {
+                  global: action === "courses.create",
+                  own_resource: false,
+                  course_ids:
+                    action === "courses.supervise"
+                      ? ["assigned_1"]
+                      : ["not_supervised"],
+                  student_ids: [],
+                  course_students: [],
+                },
+              })),
+            },
+          },
+        }),
+      ),
+    );
+    const capability = await getCurrentAccountCapabilities();
+    expect(
+      capability.courseCreate &&
+        capability.courseSupervision &&
+        !capability.courseRecords &&
+        !capability.supervisorCandidates &&
+        !capability.supervisorAssignments,
+    ).toBe(true);
+    expect(capability.supervisedCourseIds).toEqual(["assigned_1"]);
+  });
   it.each([
     [
       "authenticated",

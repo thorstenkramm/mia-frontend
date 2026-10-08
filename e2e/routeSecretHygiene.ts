@@ -19,6 +19,8 @@ type Fixture = {
   readonly rawError: string;
   // A synthetic invitee address: protected personal data, never a test name.
   readonly email: string;
+  readonly courseName: string;
+  readonly supervisorUsername: string;
 };
 const fixtures = new WeakMap<Page, Fixture>();
 
@@ -51,6 +53,8 @@ export function routeSecretFixture(page: Page): Fixture {
       codes: recoveryCodesFixture(),
       rawError: `fixture-body-${randomBytes(24).toString("hex")}`,
       email: `invitee-${randomBytes(12).toString("hex")}@example.test`,
+      courseName: `درس course-${randomUUID()}`,
+      supervisorUsername: `supervisor.${randomUUID().slice(0, 12)}`,
     };
   } else {
     const value: unknown = JSON.parse(seed);
@@ -72,6 +76,10 @@ export function routeSecretFixture(page: Page): Fixture {
       !("email" in value) ||
       typeof value.email !== "string" ||
       !("codes" in value) ||
+      !("courseName" in value) ||
+      typeof value.courseName !== "string" ||
+      !("supervisorUsername" in value) ||
+      typeof value.supervisorUsername !== "string" ||
       !Array.isArray(value.codes) ||
       value.codes.length !== 10 ||
       !value.codes.every((code: unknown) => typeof code === "string")
@@ -86,6 +94,8 @@ export function routeSecretFixture(page: Page): Fixture {
       rawError: value.rawError,
       email: value.email,
       codes: value.codes,
+      courseName: value.courseName,
+      supervisorUsername: value.supervisorUsername,
     };
   }
   fixtures.set(page, fixture);
@@ -136,7 +146,32 @@ export async function routeHygieneCheckpoint(
   // Confirm exposure with boolean assertions only. No marker enters a matcher,
   // checkpoint, test name, exception or report. Cookie-only tests use public
   // settled-state assertions in their original bodies before `complete`.
-  if (point === "onboarding-acceptance-input") {
+  if (point === "course-input") {
+    expect(
+      (await page.locator("#course-name").inputValue()) === fixture.courseName,
+    ).toBe(true);
+  } else if (point === "course-persisted") {
+    await expect
+      .poll(async () =>
+        page.evaluate(
+          (marker) =>
+            document.querySelector("main")?.textContent?.includes(marker) ===
+            true,
+          fixture.courseName,
+        ),
+      )
+      .toBe(true);
+  } else if (point === "course-error") {
+    await page
+      .getByRole("button", { name: "Technical details", exact: true })
+      .click();
+    expect(
+      await page
+        .locator("main pre")
+        .textContent()
+        .then((text) => text?.includes(fixture.rawError) === true),
+    ).toBe(true);
+  } else if (point === "onboarding-acceptance-input") {
     for (const selector of ["#new-password", "#password-confirmation"])
       expect(
         (await page.locator(selector).inputValue()) === fixture.password,

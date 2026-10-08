@@ -1,6 +1,61 @@
 // Actual Story 2.2 browser-test inventory, including cookie-only cases and the
 // R1 repair. IDs/checkpoints are fixed public labels, never fixture-derived.
 export const routeHygieneCases = [
+  {
+    id: "course-boundaries",
+    title:
+      "course enabled unfocused boundaries and collection landmarks are accessible",
+    checkpoints: ["complete"],
+  },
+  {
+    id: "course-hidden-locales",
+    title:
+      "course hidden detail causes share neutral presentation in every locale",
+    checkpoints: ["course-persisted", "complete"],
+  },
+  {
+    id: "course-connected",
+    title:
+      "course creation persists atomically and assigned scope discovers it",
+    checkpoints: ["course-input", "course-persisted", "complete"],
+  },
+  {
+    id: "course-scope",
+    title:
+      "course authority and scope never broaden through role or empty scope",
+    checkpoints: ["course-persisted", "complete"],
+  },
+  {
+    id: "course-hidden",
+    title: "course hidden selector denial removes draft dialog and labels",
+    checkpoints: ["course-input", "course-error", "complete"],
+  },
+  {
+    id: "course-unknown",
+    title: "course lost response freezes the journey without replay",
+    checkpoints: ["course-input", "course-persisted", "complete"],
+  },
+  {
+    id: "course-stopped",
+    title: "course stopping waiting fences late create success",
+    checkpoints: ["course-input", "complete"],
+  },
+  {
+    id: "course-departure",
+    title:
+      "course dirty navigation and lifecycle security have separate boundaries",
+    checkpoints: ["course-input", "complete"],
+  },
+  {
+    id: "course-reflow",
+    title: "course create reflows in every locale and text mode",
+    checkpoints: ["complete"],
+  },
+  {
+    id: "course-zoom",
+    title: "course connected process remains operable at real 200 percent zoom",
+    checkpoints: ["course-input", "course-persisted", "complete"],
+  },
   // Story 3.2 executes the actual joined cases in scaffold's bounded describe.
   ...["standard", "large", "extra-large"].map((size) => ({
     id: `supervisor-handoff-${size}`,

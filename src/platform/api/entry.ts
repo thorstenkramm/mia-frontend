@@ -126,6 +126,11 @@ const capabilitiesDocumentSchema = z.object({
 
 declare const accountIdBrand: unique symbol;
 export type AccountId = string & { readonly [accountIdBrand]: "AccountId" };
+declare const courseIdBrand: unique symbol;
+export type CourseId = string & { readonly [courseIdBrand]: "CourseId" };
+export function toCourseId(id: string): CourseId {
+  return id as CourseId;
+}
 declare const mfaChallengeIdBrand: unique symbol;
 export type MfaChallengeId = string & {
   readonly [mfaChallengeIdBrand]: "MfaChallengeId";
@@ -161,6 +166,12 @@ export type AccountCapabilities = {
   // navigation and route guidance for administrator invitation management
   // (BACKEND-CONTRACT-GAPS.md §BCG-003, owner decision 2026-10-07).
   readonly invitationAdministration: boolean;
+  readonly courseRecords: boolean;
+  readonly courseCreate: boolean;
+  readonly supervisorAssignments: boolean;
+  readonly supervisorCandidates: boolean;
+  readonly courseSupervision: boolean;
+  readonly supervisedCourseIds: readonly CourseId[];
 };
 
 export function toAccountId(id: string): AccountId {
@@ -329,12 +340,32 @@ export async function getCurrentAccountCapabilities(
   const administer = document.data.attributes.capabilities.find(
     (capability) => capability.action === "accounts.administer",
   );
+  const capabilities = document.data.attributes.capabilities;
+  const globalAction = (action: AccountCapability["action"]) =>
+    capabilities.some(
+      (capability) =>
+        capability.action === action &&
+        capability.available &&
+        capability.scope.global,
+    );
+  const supervise = capabilities.find(
+    (capability) => capability.action === "courses.supervise",
+  );
   return {
     accountId: toAccountId(document.data.id),
     ownProfileView:
       profileView?.available === true && profileView.scope.own_resource,
     invitationAdministration:
       administer?.available === true && administer.scope.global,
+    courseRecords: globalAction("course_records.manage"),
+    courseCreate: globalAction("courses.create"),
+    supervisorAssignments: globalAction("course_supervisors.manage"),
+    supervisorCandidates: globalAction("accounts.administer"),
+    courseSupervision: supervise?.available === true,
+    supervisedCourseIds:
+      supervise?.available === true
+        ? [...new Set(supervise.scope.course_ids)].map(toCourseId)
+        : [],
   };
 }
 

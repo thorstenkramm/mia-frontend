@@ -11,6 +11,11 @@ import {
   type StrongETag,
 } from "./client";
 import { resourceId, sendNoContent, utcInstant } from "./entry";
+import {
+  collectionNavigation,
+  collectionPageLimit,
+  collectionQuery,
+} from "./collectionNavigation";
 
 // Administrator invitation management (Story 3.1 slice decision,
 // BACKEND-CONTRACT-GAPS.md §BCG-006 and §BCG-014). Only `supervisor`
@@ -137,8 +142,7 @@ export function isHiddenInvitationFailure(failure: ApiFailure): boolean {
 }
 
 const collectionPath = "/api/v1/invitations";
-export const invitationPageLimit = 25;
-const maxPageOffset = 10_000;
+export const invitationPageLimit = collectionPageLimit;
 
 function toInvitation(resource: z.infer<typeof invitationSchema>): Invitation {
   const attributes = resource.attributes;
@@ -162,56 +166,22 @@ function invitationPath(id: InvitationId): string {
   return `${collectionPath}/${encodeURIComponent(id)}`;
 }
 
-function pagePath(offset: number): string {
-  const query = new URLSearchParams({
-    "page[limit]": String(invitationPageLimit),
-    "page[offset]": String(offset),
-  });
-  return `${collectionPath}?${query.toString()}`;
-}
-
-// Follows a backend navigation link only when it is the same collection with
-// the canonical pagination parameters this client requested.
-function linkedOffset(link: string | undefined): number | null {
-  if (link === undefined) return null;
-  if (!link.startsWith("/") || link.startsWith("//"))
-    throw new ApiProtocolError();
-  const url = new URL(link, window.location.origin);
-  const keys = [...url.searchParams.keys()].sort();
-  const limit = url.searchParams.get("page[limit]");
-  const offset = url.searchParams.get("page[offset]");
-  if (
-    url.origin !== window.location.origin ||
-    url.pathname !== collectionPath ||
-    url.hash !== "" ||
-    keys.join("&") !== "page[limit]&page[offset]" ||
-    limit !== String(invitationPageLimit) ||
-    offset === null ||
-    !/^(0|[1-9]\d*)$/u.test(offset)
-  )
-    throw new ApiProtocolError();
-  const value = Number(offset);
-  if (value > maxPageOffset) throw new ApiProtocolError();
-  return value;
-}
-
 export async function listInvitations(
   offset: number,
   signal: AbortSignal,
 ): Promise<InvitationPage> {
   const document = await readJsonApi({
-    path: pagePath(offset),
+    path: `${collectionPath}?${collectionQuery(offset)}`,
     schema: invitationCollectionDocumentSchema,
     initiator: "user",
     signal,
   });
-  const previousOffset = linkedOffset(document.links?.prev);
-  const nextOffset = linkedOffset(document.links?.next);
-  if (
-    (previousOffset !== null && previousOffset >= offset) ||
-    (nextOffset !== null && (nextOffset <= offset || !document.meta.has_more))
-  )
-    throw new ApiProtocolError();
+  const { previousOffset, nextOffset } = collectionNavigation(
+    collectionPath,
+    offset,
+    document.meta.has_more,
+    document.links,
+  );
   return {
     invitations: document.data.map(toInvitation),
     offset,

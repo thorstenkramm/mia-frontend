@@ -41,6 +41,8 @@ import {
   type EntryRouteKey,
 } from "./routes/entryRoutes";
 import { AdminInvitationRoute } from "./routes/AdminInvitationRoute";
+import { AdminCourseRoute } from "./routes/AdminCourseRoute";
+import { PrepareCourseRoute } from "./routes/PrepareCourseRoute";
 import { ProfileMfaRoute } from "./routes/ProfileMfaRoute";
 import { SimpleEntrySurface } from "./routes/SimpleEntrySurface";
 import { SessionPrivacyShield, SessionWarning } from "./SessionLifecycle";
@@ -200,6 +202,10 @@ function CanonicalEntry({
   const routeAccess: AuthenticatedRouteAccess = {
     ownProfileView: access?.ownProfileView === true,
     invitationAdministration: access?.invitationAdministration === true,
+    courseRecords: access?.courseRecords === true,
+    courseCreate: access?.courseCreate === true,
+    supervisorAssignments: access?.supervisorAssignments === true,
+    courseSupervision: access?.courseSupervision === true,
   };
   const authenticated = authenticatedRoute(location.pathname, routeAccess);
   const key = routeKey(
@@ -275,6 +281,21 @@ function CanonicalEntry({
       />
     );
 
+  if (route.gate === "Administer(courses)")
+    return (
+      <AdminCourseRoute
+        key={`${location.key}:${access?.epoch}`}
+        route={route}
+        courseId={authenticated.courseId ?? null}
+      />
+    );
+  if (route.gate === "Prepare(courses)")
+    return (
+      <PrepareCourseRoute
+        key={`${location.key}:${access?.epoch}`}
+        route={route}
+      />
+    );
   const RouteContent = route.component;
   const parent =
     invitation?.view.kind === "interstitial"

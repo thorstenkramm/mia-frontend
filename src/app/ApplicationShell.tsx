@@ -7,6 +7,7 @@ import {
 import {
   Bars3Icon,
   EnvelopeIcon,
+  AcademicCapIcon,
   HomeIcon,
   ShieldCheckIcon,
   XMarkIcon,
@@ -68,12 +69,35 @@ function authorizedGroups(
   const groups: ShellGroup[] = [
     {
       label: messages.shellAdministerGroup,
-      links: access.invitationAdministration
+      links: [
+        ...(access.courseRecords
+          ? [
+              {
+                to: entryRoutes.courseList.path,
+                label: messages.coursesListHeading,
+                icon: AcademicCapIcon,
+              },
+            ]
+          : []),
+        ...(access.invitationAdministration
+          ? [
+              {
+                to: entryRoutes.invitationList.path,
+                label: messages.shellInvitationsLink,
+                icon: EnvelopeIcon,
+              },
+            ]
+          : []),
+      ],
+    },
+    {
+      label: messages.coursesPrepareGroup,
+      links: access.courseSupervision
         ? [
             {
-              to: entryRoutes.invitationList.path,
-              label: messages.shellInvitationsLink,
-              icon: EnvelopeIcon,
+              to: entryRoutes.prepareCourses.path,
+              label: messages.coursesPrepareHeading,
+              icon: AcademicCapIcon,
             },
           ]
         : [],
@@ -284,6 +308,10 @@ function ShellNavigation({
   const groups = authorizedGroups({
     ownProfileView: access?.ownProfileView === true,
     invitationAdministration: access?.invitationAdministration === true,
+    courseRecords: access?.courseRecords === true,
+    courseCreate: access?.courseCreate === true,
+    supervisorAssignments: access?.supervisorAssignments === true,
+    courseSupervision: access?.courseSupervision === true,
   });
 
   return (

@@ -1,0 +1,92 @@
+story: 4-1-administrator-creates-a-course-with-a-supervisor
+phase: commit-pending
+spec: _bmad-output/implementation-artifacts/spec-4-1-administrator-creates-a-course-with-a-supervisor.md
+baseline_commit: d2d079023f3935aeee1dba7b0add98ff6c4425ca
+pre_existing_changes_ref: tmp/agent-execution/4-1-administrator-creates-a-course-with-a-supervisor/prepare-context.json
+files:
+  - _bmad-output/implementation-artifacts/spec-4-1-administrator-creates-a-course-with-a-supervisor.md
+worker_session: ses_ee5ce26ebffeKPf0Pq5R6T9mGI
+reviewer_session: ses_ee563bbd2ffecJS5ysP3GYkoYV
+models:
+  prepare: openai/gpt-6.1-sol#high
+  implement: openai/gpt-6.1-sol#high
+  review: openai/gpt-6-astra#high
+completed_blocks:
+  - Owner approved O1 supervisor-selector slice and O2 scoped-ID discovery batches; dated canonical decisions recorded.
+  - Detailed spec ready with 47-path planned manifest; documentation consistency checks passed.
+  - Prepared bounded Story 4.1 spec and contract/tool inventory; no unknown overlapping edits.
+  - User authorized separate verified story commits for Stories 4.1-4.5; no push; stop before Epic 5.
+repair_queue:
+  - id: R1
+    finding: Enabled unfocused supervisor checkbox and empty course-name input boundaries lack 3:1 contrast.
+    disposition: Repaired and reviewer-cleared; browser-measured normal-color boundary contrast 4.836:1.
+  - id: R2
+    finding: Supervisor selection errors lack programmatic invalid state.
+    disposition: Repaired and reviewer-cleared; associated invalid state and local/backend correction regressions passed.
+  - id: R3
+    finding: Course and supervisor-selector pagination landmarks incorrectly named Invitation pages.
+    disposition: Repaired and reviewer-cleared; localized Collection pages labels preserve invitation labels.
+repair_batch: 1
+last_verification:
+  status: passed
+  command: ./run-all-tests.sh
+  attempt: 3
+  exit_code: 0
+  stages_completed: 17
+  skipped: []
+  unit_tests: 671
+  browser_tests: 163
+  hygiene_route_tests: 56
+  hygiene_checkpoints: 116
+  marker_leaks: 0
+  build_count: 1
+  input_count: 199
+  fingerprint: 2578812d42795831d660e93cd3a3b0849abd5cfb9f5734fdbe13f38ee4ec2d3c
+  report: tmp/agent-execution/4-1-administrator-creates-a-course-with-a-supervisor/verify-report.json
+  evidence: tmp/agent-execution/4-1-administrator-creates-a-course-with-a-supervisor/verify-attempt3/
+  advisories: Current unchanged KaTeX LOW and static-country-code false-positive identities substantiated; prior dispositions reused.
+resume_attempts: 0
+commit:
+  intended_message: "feat: create courses with assigned supervisors"
+  sha: null
+next_action: Commit exact verified Story 4.1 manifest and approved tracking hunks; await confirmed SHA before Story 4.2.
+hygiene_diagnosis:
+  result: Exact probe passed once with intended checkpoint and failure identity; zero leaks across 30 markers and complete output/artifacts.
+  original_cause: Unknown; attempt-2 child cause not retained and failure did not reproduce.
+  executable_changes: None; all 199 input hashes unchanged.
+  report: tmp/agent-execution/4-1-administrator-creates-a-course-with-a-supervisor/hygiene-diagnosis/diagnostic-report.json
+  disposition: Retain review clearance; authorize full attempt 3, not acceptance based on isolated probe alone.
+gate_attempt_2:
+  exit_code: 1
+  fingerprint: 2578812d42795831d660e93cd3a3b0849abd5cfb9f5734fdbe13f38ee4ec2d3c
+  completed: 671 unit tests and 163 browser tests passed; one build; 199 input hashes unchanged.
+  failure: supervisor-acceptance-unknown/invitation-detail hygiene probe did not reach intended checkpoint/failure identity.
+  interpretation: Missing probe evidence, not an established marker leak; child cause unknown.
+  not_reached: Duplication, audit, Trivy, catalog and Markdown.
+  evidence: tmp/agent-execution/4-1-administrator-creates-a-course-with-a-supervisor/verify-attempt2/full-gate.log
+gate_attempt_1:
+  exit_code: 1
+  completed: 671 unit tests and 162 browser tests passed; one shell browser assertion failed.
+  failure: Shell test expected old destination list without approved Courses and Prepare courses links.
+  evidence: tmp/agent-execution/4-1-administrator-creates-a-course-with-a-supervisor/verify/gate-exit.json
+  repair_authorized: Update actual destination and keyboard-order assertions without weakening coverage; no production changes expected.
+review_result:
+  status: pass
+  remaining_blockers: []
+  reproduction_requests: []
+repair_evidence:
+  report: tmp/agent-execution/4-1-administrator-creates-a-course-with-a-supervisor/fix-report.json
+  delta: tmp/agent-execution/4-1-administrator-creates-a-course-with-a-supervisor/repair.diff
+  checks: 57 focused unit tests, 4 browser journeys, static/format/i18n and zero-clone checks passed.
+  hygiene: 21 unit and 22 browser checkpoints passed with zero marker leaks.
+  measured_contrast: 4.836:1 enabled unfocused boundaries against inner and outer white backgrounds.
+implementation_evidence:
+  diff: tmp/agent-execution/4-1-administrator-creates-a-course-with-a-supervisor/story.diff
+  report: tmp/agent-execution/4-1-administrator-creates-a-course-with-a-supervisor/implement-report.json
+  fingerprint: tmp/agent-execution/4-1-administrator-creates-a-course-with-a-supervisor/implementation-fingerprint.json
+  changed_paths: 53
+  focused_results: 292 unit/integration tests, 9 Chromium journeys, 19 unit and 21 browser failure checkpoints passed; zero marker leaks.
+  static_results: Typecheck, lint, format, i18n, API drift, bundle and duplication checks passed.
+blocked_on: null
+implementation_manifest: tmp/agent-execution/4-1-administrator-creates-a-course-with-a-supervisor/manifest.json
+prepare_report: tmp/agent-execution/4-1-administrator-creates-a-course-with-a-supervisor/prepare-report.json

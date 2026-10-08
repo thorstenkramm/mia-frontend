@@ -827,8 +827,13 @@ use their backend retry lifecycle.
 | Action ineligible | Server reports no action | Disabled reason | Safe navigation | Fresh representation |
 | Access lost | Read denies | Clear protected state | Safe navigation | Auth/scope recovery |
 
-Account reads are `BLOCKED` on `BCG-008: Account-administration collection and detail reads`. MFA overview and factor
-identity are `BLOCKED` on `BCG-009: Current and pending MFA-factor discovery`. Student and staff reset are `BLOCKED` on
+Account reads outside the approved Story 4.1 selector slice are `BLOCKED` on
+`BCG-008: Account-administration collection and detail reads`. Owner decision, 2026-10-08 (O1), is recorded in
+`BACKEND-CONTRACT-GAPS.md` §BCG-008 Story 4.1 supervisor-selector slice decision: only the bounded collection selector's
+checking, empty, paginated, failed and unavailable states resume. Selection remains candidate discovery, not assignment
+eligibility; atomic course creation validates it. Account detail and target-action work remain outside this exception.
+MFA overview and factor identity are `BLOCKED` on `BCG-009: Current and pending MFA-factor discovery`.
+Student and staff reset are `BLOCKED` on
 `BCG-010: Authorized student and staff MFA-reset operations`. Role inference and mutation probing are forbidden.
 
 Supervisor mentor-role targeting is `BLOCKED` on

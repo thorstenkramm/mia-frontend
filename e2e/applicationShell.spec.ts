@@ -146,10 +146,13 @@ test("desktop shell keyboard order reaches each destination and Sign out", async
     "aria-current",
     "page",
   );
-  // Global `accounts.administer` adds invitation management (Story 3.1).
+  // This all-capabilities fixture includes the landed 4.1 course-records and
+  // supervision destinations, alongside 3.1 invitation management.
   await expect(navigation.getByRole("link")).toHaveText([
     "Home",
+    "Courses",
     "Invitations",
+    "Prepare courses",
     "Multi-factor authentication",
   ]);
   await expect(
@@ -165,7 +168,15 @@ test("desktop shell keyboard order reaches each destination and Sign out", async
   await expect(navigation.getByRole("link", { name: "Home" })).toBeFocused();
   await page.keyboard.press("Tab");
   await expect(
+    navigation.getByRole("link", { name: "Courses", exact: true }),
+  ).toBeFocused();
+  await page.keyboard.press("Tab");
+  await expect(
     navigation.getByRole("link", { name: "Invitations" }),
+  ).toBeFocused();
+  await page.keyboard.press("Tab");
+  await expect(
+    navigation.getByRole("link", { name: "Prepare courses", exact: true }),
   ).toBeFocused();
   await page.keyboard.press("Tab");
   const mfa = navigation.getByRole("link", {

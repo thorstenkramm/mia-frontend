@@ -1,7 +1,7 @@
 ---
 name: MIA frontend backend contract gaps
 status: draft
-updated: 2026-10-07
+updated: 2026-10-08
 sources:
   - .memlog.md
   - mia/docs/product-requirements.md
@@ -853,10 +853,12 @@ into the DOM, accessibility tree, clipboard, logs, analytics, or diagnostics.
 
 ### BCG-008: Account-administration collection and detail reads
 
+Status: **OPEN — Story 4.1 collection-only supervisor-selector slice approved; broader obligations remain.**
+
 #### BCG-008 frontend capability blocked
 
-Release-one account administration is blocked. Administrators cannot discover accounts or open an authoritative account
-detail before using ID-addressed role and deletion mutations.
+Broader release-one account-directory, account-detail and target-action work remains blocked pending reconciliation and
+acceptance evidence. The Story 4.1 decision below permits only its bounded supervisor selector, not those surfaces.
 
 #### BCG-008 authoritative product requirement
 
@@ -866,13 +868,37 @@ detail before using ID-addressed role and deletion mutations.
 - The API narrative confirms that administrators can list account and relationship metadata needed for administration
   (`mia/docs/api.md:340-365`).
 
-#### BCG-008 current docs/OpenAPI mismatch
+#### BCG-008 historical mismatch and Story 4.1 transport assessment
 
-- OpenAPI maps only `GET /api/v1/users/me`, user mutations, and `DELETE /api/v1/users/{id}`. It has no users collection
-  read or ID-addressed user detail read (`mia/api-doc/openapi.yaml:75-97`).
-- `users.yaml` defines self-profile reads and target mutations but no administration read operation
-  (`mia/api-doc/paths/users.yaml:1-271`).
+- The original missing-collection/detail finding is stale against backend revision
+  `63c99925e5995fe2e2467f4f894976dfd4c0d297`. Current OpenAPI maps `GET /api/v1/users` at
+  `mia/api-doc/openapi.yaml:90-91`; `mia/api-doc/paths/users.yaml#/accounts` (`listAdministrationAccounts`, 272-308)
+  contracts administrator-authorized minimal account reads, exact role/state filters, deterministic ordering, bounded
+  pagination, empty pages, errors and `no-store`. ID-addressed account detail also exists at `users.yaml#/account`;
+  this collection-only assessment does not authorize its use or close its broader obligations.
+- The selector's resource and page shapes are owned by `mia/api-doc/schemas/resources/resources.yaml`
+  `AdministrationAccount` (203-219) and `AdministrationAccountCollectionDocument` (1974-1982). The collection has no
+  course-assignment eligibility field; account detail's role-grant/deletion actions are not assignment preflight.
 - Existing course rosters are scoped relationship reads and cannot serve as a global account directory.
+
+#### BCG-008 Story 4.1 supervisor-selector slice decision
+
+Owner decision, 2026-10-08 (O1): Story 4.1 may use the existing `listAdministrationAccounts` transport only for a
+collection-only supervisor selector during administrator course creation. Require current available, globally scoped
+`accounts.administer` guidance before the read; every operation still independently authorizes. Use
+`filter[role]=supervisor`, `filter[state]=active`, and bounded OpenAPI pagination, following filter-preserving backend
+links rather than inventing offsets, totals or search. Render only the contracted minimal candidate identity/state.
+This resumes the checking, empty, paginated, failed and unavailable states for that selector only.
+
+Candidate selection is not authoritative assignment eligibility. The atomic `createCourse` operation and its required
+initial supervisor relationships remain final validation (`mia/api-doc/paths/courses.yaml#/courses`,
+`mia/api-doc/schemas/requests/requests.yaml#/CourseCreateRequestDocument`); do not probe mutations or infer eligibility
+from role labels, partial pages, email or account-detail actions. No full account directory, account detail, role grant,
+deletion, later assignment addition/removal or broad BCG-008 closure is approved. The remaining required contract and
+acceptance evidence below stay open. Preparation records transport inspection, not a new backend/browser test run.
+
+The separate Story 4.1 O2 decision for bounded assigned-course discovery is recorded at
+`ROUTE-INVENTORY.md` §Assigned-Course List; it grants no account-collection access to supervisors.
 
 #### BCG-008 required observable contract
 

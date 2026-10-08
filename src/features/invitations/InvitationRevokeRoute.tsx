@@ -23,7 +23,7 @@ import {
   expectResource,
   secondaryActionClass,
 } from "./InvitationStatus";
-import { useInvitationActivity } from "./useInvitationActivity";
+import { useRouteActivity } from "../../platform/ui/useRouteActivity";
 
 // FRONTEND-STATE-MACHINES.md §22 with the Story 3.1 BCG-014 decision: the
 // reviewed strong ETag is the atomic precondition for pending revocation.
@@ -70,8 +70,9 @@ export default function InvitationRevokeRoute({
     value: expectResource(resource, "invitation").reviewed,
     checkedAt: Date.now(),
   }));
-  const { state, stateRef, mounted, update } =
-    useInvitationActivity<RevokeState>({ kind: "Review" });
+  const { state, stateRef, mounted, update } = useRouteActivity<RevokeState>({
+    kind: "Review",
+  });
   const outcomeRef = useRef<HTMLHeadingElement>(null);
   useLayoutEffect(() => {
     if (

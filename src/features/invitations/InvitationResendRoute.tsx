@@ -26,7 +26,7 @@ import {
   primaryActionClass,
   secondaryActionClass,
 } from "./InvitationStatus";
-import { useInvitationActivity } from "./useInvitationActivity";
+import { useRouteActivity } from "../../platform/ui/useRouteActivity";
 
 // FRONTEND-STATE-MACHINES.md §27 Resend in flight / failed / unknown.
 type ResendOutcome =
@@ -72,8 +72,9 @@ export default function InvitationResendRoute({
     invitation: expectResource(resource, "invitation").reviewed.invitation,
     checkedAt: Date.now(),
   }));
-  const { state, stateRef, mounted, update } =
-    useInvitationActivity<ResendState>({ kind: "Review" });
+  const { state, stateRef, mounted, update } = useRouteActivity<ResendState>({
+    kind: "Review",
+  });
   const outcomeRef = useRef<HTMLHeadingElement>(null);
   useLayoutEffect(() => {
     if (state.kind === "Settled" || state.kind === "Reconcile failed")

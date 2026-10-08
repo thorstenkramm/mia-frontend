@@ -1209,6 +1209,18 @@ blocked by `BCG-006`, so `CP-10/UNK` and `CP-10/A01` are `Not run`. Pending-invi
 `BCG-014`; `CP-10/STA` and `CP-10/A03` stay `Blocked` only for Delete faulty invitation. `CP-10/SUC` stays blocked
 by `BCG-005` and by `BCG-014` for faulty deletion. Other roles' invitation creation remains later work.
 
+Story 4.1 owner decisions, 2026-10-08: O1 (`BACKEND-CONTRACT-GAPS.md` §BCG-008 Story 4.1 selector slice) lifts the
+account-read block only for the collection-only supervisor selector during course creation. Its CP-12 checking, empty,
+paginated, validation, failed/unavailable, stale-selection and access-loss subset is **Not run**, not Pass. The full
+`CP-12/A01` account-directory/detail process and broader CP-12 rows remain Blocked as recorded; role grants, staff MFA
+reset, account/course deletion and supervisor removal are not resumed. Atomic creation remains final assignment validation.
+
+O2 (`ROUTE-INVENTORY.md` §Assigned-Course List) permits only CP-03 persisted assigned-course name/state discovery via
+current capability-authored IDs and bounded exact-ID reads with explicit Show more. That discovery-only subset is
+**Not run**, not blocked by BCG-011 readiness transport and not Pass. Full preparation/readiness/activation processes,
+BCG release obligations and the other complete-process cells remain unchanged. No implementation/test evidence is
+claimed by these planning decisions; all applicable accessibility and security checks remain required for the slice.
+
 Pairwise sampling MAY reduce combinations only after every process has passed at 320 effective CSS pixels in all three
 text modes and every locale has passed representative long-content fixtures. The sampling rule and uncovered
 combinations MUST be documented as coverage residual risks.

@@ -1,6 +1,164 @@
 import { defineMessages } from "react-intl";
 
 export const messages = defineMessages({
+  coursesPagination: {
+    id: "courses.pagination",
+    defaultMessage: "Collection pages",
+  },
+  coursesListTitle: {
+    id: "courses.listTitle",
+    defaultMessage: "Courses | MIA",
+  },
+  coursesListHeading: { id: "courses.listHeading", defaultMessage: "Courses" },
+  coursesCreateTitle: {
+    id: "courses.createTitle",
+    defaultMessage: "Create course | MIA",
+  },
+  coursesCreateHeading: {
+    id: "courses.createHeading",
+    defaultMessage: "Create course",
+  },
+  coursesDetailTitle: {
+    id: "courses.detailTitle",
+    defaultMessage: "Course administration | MIA",
+  },
+  coursesDetailHeading: {
+    id: "courses.detailHeading",
+    defaultMessage: "Course administration",
+  },
+  coursesPrepareTitle: {
+    id: "courses.prepareTitle",
+    defaultMessage: "Prepare courses | MIA",
+  },
+  coursesPrepareHeading: {
+    id: "courses.prepareHeading",
+    defaultMessage: "Prepare courses",
+  },
+  coursesPrepareGroup: {
+    id: "courses.prepareGroup",
+    defaultMessage: "Prepare",
+  },
+  coursesName: { id: "courses.name", defaultMessage: "Course name (required)" },
+  coursesValidationSummary: {
+    id: "courses.validationSummary",
+    defaultMessage: "Check the course input",
+  },
+  coursesNameHelp: {
+    id: "courses.nameHelp",
+    defaultMessage:
+      "Use a unique name of 1–200 characters. The course starts inactive.",
+  },
+  coursesNameInvalid: {
+    id: "courses.nameInvalid",
+    defaultMessage:
+      "Enter a course name of 1–200 characters (at most 800 UTF-8 bytes).",
+  },
+  coursesNameConflict: {
+    id: "courses.nameConflict",
+    defaultMessage: "This course name is already in use. Choose another name.",
+  },
+  coursesSupervisors: {
+    id: "courses.supervisors",
+    defaultMessage: "Supervisors (at least one required)",
+  },
+  coursesSupervisorHelp: {
+    id: "courses.supervisorHelp",
+    defaultMessage:
+      "Select registered active supervisors. Creation validates the complete assignment set; selection alone does not confirm eligibility.",
+  },
+  coursesSupervisorRequired: {
+    id: "courses.supervisorRequired",
+    defaultMessage: "Select at least one supervisor.",
+  },
+  coursesSupervisorInvalid: {
+    id: "courses.supervisorInvalid",
+    defaultMessage:
+      "The supervisor set could not be assigned. Review your selection and try a corrected set.",
+  },
+  coursesSelected: {
+    id: "courses.selected",
+    defaultMessage: "Selected supervisors",
+  },
+  coursesRemoveSelection: {
+    id: "courses.removeSelection",
+    defaultMessage: "Remove selection",
+  },
+  coursesPage: { id: "courses.page", defaultMessage: "Current page: {page}" },
+  coursesNoCandidates: {
+    id: "courses.noCandidates",
+    defaultMessage:
+      "No candidates on this page. A newly invited supervisor must join before selection.",
+  },
+  coursesInvite: {
+    id: "courses.invite",
+    defaultMessage: "Invite a supervisor",
+  },
+  coursesPrerequisite: {
+    id: "courses.prerequisite",
+    defaultMessage:
+      "Account administration access is required to select supervisors and create this course.",
+  },
+  coursesSaving: { id: "courses.saving", defaultMessage: "Creating course…" },
+  coursesUnknown: {
+    id: "courses.unknown",
+    defaultMessage: "Save outcome unknown",
+  },
+  coursesUnknownHelp: {
+    id: "courses.unknownHelp",
+    defaultMessage:
+      "The course may have been created. This request will not be repeated. Review persisted courses before starting a new creation journey.",
+  },
+  coursesReview: { id: "courses.review", defaultMessage: "Review courses" },
+  coursesRejected: {
+    id: "courses.rejected",
+    defaultMessage:
+      "The course was not created. Review the input before submitting a corrected request.",
+  },
+  coursesBackToList: {
+    id: "courses.backToList",
+    defaultMessage: "Back to courses",
+  },
+  coursesListEmpty: {
+    id: "courses.listEmpty",
+    defaultMessage: "No courses on this page.",
+  },
+  coursesPrepareEmpty: {
+    id: "courses.prepareEmpty",
+    defaultMessage: "No courses are currently assigned to you for supervision.",
+  },
+  coursesMore: {
+    id: "courses.more",
+    defaultMessage: "Show more assigned courses",
+  },
+  coursesState: { id: "courses.state", defaultMessage: "State" },
+  coursesActive: { id: "courses.active", defaultMessage: "Active" },
+  coursesInactive: { id: "courses.inactive", defaultMessage: "Inactive" },
+  coursesUnavailableTitle: {
+    id: "courses.unavailableTitle",
+    defaultMessage: "Course access unavailable | MIA",
+  },
+  coursesUnavailableHeading: {
+    id: "courses.unavailableHeading",
+    defaultMessage: "Course access unavailable",
+  },
+  coursesUnavailable: {
+    id: "courses.unavailable",
+    defaultMessage: "This course view is unavailable. Use an available exit.",
+  },
+  coursesCheckFailed: {
+    id: "courses.checkFailed",
+    defaultMessage:
+      "The course or supervisor check could not be completed. This is not an empty result.",
+  },
+  coursesDiscard: {
+    id: "courses.discard",
+    defaultMessage: "Discard course input?",
+  },
+  coursesDiscardHelp: {
+    id: "courses.discardHelp",
+    defaultMessage:
+      "Your unsaved course name and supervisor selection will be discarded.",
+  },
   routeLoading: { id: "route.loading", defaultMessage: "Loading this page…" },
   routeUnavailable: {
     id: "route.unavailable",

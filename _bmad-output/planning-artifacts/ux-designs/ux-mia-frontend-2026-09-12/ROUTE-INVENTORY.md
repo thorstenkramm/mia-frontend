@@ -496,6 +496,16 @@ unknown mutation outcome remains on its owning route without success copy until 
 - Gate: `Prepare(assigned courses)`.
 - Fallback: `/`.
 
+Owner decision, 2026-10-08 (Story 4.1 O2): this route's initial discovery subset reads only the exact IDs in current
+authoritative `courses.supervise.scope.course_ids` through contracted `getCourse`, in batches of at most 25 addressed
+records. Additional batches require explicit **Show more assigned courses**; this is local bounded batching, not
+invented server pagination, an assignment filter or a total. Empty scope sends no course requests. Explicit Refresh
+reestablishes current session/capability/scope before addressed reads; the existing security/route epoch fences them.
+Never fetch the visible-course union and hide unrelated rows. The hub and readiness UI/claims/links arrive in later
+stories; Story 4.1 renders persisted name/state discovery and the Home exit only. This does not close broader BCG-003
+or BCG-011 obligations. Transport remains `mia/api-doc/paths/users.yaml#/capabilities`,
+`mia/api-doc/schemas/resources/resources.yaml#/CapabilityScope` and `mia/api-doc/paths/courses.yaml#/course`.
+
 ### Preparation Hub
 
 - Path: `/prepare/courses/:courseId`

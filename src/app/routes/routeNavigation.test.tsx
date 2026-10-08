@@ -22,8 +22,46 @@ import { MiaIntlProvider } from "../../platform/i18n/MiaIntlProvider";
 import { InvitationLink } from "../../platform/session/invitationLink";
 import { PasswordResetLink } from "../../platform/session/passwordResetLink";
 import { App } from "../App";
+import { authenticatedRoute } from "./entryRoutes";
 
 const path = "/profile/security/mfa";
+it("course route dispatch keeps opaque identity canonical and excludes later actions", () => {
+  const access = {
+    ownProfileView: false,
+    invitationAdministration: false,
+    courseRecords: true,
+    courseCreate: true,
+    supervisorAssignments: true,
+    courseSupervision: true,
+  };
+  expect(authenticatedRoute("/admin/courses/new", access).key).toBe(
+    "courseCreate",
+  );
+  expect(
+    authenticatedRoute("/admin/courses/opaque%2Fidentifier", access).path,
+  ).toBe("/admin/courses/opaque%2Fidentifier");
+  for (const unsupported of [
+    "/admin/courses/",
+    "/admin/courses/new/",
+    "/admin/courses/id/supervisors",
+    "/admin/courses/id/delete",
+    "/prepare/courses/id",
+    "/admin/courses/%",
+  ])
+    expect(authenticatedRoute(unsupported, access).key).toBe("home");
+  expect(
+    authenticatedRoute("/admin/courses/new", {
+      ...access,
+      supervisorAssignments: false,
+    }).key,
+  ).toBe("home");
+  expect(
+    authenticatedRoute("/prepare/courses", {
+      ...access,
+      courseSupervision: false,
+    }).key,
+  ).toBe("home");
+});
 const defaultError = getConfig().getElementError;
 function politeRegion() {
   return Array.from(document.querySelectorAll("[aria-live]")).find(

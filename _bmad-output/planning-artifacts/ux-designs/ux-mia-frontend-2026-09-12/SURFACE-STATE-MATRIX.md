@@ -296,6 +296,11 @@ history renders only returned records; absent later records and transcript quota
 An active course with no approved, ready, file-backed course-wide material remains active but blocks new sessions.
 Approval restoration permits starts without another activation.
 
+Story 4.1 owner decision, 2026-10-08 (O2), at `ROUTE-INVENTORY.md` §Assigned-Course List permits only persisted
+name/state discovery from current authoritative supervised-course IDs and bounded exact-ID reads with explicit Show
+more. For that subset the assigned-course list is not blocked by BCG-011; its exit is Home, with no hub/readiness
+links or accepting/start claims. The broader row's readiness states and other Prepare surfaces remain unchanged.
+
 ### Course content
 
 | Surface | Profiles | Domain states | Exit | Companion |
@@ -444,6 +449,11 @@ Student-only deletion removes all operational data. Staff deletion requires a di
 assignment cleanup and mentoring triage atomically. Only content-free audit records remain; provider copies and backups
 are outside MIA's live-local deletion.
 
+Story 4.1 owner decision, 2026-10-08 (O1), at `BACKEND-CONTRACT-GAPS.md` §BCG-008 permits the collection-only
+supervisor selector inside Create course (`G,L,F`): checking, empty, paginated, failed and unavailable. This does not
+resume the full Accounts list/detail or role/deletion rows above. Candidate identity/state is not assignment eligibility;
+the atomic course-create request validates initial supervisors. Account access loss tears down the selector/form subtree.
+
 ### Invitations
 
 | Surface | Profiles | Domain states | Exit | Companion |
@@ -479,6 +489,10 @@ Story 3.1. The rows keep their profiles; the decisions own the slice boundary.
 
 Course deletion removes course-scoped data while preserving accounts and other-course data. It never waits for provider
 work or presents late results as restored data.
+
+Story 4.1 scope is only the course list, Create course with the approved O1 selector, and persisted admin detail's
+name/state/supervisor identifiers. Deletion blockers/controls, assignment management and readiness/start claims in the
+broader rows are not part of this slice. O2 adds assigned-supervisor discovery only, as noted under Prepare courses.
 
 ### Operations
 

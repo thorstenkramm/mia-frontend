@@ -38,6 +38,8 @@ function makeFixture() {
     ),
     rawError: `fixture-body-${randomBytes(24).toString("hex")}`,
     email: `invitee-${randomBytes(12).toString("hex")}@example.test`,
+    courseName: `درس course-${randomUUID()}`,
+    supervisorUsername: `supervisor.${randomUUID().slice(0, 12)}`,
   };
   const uri = `otpauth://totp/MIA%20(127.0.0.1:4173):example.learner?secret=${fixture.totpSecret}&issuer=MIA`;
   return {
@@ -50,6 +52,8 @@ function makeFixture() {
       fixture.totpSecret,
       fixture.rawError,
       fixture.email,
+      fixture.courseName,
+      fixture.supervisorUsername,
       uri,
       ...fixture.codes,
       ...fixture.codes.map((code) => code.replace(/(.{4})(?=.)/gu, "$1-")),
@@ -84,6 +88,7 @@ export async function checkRouteSecretHygiene() {
       "e2e/routeNavigation.spec.ts",
       "e2e/routeRecovery.spec.ts",
       "e2e/invitationAdministration.spec.ts",
+      "e2e/courseAdministration.spec.ts",
       "--list",
       "--reporter=json",
     ],
@@ -120,7 +125,8 @@ export async function checkRouteSecretHygiene() {
   if (
     scope !== undefined &&
     scope !== "invitations" &&
-    scope !== "supervisor-onboarding"
+    scope !== "supervisor-onboarding" &&
+    scope !== "courses"
   )
     throw new Error("Unknown route-hygiene scope.");
   const selected =
@@ -128,7 +134,9 @@ export async function checkRouteSecretHygiene() {
       ? routeHygieneCases.filter((item) => item.id.startsWith("invitation-"))
       : scope === "supervisor-onboarding"
         ? routeHygieneCases.filter((item) => item.id.startsWith("supervisor-"))
-        : routeHygieneCases;
+        : scope === "courses"
+          ? routeHygieneCases.filter((item) => item.id.startsWith("course-"))
+          : routeHygieneCases;
   const root = await mkdtemp(join(tmpdir(), "mia-route-hygiene-"));
   const evidence = [];
   try {

@@ -15,6 +15,7 @@ import {
   type EntrySession,
   type SessionDeadlines,
   type AccountId,
+  type AccountCapabilities,
   type MfaChallengeId,
   type PasswordResetToken,
   type InvitationToken,
@@ -125,10 +126,7 @@ export type SecurityTeardownScope = "mask" | "destroy";
 type SecurityTeardown = (scope: SecurityTeardownScope) => void;
 // The gate decisions the current authenticated tab passed, in one security
 // epoch. Every destroying teardown starts a new epoch.
-export type AuthenticatedAccess = {
-  readonly accountId: AccountId;
-  readonly ownProfileView: boolean;
-  readonly invitationAdministration: boolean;
+export type AuthenticatedAccess = AccountCapabilities & {
   readonly epoch: number;
 };
 export type AuthenticatedReadResult<T> =
@@ -1447,13 +1445,34 @@ export class SessionController {
           if (
             this.access !== null &&
             (this.access.accountId !== session.accountId ||
-              this.access.ownProfileView !== capabilities.ownProfileView)
+              this.access.ownProfileView !== capabilities.ownProfileView ||
+              this.access.invitationAdministration !==
+                capabilities.invitationAdministration ||
+              this.access.courseRecords !== capabilities.courseRecords ||
+              this.access.courseCreate !== capabilities.courseCreate ||
+              this.access.supervisorAssignments !==
+                capabilities.supervisorAssignments ||
+              this.access.supervisorCandidates !==
+                capabilities.supervisorCandidates ||
+              this.access.courseSupervision !==
+                capabilities.courseSupervision ||
+              this.access.supervisedCourseIds.length !==
+                capabilities.supervisedCourseIds.length ||
+              this.access.supervisedCourseIds.some(
+                (id) => !capabilities.supervisedCourseIds.includes(id),
+              ))
           )
             this.destroySecrets();
           this.access = {
             accountId: session.accountId,
             ownProfileView: capabilities.ownProfileView,
             invitationAdministration: capabilities.invitationAdministration,
+            courseRecords: capabilities.courseRecords,
+            courseCreate: capabilities.courseCreate,
+            supervisorAssignments: capabilities.supervisorAssignments,
+            supervisorCandidates: capabilities.supervisorCandidates,
+            courseSupervision: capabilities.courseSupervision,
+            supervisedCourseIds: capabilities.supervisedCourseIds,
             epoch: this.securityEpoch,
           };
           this.setState({ kind: "Authenticated" });
