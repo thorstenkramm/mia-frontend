@@ -2,12 +2,18 @@ import { z } from "zod";
 import type { operations } from "./generated";
 import {
   resourceId,
+  utcInstant,
   type CourseId,
   type MaterialId,
   type MaterialFileId,
 } from "./entry";
 export type { MaterialId, MaterialFileId } from "./entry";
 import { collectionNavigation, collectionQuery } from "./collectionNavigation";
+import {
+  materialBriefSchema,
+  briefRequest,
+  type MaterialBrief,
+} from "./materialBrief";
 import {
   ApiProtocolError,
   jsonApiMediaType,
@@ -77,6 +83,13 @@ const materialSchema = z.object({
     format: z.enum([...formats, "link"]),
     state: z.enum(["draft", "processing", "ready", "failed"]),
     approved: z.boolean(),
+    brief: materialBriefSchema.nullable(),
+    brief_source: z.enum(["generated", "supervisor"]).nullable(),
+    brief_updated_at: utcInstant.nullable(),
+    approved_at: utcInstant.nullable(),
+    failure_code: z.string().nullable(),
+    created_at: utcInstant,
+    updated_at: utcInstant.nullable(),
   }),
   relationships: z.object({
     course: z.object({
@@ -125,7 +138,7 @@ function projectFile(data: z.infer<typeof fileSchema>) {
 export type Material = ReturnType<typeof projectMaterial>;
 export type MaterialFile = ReturnType<typeof projectFile>;
 export type MaterialPage = {
-  readonly items: readonly Material[];
+  readonly items: readonly Omit<Material, "brief">[];
   readonly nextOffset: number | null;
   readonly previousOffset: number | null;
 };
@@ -186,7 +199,11 @@ export async function listMaterials(
     ...(doc.links?.next === undefined ? {} : { next: doc.links.next }),
   });
   return {
-    items: doc.data.map((data) => admitMaterial(data, course)),
+    items: doc.data.map((data) => {
+      const { brief: _brief, ...row } = admitMaterial(data, course);
+      void _brief;
+      return row;
+    }),
     ...navigation,
   };
 }
@@ -269,4 +286,119 @@ export async function deleteMaterialFile(
   }
   if (response.status !== 204 || (await response.text()) !== "")
     throw new ApiProtocolError();
+}
+
+async function materialMutation(
+  course: CourseId,
+  id: MaterialId,
+  csrfToken: string,
+  method: "POST" | "PATCH" | "DELETE",
+  suffix: string,
+  body?: string,
+): Promise<Material> {
+  const doc = await parseJsonApiResponse(
+    await sendUnsafeRequest({
+      path: `/api/v1/materials/${encodeURIComponent(id)}${suffix}`,
+      method,
+      csrfToken,
+      ...(body === undefined ? {} : { body }),
+    }),
+    materialDocument,
+    200,
+  );
+  const material = admitMaterial(doc.data, course, id);
+  if (material.scope !== "course-wide") throw new ApiProtocolError();
+  return material;
+}
+export async function finalizeMaterial(
+  course: CourseId,
+  id: MaterialId,
+  csrf: string,
+) {
+  const material = await materialMutation(
+    course,
+    id,
+    csrf,
+    "POST",
+    "/finalizations",
+  );
+  if (material.state !== "processing" && material.state !== "ready")
+    throw new ApiProtocolError();
+  return material;
+}
+export const approveMaterial = (
+  course: CourseId,
+  id: MaterialId,
+  csrf: string,
+) => materialMutation(course, id, csrf, "POST", "/approvals");
+export const revokeMaterialApproval = (
+  course: CourseId,
+  id: MaterialId,
+  csrf: string,
+) => materialMutation(course, id, csrf, "DELETE", "/approvals");
+export function updateMaterialBrief(
+  course: CourseId,
+  id: MaterialId,
+  brief: MaterialBrief,
+  csrf: string,
+) {
+  const body = {
+    data: { type: "materials", id, attributes: { brief: briefRequest(brief) } },
+  } satisfies operations["updateMaterialBrief"]["requestBody"]["content"][typeof jsonApiMediaType];
+  return materialMutation(course, id, csrf, "PATCH", "", JSON.stringify(body));
+}
+const jobSchema = z.object({
+  type: z.literal("jobs"),
+  id: resourceId,
+  attributes: z.strictObject({
+    job_type: z.string(),
+    subject_type: z.string(),
+    subject_id: resourceId,
+    state: z.enum(["queued", "running", "succeeded", "failed", "cancelled"]),
+    attempt_count: z.number().int().nonnegative().safe(),
+    created_at: utcInstant,
+    started_at: utcInstant.nullable(),
+    finished_at: utcInstant.nullable(),
+  }),
+});
+export type MaterialJobPage = {
+  readonly items: readonly {
+    readonly id: string;
+    readonly state: z.infer<typeof jobSchema>["attributes"]["state"];
+    readonly attempts: number;
+  }[];
+  readonly nextOffset: number | null;
+  readonly previousOffset: number | null;
+};
+export async function listMaterialJobs(
+  id: MaterialId,
+  offset: number,
+  signal: AbortSignal,
+): Promise<MaterialJobPage> {
+  const path = `/api/v1/materials/${encodeURIComponent(id)}/jobs`;
+  const doc = await readJsonApi({
+    path: `${path}?${collectionQuery(offset)}`,
+    initiator: "user",
+    signal,
+    schema: z.object({
+      data: z.array(jobSchema).max(100),
+      meta: z.object({ has_more: z.boolean() }),
+      links: z
+        .object({ next: z.string().optional(), prev: z.string().optional() })
+        .optional(),
+    }),
+  });
+  if (new Set(doc.data.map((job) => job.id)).size !== doc.data.length)
+    throw new ApiProtocolError();
+  return {
+    items: doc.data.map((job) => ({
+      id: job.id,
+      state: job.attributes.state,
+      attempts: job.attributes.attempt_count,
+    })),
+    ...collectionNavigation(path, offset, doc.meta.has_more, {
+      ...(doc.links?.next === undefined ? {} : { next: doc.links.next }),
+      ...(doc.links?.prev === undefined ? {} : { prev: doc.links.prev }),
+    }),
+  };
 }

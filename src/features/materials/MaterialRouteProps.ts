@@ -4,6 +4,7 @@ import type {
   MaterialFile,
   MaterialId,
   MaterialPage,
+  MaterialJobPage,
 } from "../../platform/api/materials";
 import { messages } from "../../platform/i18n/messages";
 
@@ -11,6 +12,16 @@ export type MaterialResource =
   | { readonly kind: "list"; readonly page: MaterialPage }
   | { readonly kind: "create" }
   | { readonly kind: "detail"; readonly material: Material }
+  | {
+      readonly kind: "brief" | "approval" | "revoke";
+      readonly material: Material;
+    }
+  | {
+      readonly kind: "processing";
+      readonly material: Material;
+      readonly files: readonly MaterialFile[];
+      readonly jobs: MaterialJobPage;
+    }
   | {
       readonly kind: "files";
       readonly material: Material;
@@ -25,6 +36,10 @@ export type MaterialRouteProps = {
     readonly create: string;
     readonly detail: (id: MaterialId) => string;
     readonly files: (id: MaterialId) => string;
+    readonly processing: (id: MaterialId) => string;
+    readonly brief: (id: MaterialId) => string;
+    readonly approval: (id: MaterialId) => string;
+    readonly revoke: (id: MaterialId) => string;
   };
   readonly unavailable: (failure: EntryApiFailure | null) => void;
 };

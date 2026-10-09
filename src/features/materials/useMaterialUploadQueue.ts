@@ -6,6 +6,7 @@ import {
   listMaterialFiles,
   matchesMaterialFormat,
   deleteMaterialFile,
+  finalizeMaterial,
   type Material,
   type MaterialFile,
   type MaterialFileId,
@@ -73,6 +74,14 @@ type QueueSnapshot = {
     readonly failure: EntryApiFailure;
   } | null;
   readonly checkedAt: number;
+  readonly finalization:
+    | "Idle"
+    | "Prevalidating"
+    | "Confirming"
+    | "Submitting"
+    | "Rejected"
+    | "Outcome unknown"
+    | "Changed";
 };
 type SessionActions = Pick<
   ReturnType<typeof useSessionActions>,
@@ -107,10 +116,13 @@ export class MaterialUploadQueue {
   private rowId = 0;
   private pumping = false;
   private deletionSequence = 0;
+  private finalizationSequence = 0;
   private announce: (events: readonly AnnounceEvent[]) => void = () =>
     undefined;
   private announceDeletion: (state: DeletionAnnouncement) => void = () =>
     undefined;
+  private announceFinalization: (state: QueueSnapshot["finalization"]) => void =
+    () => undefined;
   constructor(
     material: Material,
     files: readonly MaterialFile[],
@@ -133,6 +145,7 @@ export class MaterialUploadQueue {
       queue: material.state === "draft" ? "Selected" : "Frozen elsewhere",
       error: null,
       checkedAt: Date.now(),
+      finalization: "Idle",
     };
   }
   subscribe = (listener: () => void) => {
@@ -145,9 +158,12 @@ export class MaterialUploadQueue {
   configure(
     announce: (events: readonly AnnounceEvent[]) => void,
     announceDeletion: (state: DeletionAnnouncement) => void = () => undefined,
+    announceFinalization: (state: QueueSnapshot["finalization"]) => void = () =>
+      undefined,
   ): void {
     this.announce = announce;
     this.announceDeletion = announceDeletion;
+    this.announceFinalization = announceFinalization;
   }
   destroy(): void {
     this.live = false;
@@ -157,16 +173,150 @@ export class MaterialUploadQueue {
     this.handles.clear();
     this.announce = () => undefined;
     this.announceDeletion = () => undefined;
+    this.announceFinalization = () => undefined;
     this.data = null;
     for (const listener of this.listeners) listener();
   }
   private publish(next: QueueSnapshot): void {
     if (!this.live) return;
+    const changed = next.finalization !== this.snapshot.finalization;
     this.snapshot = next;
+    if (changed) this.announceFinalization(next.finalization);
     for (const listener of this.listeners) listener();
   }
   private invalidate(): ReviewState {
     return { kind: "User review" };
+  }
+  private finalizationLocked(): boolean {
+    return [
+      "Prevalidating",
+      "Confirming",
+      "Submitting",
+      "Outcome unknown",
+    ].includes(this.snapshot.finalization);
+  }
+  canFinalize(): boolean {
+    if (!this.live) return false;
+    const current = this.snapshot;
+    return (
+      !this.finalizationLocked() &&
+      current.review.kind === "List accepted" &&
+      current.review.sequence === this.sequence &&
+      current.error === null &&
+      current.read === "Idle" &&
+      current.deletion.kind === "Idle" &&
+      current.files.length > 0 &&
+      current.material.format !== "link" &&
+      ["draft", "failed"].includes(current.material.state) &&
+      current.rows.every((row) => row.state.kind === "Uploaded")
+    );
+  }
+  async reviewFinalization(): Promise<void> {
+    if (!this.canFinalize()) return;
+    const before = this.snapshot;
+    const generation = this.generation;
+    this.publish({ ...before, finalization: "Prevalidating" });
+    const result = await this.actions.readAuthenticated(async (signal) => {
+      const material = await getMaterial(
+        before.material.courseId,
+        before.material.id,
+        signal,
+      );
+      if (material.scope !== "course-wide" || material.format === "link")
+        return null;
+      return { material, files: await listMaterialFiles(material.id, signal) };
+    });
+    if (!this.live || generation !== this.generation) return;
+    if (result.kind === "failed") {
+      if (this.hideIfDenied(result.failure)) return;
+      this.publish({
+        ...this.snapshot,
+        finalization: "Rejected",
+        review: this.invalidate(),
+        error: { kind: "read", failure: result.failure },
+      });
+    } else if (result.kind === "completed") {
+      if (result.value === null) {
+        this.unavailable(null);
+        this.destroy();
+        return;
+      }
+      this.sequence++;
+      const unchanged =
+        JSON.stringify(before.files) === JSON.stringify(result.value.files) &&
+        JSON.stringify(before.material) ===
+          JSON.stringify(result.value.material);
+      this.publish({
+        ...this.snapshot,
+        ...result.value,
+        checkedAt: Date.now(),
+        finalization: unchanged ? "Confirming" : "Changed",
+        review: unchanged
+          ? { kind: "List accepted", sequence: this.sequence }
+          : this.invalidate(),
+      });
+    } else this.destroy();
+  }
+  cancelFinalization(): void {
+    if (this.live && this.snapshot.finalization === "Confirming")
+      this.publish({ ...this.snapshot, finalization: "Idle" });
+  }
+  async finalize(onConfirmed: (material: Material) => void): Promise<void> {
+    if (!this.live || this.snapshot.finalization !== "Confirming") return;
+    const material = this.snapshot.material;
+    const generation = this.generation;
+    const sequence = ++this.finalizationSequence;
+    this.publish({ ...this.snapshot, finalization: "Submitting" });
+    const result = await this.actions.runAuthenticatedMutation(
+      {
+        send: (csrf) => finalizeMaterial(material.courseId, material.id, csrf),
+      },
+      () =>
+        this.live &&
+        generation === this.generation &&
+        sequence === this.finalizationSequence,
+    );
+    if (!this.live || generation !== this.generation) return;
+    if (
+      (result.kind === "rejected" || result.kind === "unknown") &&
+      this.hideIfDenied(result.failure)
+    )
+      return;
+    if (sequence !== this.finalizationSequence) return;
+    if (result.kind === "completed") {
+      this.handles.clear();
+      this.publish({
+        ...this.snapshot,
+        material: result.value,
+        rows: [],
+        finalization: "Idle",
+        queue: "Frozen elsewhere",
+        review: this.invalidate(),
+      });
+      onConfirmed(result.value);
+    } else if (result.kind === "unknown") {
+      this.publish({
+        ...this.snapshot,
+        finalization: "Outcome unknown",
+        review: this.invalidate(),
+        error: { kind: "unknown", failure: result.failure },
+      });
+    } else if (result.kind === "rejected" || result.kind === "not-sent") {
+      this.publish({
+        ...this.snapshot,
+        finalization: "Rejected",
+        error: { kind: "rejected", failure: result.failure },
+      });
+    } else this.destroy();
+  }
+  stopFinalizationWaiting(): void {
+    if (!this.live || this.snapshot.finalization !== "Submitting") return;
+    this.finalizationSequence++;
+    this.publish({
+      ...this.snapshot,
+      finalization: "Outcome unknown",
+      review: this.invalidate(),
+    });
   }
   private hideIfDenied(failure: EntryApiFailure): boolean {
     if (!isHiddenMaterialFailure(failure)) return false;
@@ -200,6 +350,7 @@ export class MaterialUploadQueue {
   }
   select(files: readonly File[]): void {
     if (!this.live) return;
+    if (this.finalizationLocked()) return;
     if (
       this.snapshot.material.state !== "draft" ||
       this.snapshot.queue === "Frozen elsewhere" ||
@@ -241,6 +392,7 @@ export class MaterialUploadQueue {
   }
   remove(id: number): void {
     if (!this.live) return;
+    if (this.finalizationLocked()) return;
     const row = this.snapshot.rows.find((candidate) => candidate.id === id);
     if (
       row === undefined ||
@@ -260,6 +412,7 @@ export class MaterialUploadQueue {
   async start(): Promise<void> {
     if (
       !this.live ||
+      this.finalizationLocked() ||
       this.pumping ||
       this.snapshot.queue === "Queue paused" ||
       this.snapshot.queue === "Frozen elsewhere" ||
@@ -387,6 +540,9 @@ export class MaterialUploadQueue {
     if (
       !this.live ||
       this.snapshot.read === "Reading" ||
+      ["Prevalidating", "Confirming", "Submitting"].includes(
+        this.snapshot.finalization,
+      ) ||
       (explicit && this.active !== null)
     )
       return;
@@ -443,6 +599,7 @@ export class MaterialUploadQueue {
         rows,
         read: "Idle",
         deletion: explicit ? { kind: "Idle" } : this.snapshot.deletion,
+        finalization: explicit ? "Idle" : this.snapshot.finalization,
         checkedAt: Date.now(),
         review: { kind: unknown ? "User review" : "List reviewable" },
         queue:
@@ -499,14 +656,13 @@ export class MaterialUploadQueue {
   }
   accept(): void {
     if (!this.live) return;
+    if (this.finalizationLocked()) return;
     if (
       this.snapshot.error !== null ||
       this.snapshot.queue === "Queue paused" ||
       this.snapshot.read !== "Idle" ||
       this.snapshot.deletion.kind !== "Idle" ||
-      this.snapshot.rows.some(
-        (row) => !["Uploaded", "Rejected"].includes(row.state.kind),
-      )
+      this.snapshot.rows.some((row) => row.state.kind !== "Uploaded")
     )
       return;
     this.publish({
@@ -516,9 +672,11 @@ export class MaterialUploadQueue {
   }
   chooseRemoval(id: MaterialFileId): void {
     if (!this.live) return;
+    if (this.finalizationLocked()) return;
     if (
-      this.snapshot.material.state !== "draft" ||
-      this.snapshot.queue === "Frozen elsewhere" ||
+      !["draft", "failed"].includes(this.snapshot.material.state) ||
+      (this.snapshot.queue === "Frozen elsewhere" &&
+        this.snapshot.material.state !== "failed") ||
       this.active !== null ||
       this.snapshot.read !== "Idle" ||
       this.snapshot.deletion.kind !== "Idle"
@@ -557,7 +715,7 @@ export class MaterialUploadQueue {
       () =>
         this.live &&
         generation === this.generation &&
-        this.snapshot.material.state === "draft",
+        ["draft", "failed"].includes(this.snapshot.material.state),
     );
     if (!this.live || generation !== this.generation) return;
     if (
@@ -666,6 +824,21 @@ export function useMaterialUploadQueue(
           intl.formatMessage(descriptor),
           state === "Submitting" || state === "Deleted" ? "polite" : "urgent",
         );
+      },
+      (state) => {
+        const descriptor =
+          state === "Submitting"
+            ? messages.materialLifecyclePending
+            : state === "Outcome unknown"
+              ? messages.materialLifecycleUnknown
+              : state === "Rejected"
+                ? messages.materialError
+                : null;
+        if (descriptor)
+          announce(
+            intl.formatMessage(descriptor),
+            state === "Submitting" ? "polite" : "urgent",
+          );
       },
     );
   }, [queue, intl, announce]);

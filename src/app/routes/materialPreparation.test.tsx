@@ -72,6 +72,13 @@ function backend() {
       scope: state.materialScope,
       state: "draft",
       approved: false,
+      brief: null,
+      brief_source: null,
+      brief_updated_at: null,
+      approved_at: null,
+      failure_code: null,
+      created_at: "2026-10-09T10:00:00.000000Z",
+      updated_at: null,
     },
     relationships: { course: { data: { type: "courses", id: "course_1" } } },
   });

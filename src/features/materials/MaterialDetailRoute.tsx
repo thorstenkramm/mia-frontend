@@ -2,6 +2,7 @@ import { useIntl } from "react-intl";
 import { useSessionActions } from "../../platform/data/EntryDataProvider";
 import { messages } from "../../platform/i18n/messages";
 import { RouteDepartureLink } from "../../platform/ui/RouteDepartureLink";
+import { MaterialState } from "./MaterialProcessingRoute";
 import {
   materialActionClass,
   materialLabels,
@@ -11,7 +12,7 @@ import {
 // Tailwind Plus: Application UI > Data Display > Description Lists >
 // Left-aligned with inline actions, 2026-09-13-083323, v4/react-light.jsx.
 // MIA: persisted metadata only, separate approval/technical state; wrapping names,
-// no brief/download/future actions; draft continuation only for course-wide files.
+// no download/future actions; state-appropriate continuations for course-wide files.
 export default function MaterialDetailRoute({
   resource,
   links,
@@ -23,9 +24,7 @@ export default function MaterialDetailRoute({
   const material = resource.material;
   return (
     <>
-      <h2 className="text-base/7 font-semibold text-gray-900 wrap-anywhere">
-        <bdi>{material.name}</bdi>
-      </h2>
+      <MaterialState material={material} />
       <dl className="mt-6 divide-y divide-gray-100 border-t border-gray-100">
         {[
           materialLabels[material.scope],
@@ -42,9 +41,9 @@ export default function MaterialDetailRoute({
             </dt>
             <dd className="mt-1 text-sm/6 text-gray-700">
               {material.scope === "course-wide" &&
-              material.state === "draft" &&
+              (material.state === "draft" || material.state === "failed") &&
               material.format !== "link" &&
-              label === materialLabels.draft ? (
+              label === materialLabels[material.state] ? (
                 <RouteDepartureLink
                   to={links.files(material.id)}
                   className={materialActionClass}
@@ -56,6 +55,38 @@ export default function MaterialDetailRoute({
           </div>
         ))}
       </dl>
+      {material.scope === "course-wide" ? (
+        <nav
+          className="mt-6 flex flex-wrap gap-3"
+          aria-label={intl.formatMessage(messages.materialDetail)}
+        >
+          {material.format !== "link" &&
+          (material.state === "processing" || material.state === "failed") ? (
+            <RouteDepartureLink
+              to={links.processing(material.id)}
+              className={materialActionClass}
+            >
+              {intl.formatMessage(messages.materialProcessingHeading)}
+            </RouteDepartureLink>
+          ) : null}
+          {material.brief !== null ? (
+            <RouteDepartureLink
+              to={links.brief(material.id)}
+              className={materialActionClass}
+            >
+              {intl.formatMessage(messages.materialBriefHeading)}
+            </RouteDepartureLink>
+          ) : null}
+          {material.state === "ready" ? (
+            <RouteDepartureLink
+              to={links.approval(material.id)}
+              className={materialActionClass}
+            >
+              {intl.formatMessage(messages.materialApprovalHeading)}
+            </RouteDepartureLink>
+          ) : null}
+        </nav>
+      ) : null}
       <button
         type="button"
         onClick={() => void checkRouteAdmission()}

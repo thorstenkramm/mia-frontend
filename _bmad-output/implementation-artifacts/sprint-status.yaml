@@ -33,7 +33,7 @@
 # - Epic 1 remains in-progress for recorded acceptance follow-up; do not restart its done stories.
 # - Unstarted story IDs were replaced; planning-artifacts/sprint-change-proposal-2026-10-06.md owns the map.
 generated: 09-19-2026 13:57
-last_updated: 10-07-2026
+last_updated: 10-07-2026 10:28
 project: mia-frontend
 project_key: NOKEY
 tracking_system: file-system
@@ -69,7 +69,7 @@ development_status:
   4-1-administrator-creates-a-course-with-a-supervisor: done
   4-2-supervisor-edits-course-teaching-fields: done
   4-3-supervisor-creates-material-and-uploads-files: done
-  4-4-process-material-and-approve-its-brief: backlog
+  4-4-process-material-and-approve-its-brief: done
   4-5-activate-the-ready-course: backlog
   epic-4-retrospective: optional
 

@@ -176,7 +176,18 @@ test(
         .count()) === 0,
     ).toBe(true);
     expect(
-      (await page.locator(`main a[href="${hub}/materials"]`).count()) === 1,
+      (await page
+        .getByRole("navigation", { name: "Course preparation", exact: true })
+        .getByRole("link", { name: "Course materials", exact: true })
+        .getAttribute("href")) === `${hub}/materials` &&
+        (await page
+          .getByRole("link", {
+            name: "Choose material to review its brief",
+            exact: true,
+          })
+          .getAttribute("href")) === `${hub}/materials` &&
+        (await page.locator(`main dl a[href="${hub}/materials"]`).count()) ===
+          1,
     ).toBe(true);
     await routeHygieneCheckpoint(page, "preparation-persisted");
     expect(
@@ -270,7 +281,24 @@ test(
       await page.goto(hub);
       await ready(page, "Course preparation");
       await expect.poll(() => hasText(page, text)).toBe(true);
-      expect((await page.locator("main dl a").count()) === 0).toBe(true);
+      const materialBlocked = control.blockers.some(
+        (blocker) => blocker.id === "qualifying_material",
+      );
+      expect(
+        (await page.locator("main dl a").count()) ===
+          (materialBlocked ? 1 : 0) &&
+          (await page
+            .locator("main dl")
+            .getByRole("link", { name: "Course materials", exact: true })
+            .count()) === (materialBlocked ? 1 : 0) &&
+          (await page.locator(`main dl a[href="${hub}/materials"]`).count()) ===
+            (materialBlocked ? 1 : 0) &&
+          (await page
+            .locator(
+              'main a[href*="activate"], main a[href*="supervisors"], main a[href*="assignments"], main a[href*="brief"], main a[href^="/api/"], main a[href^="https:"]',
+            )
+            .count()) === 0,
+      ).toBe(true);
     }
     expect(control.patches === 0 && control.collectionReads === 0).toBe(true);
     control.readUnavailable = true;

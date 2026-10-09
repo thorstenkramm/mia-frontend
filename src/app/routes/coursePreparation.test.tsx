@@ -5,6 +5,7 @@ import {
   render,
   screen,
   waitFor,
+  within,
 } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
 import { http, HttpResponse, type JsonBodyType } from "msw";
@@ -273,9 +274,17 @@ it("preparation validates Unicode bounds then installs persisted distinct teachi
     ),
   ).toBe(true);
   expect(
-    document.querySelectorAll(
-      'main a[href="/prepare/courses/course_1/materials"]',
-    ).length === 1,
+    within(screen.getByRole("navigation", { name: "Course preparation" }))
+      .getByRole("link", { name: "Course materials" })
+      .getAttribute("href") === "/prepare/courses/course_1/materials" &&
+      screen
+        .getByRole("link", {
+          name: "Choose material to review its brief",
+        })
+        .getAttribute("href") === "/prepare/courses/course_1/materials" &&
+      document.querySelectorAll(
+        'main dl a[href="/prepare/courses/course_1/materials"]',
+      ).length === 1,
   ).toBe(true);
   await user.click(
     screen.getAllByRole("link", { name: "AI instructions" })[0] as HTMLElement,

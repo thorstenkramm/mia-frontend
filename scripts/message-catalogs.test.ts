@@ -2,8 +2,29 @@ import { readFileSync } from "node:fs";
 import { resolve } from "node:path";
 import { runInNewContext } from "node:vm";
 import { expect, it } from "vitest";
-import { messageCatalogModule } from "./message-catalogs";
-import { catalogMessageIds } from "../src/platform/i18n/messages";
+import {
+  messageCatalogModule,
+  messageDescriptorModule,
+} from "./message-catalogs";
+import { catalogMessageIds, messages } from "../src/platform/i18n/messages";
+
+it("production packed descriptors preserve every public identity and default in all catalogs", () => {
+  const source = messageDescriptorModule(
+    resolve("src/platform/i18n/messages.ts"),
+  )
+    .code.replace(/^import .*;$/gmu, "")
+    .replace("export const messages=", "result =")
+    .replace("export const catalogMessageIds=", "ids =")
+    .replace("Object.values(messages)", "Object.values(result)");
+  const context = {
+    defineMessages: (value: unknown) => value,
+    result: undefined as unknown,
+    ids: undefined as unknown,
+  };
+  runInNewContext(source, context);
+  expect(context.result).toEqual(messages);
+  expect(context.ids).toEqual(catalogMessageIds);
+});
 
 it.each([
   ["de-DE", null],

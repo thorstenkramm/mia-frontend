@@ -104,6 +104,17 @@ for (const file of sourceFiles(join(root, "src"))) {
   const isDataOwner = path.startsWith("src/platform/data/");
   const isPrefsOwner = path.startsWith("src/platform/prefs/");
   const isAnnouncerOwner = path.startsWith("src/platform/announcer/");
+  const isMarkdownOwner = path.startsWith("src/platform/markdown/");
+  if (
+    !isMarkdownOwner &&
+    /(?:from\s+|import\s*(?:\(\s*)?)['"](?:react-markdown|remark-[^'"]+|rehype-[^'"]+|katex|micromark[^'"]*|mdast-util[^'"]*|hast-util[^'"]*)(?:\/[^'"]+)?['"]/.test(
+      source,
+    )
+  ) {
+    failures.push(
+      `${path} imports rich-content infrastructure outside platform/markdown.`,
+    );
+  }
 
   if (
     !isDataOwner &&

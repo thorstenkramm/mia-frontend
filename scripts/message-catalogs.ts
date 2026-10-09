@@ -48,6 +48,26 @@ export function messageCatalogModule(
   };
 }
 
+export function messageDescriptorModule(path: string): {
+  readonly code: string;
+} {
+  // Bounded FFR-955 mitigation: pack public descriptors, not locale content.
+  // Development keeps typed defineMessages; production reconstructs exactly
+  // the same descriptors from triples, without repeated object property names.
+  const source = readFileSync(path, "utf8");
+  const catalog = readCatalog(resolve(dirname(path), "catalogs/en-US.json"));
+  const entries = [...source.matchAll(/(\w+):\s*\{\s*id:\s*"([^"]+)"/gu)].map(
+    (match) => [match[1], match[2], catalog[match[2] ?? ""]],
+  );
+  if (
+    entries.length !== Object.keys(catalog).length ||
+    entries.some((entry) => entry.some((value) => value === undefined))
+  )
+    throw new Error("Descriptor packing must preserve the complete catalog.");
+  return {
+    code: `import {defineMessages} from "react-intl";\nexport const messages=defineMessages(Object.fromEntries(${JSON.stringify(entries)}.map(([name,id,defaultMessage])=>[name,{id,defaultMessage}])));\nexport const catalogMessageIds=Object.values(messages).map(message=>message.id).sort();`,
+  };
+}
 export function compactMessageCatalogs(): Plugin {
   let root = "";
   return {
@@ -58,6 +78,9 @@ export function compactMessageCatalogs(): Plugin {
       root = config.root;
     },
     transform(_code, id) {
+      if (id === resolve(root, "src/platform/i18n/messages.ts")) {
+        return { ...messageDescriptorModule(id), map: null };
+      }
       const pairs = [
         ["de-DE.json", null],
         ["fr-FR.json", null],

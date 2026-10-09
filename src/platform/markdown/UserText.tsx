@@ -1,3 +1,3 @@
 export function UserText({ text }: { text: string }) {
-  return <bdi>{text}</bdi>;
+  return <bdi dir="auto">{text}</bdi>;
 }

@@ -82,7 +82,7 @@ type EntryRoute =
   | (EntryRouteBase & {
       readonly path: (typeof materialRoutePaths)[keyof typeof materialRoutePaths];
       readonly gate: "Prepare(materials)";
-      readonly resource: "list" | "create" | "detail" | "files";
+      readonly resource: keyof typeof materialRoutePaths;
       readonly component: LazyExoticComponent<
         ComponentType<MaterialRouteProps>
       >;
@@ -93,6 +93,10 @@ export const materialRoutePaths = {
   create: "/prepare/courses/:courseId/materials/new",
   detail: "/prepare/courses/:courseId/materials/:materialId",
   files: "/prepare/courses/:courseId/materials/:materialId/files",
+  processing: "/prepare/courses/:courseId/materials/:materialId/processing",
+  brief: "/prepare/courses/:courseId/materials/:materialId/brief",
+  approval: "/prepare/courses/:courseId/materials/:materialId/approval",
+  revoke: "/prepare/courses/:courseId/materials/:materialId/approval/revoke",
 } as const;
 export function materialPath(
   course: CourseId,
@@ -126,6 +130,49 @@ export function prepareCoursePath(
   );
 }
 const materialRoutes = {
+  materialProcessing: {
+    resource: "processing",
+    path: materialRoutePaths.processing,
+    parent: { path: materialRoutePaths.detail, label: messages.materialDetail },
+    titleMessage: messages.materialProcessingTitle,
+    headingMessage: messages.materialProcessingHeading,
+    component: lazy(
+      () => import("../../features/materials/MaterialProcessingRoute"),
+    ),
+  },
+  materialBrief: {
+    resource: "brief",
+    path: materialRoutePaths.brief,
+    parent: { path: materialRoutePaths.detail, label: messages.materialDetail },
+    titleMessage: messages.materialBriefTitle,
+    headingMessage: messages.materialBriefHeading,
+    component: lazy(
+      () => import("../../features/materials/MaterialBriefRoute"),
+    ),
+  },
+  materialApproval: {
+    resource: "approval",
+    path: materialRoutePaths.approval,
+    parent: { path: materialRoutePaths.detail, label: messages.materialDetail },
+    titleMessage: messages.materialApprovalTitle,
+    headingMessage: messages.materialApprovalHeading,
+    component: lazy(
+      () => import("../../features/materials/MaterialApprovalRoute"),
+    ),
+  },
+  materialRevoke: {
+    resource: "revoke",
+    path: materialRoutePaths.revoke,
+    parent: {
+      path: materialRoutePaths.approval,
+      label: messages.materialApprovalHeading,
+    },
+    titleMessage: messages.materialRevokeTitle,
+    headingMessage: messages.materialRevokeHeading,
+    component: lazy(
+      () => import("../../features/materials/MaterialRevokeRoute"),
+    ),
+  },
   materialList: {
     resource: "list",
     path: materialRoutePaths.list,
@@ -218,6 +265,22 @@ export function invitationPath(
 }
 
 export const entryRoutes = {
+  materialProcessing: {
+    ...materialRoutes.materialProcessing,
+    gate: "Prepare(materials)",
+  },
+  materialBrief: {
+    ...materialRoutes.materialBrief,
+    gate: "Prepare(materials)",
+  },
+  materialApproval: {
+    ...materialRoutes.materialApproval,
+    gate: "Prepare(materials)",
+  },
+  materialRevoke: {
+    ...materialRoutes.materialRevoke,
+    gate: "Prepare(materials)",
+  },
   materialList: { ...materialRoutes.materialList, gate: "Prepare(materials)" },
   materialCreate: {
     ...materialRoutes.materialCreate,
@@ -629,7 +692,7 @@ function parseMaterialRoute(
 ): AuthenticatedRoute | null {
   if (!access.courseSupervision) return null;
   const match =
-    /^\/prepare\/courses\/([^/]+)\/materials(?:\/([^/]+)(?:\/(files))?)?$/u.exec(
+    /^\/prepare\/courses\/([^/]+)\/materials(?:\/([^/]+)(?:\/(files|processing|brief|approval(?:\/revoke)?))?)?$/u.exec(
       pathname,
     );
   if (match === null || match[1] === undefined) return null;
@@ -653,9 +716,25 @@ function parseMaterialRoute(
       };
     const materialId = toMaterialId(decodeURIComponent(segment));
     if (materialId === null || materialId === "new") return null;
-    const resource = match[3] === "files" ? "files" : "detail";
+    const actions = {
+      files: ["files", "materialFiles"],
+      processing: ["processing", "materialProcessing"],
+      brief: ["brief", "materialBrief"],
+      approval: ["approval", "materialApproval"],
+      "approval/revoke": ["revoke", "materialRevoke"],
+    } as const;
+    const action = match[3];
+    const resolved =
+      action === "files" ||
+      action === "processing" ||
+      action === "brief" ||
+      action === "approval" ||
+      action === "approval/revoke"
+        ? actions[action]
+        : null;
+    const resource = resolved?.[0] ?? "detail";
     return {
-      key: resource === "files" ? "materialFiles" : "materialDetail",
+      key: resolved?.[1] ?? "materialDetail",
       courseId,
       materialId,
       path: materialPath(courseId, resource, materialId),

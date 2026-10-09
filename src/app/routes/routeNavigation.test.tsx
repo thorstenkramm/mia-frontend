@@ -44,6 +44,7 @@ it("material paths preserve opaque identity and require exact assigned supervisi
     materialPath(course, "create"),
     materialPath(course, "detail", material),
     materialPath(course, "files", material),
+    materialPath(course, "brief", material),
   ]) {
     expect(authenticatedRoute(destination, access).path === destination).toBe(
       true,
@@ -57,7 +58,7 @@ it("material paths preserve opaque identity and require exact assigned supervisi
         .key,
     ).toBe("home");
   }
-  for (const suffix of ["/", "/review", "/finalize", "/brief", "/activate"])
+  for (const suffix of ["/", "/review", "/finalize", "/activate"])
     expect(
       authenticatedRoute(
         `${materialPath(course, "detail", material)}${suffix}`,

@@ -7,6 +7,8 @@ import {
   DialogTitle,
 } from "@headlessui/react";
 import { useIntl } from "react-intl";
+import { useNavigate } from "react-router";
+import { useAnnouncer } from "../../platform/announcer/AnnouncementRegion";
 import { ExclamationTriangleIcon } from "@heroicons/react/24/outline";
 import {
   documentedUploadContract,
@@ -33,8 +35,11 @@ import { MaterialUploadQueue } from "./MaterialUploadQueue";
 export default function MaterialFilesRoute({
   resource,
   unavailable,
+  links,
 }: MaterialRouteProps) {
   const intl = useIntl();
+  const navigate = useNavigate();
+  const { announce } = useAnnouncer();
   const input = useRef<HTMLInputElement>(null);
   const persistedNodes = useRef(new Map<MaterialFileId, HTMLLIElement>());
   if (resource.kind !== "files")
@@ -67,6 +72,20 @@ export default function MaterialFilesRoute({
       else input.current?.focus();
     });
   }, undefined);
+  const [, finalizeAction] = useActionState(async () => {
+    await queue.finalize((material) => {
+      // Commit the definitive transition before leaving its announcement owner.
+      // Direct processing entry remains silent; no URL/history handoff is used.
+      const destination = links.processing(material.id);
+      announce(
+        intl.formatMessage(materialLabels[material.state]),
+        "polite",
+        () => {
+          void navigate(destination);
+        },
+      );
+    });
+  }, undefined);
   if (state === null) return null;
   const contract = documentedUploadContract;
   const format = state.material.format;
@@ -74,7 +93,17 @@ export default function MaterialFilesRoute({
     state.queue === "Frozen elsewhere" ||
     state.material.state !== "draft" ||
     state.deletion.kind !== "Idle" ||
-    state.read === "Reading";
+    state.read === "Reading" ||
+    ["Prevalidating", "Confirming", "Submitting", "Outcome unknown"].includes(
+      state.finalization,
+    );
+  const fileRemovalFrozen =
+    state.read === "Reading" ||
+    state.deletion.kind !== "Idle" ||
+    !["draft", "failed"].includes(state.material.state) ||
+    ["Prevalidating", "Confirming", "Submitting", "Outcome unknown"].includes(
+      state.finalization,
+    );
   const total =
     state.files.reduce((sum, file) => sum + file.size, 0) +
     state.rows
@@ -205,7 +234,16 @@ export default function MaterialFilesRoute({
         >
           {intl.formatMessage(messages.materialQueue)}
         </h2>
-        <MaterialUploadQueue rows={state.rows} queue={queue} input={input} />
+        <fieldset
+          disabled={[
+            "Prevalidating",
+            "Confirming",
+            "Submitting",
+            "Outcome unknown",
+          ].includes(state.finalization)}
+        >
+          <MaterialUploadQueue rows={state.rows} queue={queue} input={input} />
+        </fieldset>
         <div className="mt-6 flex flex-wrap gap-3">
           <button
             type="button"
@@ -236,7 +274,10 @@ export default function MaterialFilesRoute({
                   row.state.kind === "Uploading" ||
                   row.state.kind === "Verifying",
               ) ||
-              state.deletion.kind === "Submitting"
+              state.deletion.kind === "Submitting" ||
+              ["Prevalidating", "Confirming", "Submitting"].includes(
+                state.finalization,
+              )
             }
             onClick={() => void queue.reconcile()}
           >
@@ -292,13 +333,14 @@ export default function MaterialFilesRoute({
                           · {intl.formatMessage(materialLabels[file.state])}
                         </p>
                       </div>
-                      {state.material.state === "draft" ? (
+                      {state.material.state === "draft" ||
+                      state.material.state === "failed" ? (
                         <button
                           type="button"
                           aria-describedby={`persisted-file-${index}`}
                           className={materialActionClass}
                           disabled={
-                            frozen ||
+                            fileRemovalFrozen ||
                             state.rows.some(
                               (row) =>
                                 row.state.kind === "Uploading" ||
@@ -334,6 +376,12 @@ export default function MaterialFilesRoute({
             pending ||
             state.read === "Reading" ||
             state.deletion.kind !== "Idle" ||
+            [
+              "Prevalidating",
+              "Confirming",
+              "Submitting",
+              "Outcome unknown",
+            ].includes(state.finalization) ||
             state.review.kind === "List accepted"
           }
           onClick={() => queue.accept()}
@@ -346,6 +394,41 @@ export default function MaterialFilesRoute({
           </p>
         ) : null}
       </section>
+      <div className="mt-6 space-y-3">
+        <button
+          type="button"
+          className={materialActionClass}
+          disabled={!queue.canFinalize()}
+          onClick={() => void queue.reviewFinalization()}
+        >
+          {intl.formatMessage(messages.materialFinalize)}
+        </button>
+        {state.finalization === "Changed" ? (
+          <p>{intl.formatMessage(messages.materialChanged)}</p>
+        ) : null}
+        {state.finalization === "Prevalidating" ? (
+          <p>{intl.formatMessage(messages.materialReconcile)}</p>
+        ) : null}
+        {state.finalization === "Submitting" ||
+        state.finalization === "Outcome unknown" ? (
+          <p>
+            {intl.formatMessage(
+              state.finalization === "Submitting"
+                ? messages.materialLifecyclePending
+                : messages.materialLifecycleUnknown,
+            )}
+          </p>
+        ) : null}
+        {state.finalization === "Submitting" ? (
+          <button
+            type="button"
+            className={materialActionClass}
+            onClick={() => queue.stopFinalizationWaiting()}
+          >
+            {intl.formatMessage(messages.invitationsStopWaiting)}
+          </button>
+        ) : null}
+      </div>
       {state.deletion.kind === "Submitting" ? (
         <button
           type="button"
@@ -371,10 +454,17 @@ export default function MaterialFilesRoute({
         </>
       )}
       <Dialog
-        open={state.deletion.kind === "Remove chosen row"}
-        onClose={() => queue.cancelRemoval()}
+        open={
+          state.deletion.kind === "Remove chosen row" ||
+          state.finalization === "Confirming"
+        }
+        onClose={() => {
+          queue.cancelRemoval();
+          queue.cancelFinalization();
+        }}
         className="relative z-50"
       >
+        {/* Shared Simple alert anatomy is marked in MaterialApprovalRoute; finalization stays separate. */}
         <DialogBackdrop className="fixed inset-0 bg-gray-500/75" />
         <div className="fixed inset-0 z-10 w-screen overflow-y-auto">
           <div className="flex min-h-full items-end justify-center p-4 text-center sm:items-center sm:p-0">
@@ -391,32 +481,67 @@ export default function MaterialFilesRoute({
                     as="h2"
                     className="text-base font-semibold text-gray-900"
                   >
-                    {intl.formatMessage(messages.materialRemoveConfirm)}
+                    {intl.formatMessage(
+                      state.finalization === "Confirming"
+                        ? messages.materialFinalize
+                        : messages.materialRemoveConfirm,
+                    )}
                   </DialogTitle>
                   <DialogDescription className="mt-2 text-sm/6 text-gray-700">
-                    {intl.formatMessage(messages.materialRemoveHelp)}
+                    {intl.formatMessage(
+                      state.finalization === "Confirming"
+                        ? messages.materialFinalizeHelp
+                        : messages.materialRemoveHelp,
+                    )}
                   </DialogDescription>
                   {state.deletion.kind === "Remove chosen row" ? (
                     <p className="mt-2 text-sm/6 text-gray-700 wrap-anywhere">
                       <bdi>{state.deletion.file.name}</bdi>
                     </p>
                   ) : null}
+                  {state.finalization === "Confirming" ? (
+                    <div className="mt-2 text-sm/6 wrap-anywhere">
+                      <p>
+                        <bdi>{state.material.name}</bdi>
+                      </p>
+                      <ul>
+                        {state.files.map((file) => (
+                          <li key={file.id}>
+                            <bdi>{file.name}</bdi>
+                          </li>
+                        ))}
+                      </ul>
+                    </div>
+                  ) : null}
                 </div>
               </div>
               <div className="mt-5 flex flex-wrap gap-3 sm:mt-4 sm:flex-row-reverse">
-                <form action={deleteAction}>
+                <form
+                  action={
+                    state.finalization === "Confirming"
+                      ? finalizeAction
+                      : deleteAction
+                  }
+                >
                   <button
                     type="submit"
                     className="inline-flex min-h-6 w-full justify-center rounded-md bg-red-600 px-3 py-2 text-sm font-semibold text-white shadow-xs hover:bg-red-500 focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-red-600 sm:w-auto"
                   >
-                    {intl.formatMessage(messages.materialRemove)}
+                    {intl.formatMessage(
+                      state.finalization === "Confirming"
+                        ? messages.materialFinalize
+                        : messages.materialRemove,
+                    )}
                   </button>
                 </form>
                 <button
                   type="button"
                   data-autofocus
                   className={materialActionClass}
-                  onClick={() => queue.cancelRemoval()}
+                  onClick={() => {
+                    queue.cancelRemoval();
+                    queue.cancelFinalization();
+                  }}
                 >
                   {intl.formatMessage(messages.materialCancel)}
                 </button>

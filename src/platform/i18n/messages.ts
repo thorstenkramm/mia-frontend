@@ -1,6 +1,270 @@
 import { defineMessages } from "react-intl";
 
 export const messages = defineMessages({
+  materialRequired: {
+    id: "materials.required",
+    defaultMessage: "Required. Enter at least one character.",
+  },
+  materialMinimumItems: {
+    id: "materials.minimumItems",
+    defaultMessage: "Add at least {limit} item(s).",
+  },
+  materialMaximum: {
+    id: "materials.maximum",
+    defaultMessage: "Shorten to at most {limit} characters.",
+  },
+  materialMaximumItems: {
+    id: "materials.maximumItems",
+    defaultMessage: "Remove items to leave at most {limit}.",
+  },
+  materialEncoded: {
+    id: "materials.encoded",
+    defaultMessage: "Reduce encoded content to at most {limit} UTF-8 bytes.",
+  },
+  materialSequence: {
+    id: "materials.sequence",
+    defaultMessage: "Restore contiguous section order.",
+  },
+  materialJobAnnouncement: {
+    id: "materials.jobAnnouncement",
+    defaultMessage: "Material processing job: {state}.",
+  },
+  materialMatches: {
+    id: "materials.matches",
+    defaultMessage:
+      "The current saved brief matches the submitted values. This confirms current values, not the earlier request’s outcome.",
+  },
+  materialDiffers: {
+    id: "materials.differs",
+    defaultMessage:
+      "Current saved brief values differ. Your submission remains unconfirmed. Review current values or discard local input.",
+  },
+  materialFieldLimits: {
+    id: "materials.fieldLimits",
+    defaultMessage: "At most {points} characters and {bytes} UTF-8 bytes.",
+  },
+  materialProcessingTitle: {
+    id: "materials.processingTitle",
+    defaultMessage: "Course material processing | MIA",
+  },
+  materialProcessingHeading: {
+    id: "materials.processingHeading",
+    defaultMessage: "Course material processing",
+  },
+  materialBriefTitle: {
+    id: "materials.briefTitle",
+    defaultMessage: "Review material brief | MIA",
+  },
+  materialBriefHeading: {
+    id: "materials.briefHeading",
+    defaultMessage: "Review material brief",
+  },
+  materialApprovalTitle: {
+    id: "materials.approvalTitle",
+    defaultMessage: "Material approval | MIA",
+  },
+  materialApprovalHeading: {
+    id: "materials.approvalHeading",
+    defaultMessage: "Material approval",
+  },
+  materialRevokeTitle: {
+    id: "materials.revokeTitle",
+    defaultMessage: "Revoke material approval | MIA",
+  },
+  materialRevokeHeading: {
+    id: "materials.revokeHeading",
+    defaultMessage: "Revoke material approval",
+  },
+  materialTechnical: {
+    id: "materials.technical",
+    defaultMessage: "Technical readiness",
+  },
+  materialEducational: {
+    id: "materials.educational",
+    defaultMessage: "Educational approval",
+  },
+  materialFinalize: {
+    id: "materials.finalize",
+    defaultMessage: "Finalize and process",
+  },
+  materialFinalizeHelp: {
+    id: "materials.finalizeHelp",
+    defaultMessage:
+      "Finalization freezes these source files. Processing cannot be undone here. PDF and image OCR may use Mistral; text, Markdown and DOCX extraction is local. Brief generation uses OpenAI. This review does not lock the server.",
+  },
+  materialChanged: {
+    id: "materials.changed",
+    defaultMessage:
+      "Current material changed. Review the latest saved state and confirm again.",
+  },
+  materialLifecyclePending: {
+    id: "materials.lifecyclePending",
+    defaultMessage: "Submitting; no outcome is confirmed yet.",
+  },
+  materialLifecycleUnknown: {
+    id: "materials.lifecycleUnknown",
+    defaultMessage:
+      "Outcome unknown. Refresh to inspect current state; the request will not be repeated.",
+  },
+  materialNoNotifications: {
+    id: "materials.noNotifications",
+    defaultMessage:
+      "MIA sends no workflow notifications. Use Refresh to check current state. No automatic checks run here.",
+  },
+  materialJobs: { id: "materials.jobs", defaultMessage: "Processing jobs" },
+  materialJobRunning: { id: "materials.jobRunning", defaultMessage: "Running" },
+  materialJobSucceeded: {
+    id: "materials.jobSucceeded",
+    defaultMessage: "Succeeded",
+  },
+  materialJobCancelled: {
+    id: "materials.jobCancelled",
+    defaultMessage: "Cancelled",
+  },
+  materialProcessingFailure: {
+    id: "materials.processingFailure",
+    defaultMessage:
+      "Material processing failed. The material is not usable. Review sources before deliberately finalizing again.",
+  },
+  materialOcrFailure: {
+    id: "materials.ocrFailure",
+    defaultMessage: "Source extraction failed. Review the failed source files.",
+  },
+  materialBriefFailure: {
+    id: "materials.briefFailure",
+    defaultMessage:
+      "Brief generation failed. Review current material before finalizing again.",
+  },
+  materialBriefMissing: {
+    id: "materials.briefMissing",
+    defaultMessage: "A saved ready brief is not available for this action.",
+  },
+  materialSummary: { id: "materials.summary", defaultMessage: "Summary" },
+  materialSubjects: { id: "materials.subjects", defaultMessage: "Subjects" },
+  materialLearningGoals: {
+    id: "materials.learningGoals",
+    defaultMessage: "Supported learning goals",
+  },
+  materialSections: { id: "materials.sections", defaultMessage: "Sections" },
+  materialSectionTitle: {
+    id: "materials.sectionTitle",
+    defaultMessage: "Section title",
+  },
+  materialSectionLabel: {
+    id: "materials.sectionLabel",
+    defaultMessage: "Section label (optional)",
+  },
+  materialSectionDescription: {
+    id: "materials.sectionDescription",
+    defaultMessage: "Section description",
+  },
+  materialSearchTerms: {
+    id: "materials.searchTerms",
+    defaultMessage: "Search terms",
+  },
+  materialWarnings: { id: "materials.warnings", defaultMessage: "Warnings" },
+  materialLevel: {
+    id: "materials.level",
+    defaultMessage: "Educational level (optional)",
+  },
+  materialAdd: { id: "materials.add", defaultMessage: "Add item" },
+  materialAbsent: { id: "materials.absent", defaultMessage: "Not provided" },
+  materialSavedBrief: {
+    id: "materials.savedBrief",
+    defaultMessage: "Saved brief",
+  },
+  materialDraftPreview: {
+    id: "materials.draftPreview",
+    defaultMessage: "Unsaved preview — not approval truth",
+  },
+  materialGenerated: { id: "materials.generated", defaultMessage: "Generated" },
+  materialCorrected: {
+    id: "materials.corrected",
+    defaultMessage: "Supervisor corrected",
+  },
+  materialSaveBrief: {
+    id: "materials.saveBrief",
+    defaultMessage: "Save complete brief",
+  },
+  materialBriefBounds: {
+    id: "materials.briefBounds",
+    defaultMessage:
+      "Review the highlighted fields. Use the documented character, byte and item limits; the complete encoded brief is limited to 256 KiB.",
+  },
+  materialEditWarning: {
+    id: "materials.editWarning",
+    defaultMessage:
+      "Changing approved brief content revokes educational approval. Students and the AI tutor lose access until a supervisor deliberately approves it again. An unchanged validated brief stays approved.",
+  },
+  materialSaved: {
+    id: "materials.saved",
+    defaultMessage: "Returned material state saved.",
+  },
+  materialRevoked: {
+    id: "materials.revoked",
+    defaultMessage:
+      "Educational approval revoked. Review the saved brief before approving again.",
+  },
+  materialApprove: {
+    id: "materials.approve",
+    defaultMessage: "Approve material",
+  },
+  materialReviewAck: {
+    id: "materials.reviewAck",
+    defaultMessage:
+      "I have reviewed the complete saved brief for educational suitability.",
+  },
+  materialApproveHelp: {
+    id: "materials.approveHelp",
+    defaultMessage:
+      "Approval makes this ready course-wide material available to course students and the AI tutor. Current state is checked before dispatch; this is not a content-version lock.",
+  },
+  materialRevokeHelp: {
+    id: "materials.revokeHelp",
+    defaultMessage:
+      "Revocation removes student access and future AI tutor retrieval. If no other qualifying approved file material remains, new tutoring sessions may be blocked. Existing sessions may finish. The course is not deactivated.",
+  },
+  materialLinkNonqualifying: {
+    id: "materials.linkNonqualifying",
+    defaultMessage:
+      "Link material does not qualify as file-backed material for course readiness.",
+  },
+  materialReadinessFailed: {
+    id: "materials.readinessFailed",
+    defaultMessage:
+      "The material change is confirmed, but current course readiness could not be checked. Return to the preparation hub and Refresh.",
+  },
+  materialChooseBrief: {
+    id: "materials.chooseBrief",
+    defaultMessage: "Choose material to review its brief",
+  },
+  markdownExternal: {
+    id: "markdown.external",
+    defaultMessage: "Opens in a new tab",
+  },
+  markdownTable: {
+    id: "markdown.table",
+    defaultMessage: "{context} — table {sequence}",
+  },
+  markdownTableFallback: {
+    id: "markdown.tableFallback",
+    defaultMessage: "Table shown as linear text",
+  },
+  markdownCode: { id: "markdown.code", defaultMessage: "Code" },
+  markdownCopy: { id: "markdown.copy", defaultMessage: "Copy code" },
+  markdownCopied: { id: "markdown.copied", defaultMessage: "Code copied." },
+  markdownCopyDenied: {
+    id: "markdown.copyDenied",
+    defaultMessage: "Copy unavailable. Select the code and copy manually.",
+  },
+  markdownMathSource: {
+    id: "markdown.mathSource",
+    defaultMessage: "Math source",
+  },
+  markdownMathFailed: {
+    id: "markdown.mathFailed",
+    defaultMessage: "Math could not be rendered; full source follows.",
+  },
   materialCancel: { id: "materials.cancel", defaultMessage: "Cancel" },
   materialsTitle: {
     id: "materials.title",

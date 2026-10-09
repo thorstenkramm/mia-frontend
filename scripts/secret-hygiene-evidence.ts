@@ -12,6 +12,12 @@ export const browserCases = [
   "browser-reset-token",
   "browser-invitation-token",
   "browser-totp-enrollment",
+  "browser-material-processing",
+  "browser-material-preview",
+  "browser-material-pending",
+  "browser-material-unknown",
+  "browser-material-rejected",
+  "browser-material-teardown",
 ] as const;
 export const unitCases = [
   "unit-reset-comparison",
@@ -26,6 +32,46 @@ export const unitCases = [
 type CaseId = (typeof browserCases)[number] | (typeof unitCases)[number];
 
 export const courseUnitCases = [
+  ...["stop", "teardown"].flatMap((disposition) =>
+    [200, 404, 403].map((status) => ({
+      title: `dependent readiness after definitive save ${disposition} fences ordinary results but handles applicable status ${status}`,
+      file: "src/features/materials/materialLifecycle.test.tsx",
+      points: [
+        `brief-dependent-${disposition}-${status}-retired`,
+        `brief-dependent-${disposition}-${status}-settled`,
+      ],
+    })),
+  ),
+  {
+    title:
+      "mounted brief fields give corrective named errors focus and recovery without invalid PATCH",
+    file: "src/features/materials/materialLifecycle.test.tsx",
+    points: ["brief-validation-invalid", "brief-validation-recovered"],
+  },
+  {
+    title:
+      "successive saves invalidate readiness and successful Refresh replaces failure and fences older reads",
+    file: "src/features/materials/materialLifecycle.test.tsx",
+    points: ["brief-readiness-reconciled", "brief-readiness-teardown"],
+  },
+  {
+    title:
+      "changed approved brief revokes only from returned truth and normalized no-op stays approved",
+    file: "src/features/materials/materialLifecycle.test.tsx",
+    points: ["brief-saved", "brief-revoked"],
+  },
+  {
+    title:
+      "lost save freezes submitted input and Refresh matches values without an execution claim",
+    file: "src/features/materials/materialLifecycle.test.tsx",
+    points: ["brief-unknown", "brief-reconciled"],
+  },
+  {
+    title:
+      "scope teardown drops drafts and errors immediately and fences a pending response",
+    file: "src/features/materials/materialLifecycle.test.tsx",
+    points: ["brief-pending", "brief-teardown"],
+  },
   {
     title:
       "material deletion new attempt retires rejection and stopped late success stays unknown",

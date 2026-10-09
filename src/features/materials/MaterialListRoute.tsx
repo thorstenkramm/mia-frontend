@@ -86,10 +86,12 @@ export default function MaterialListRoute({
               </p>
               <p className="mt-1 text-sm/6 text-gray-700">
                 {intl.formatMessage(materialLabels[material.scope])} ·{" "}
+                {intl.formatMessage(messages.materialTechnical)}:{" "}
                 {intl.formatMessage(materialLabels[material.state])} ·{" "}
                 {intl.formatMessage(materialLabels[material.format])}
               </p>
               <p className="text-sm/6 text-gray-700">
+                {intl.formatMessage(messages.materialEducational)}:{" "}
                 {intl.formatMessage(
                   material.approved
                     ? messages.materialApproved
@@ -98,12 +100,22 @@ export default function MaterialListRoute({
               </p>
             </div>
             {material.scope === "course-wide" ? (
-              <RouteDepartureLink
-                className={materialActionClass}
-                to={links.detail(material.id)}
-              >
-                {intl.formatMessage(messages.materialDetail)}
-              </RouteDepartureLink>
+              <div className="flex flex-wrap gap-3">
+                <RouteDepartureLink
+                  className={materialActionClass}
+                  to={links.detail(material.id)}
+                >
+                  {intl.formatMessage(messages.materialDetail)}
+                </RouteDepartureLink>
+                {material.state === "ready" ? (
+                  <RouteDepartureLink
+                    to={links.brief(material.id)}
+                    className={materialActionClass}
+                  >
+                    {intl.formatMessage(messages.materialBriefHeading)}
+                  </RouteDepartureLink>
+                ) : null}
+              </div>
             ) : null}
           </li>
         ))}

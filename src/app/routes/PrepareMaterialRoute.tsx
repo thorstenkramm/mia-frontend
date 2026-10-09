@@ -9,6 +9,7 @@ import {
   isHiddenMaterialFailure,
   listMaterialFiles,
   listMaterials,
+  listMaterialJobs,
   type MaterialId,
 } from "../../platform/api/materials";
 import type { CourseId, EntryApiFailure } from "../../platform/api/entry";
@@ -75,14 +76,33 @@ export default function PrepareMaterialRoute({
         case "create":
           return { kind: "create" } as const;
         case "detail":
+        case "processing":
+        case "brief":
+        case "approval":
+        case "revoke":
         case "files": {
           if (materialId === null)
             throw new Error("Material resource requires an identity.");
           const material = await getMaterial(courseId, materialId, signal);
           if (route.resource === "detail")
             return { kind: "detail", material } as const;
-          if (material.scope !== "course-wide" || material.format === "link")
+          if (material.scope !== "course-wide")
             return { kind: "Unavailable" } as const;
+          if (
+            route.resource === "brief" ||
+            route.resource === "approval" ||
+            route.resource === "revoke"
+          )
+            return { kind: route.resource, material };
+          if (material.format === "link")
+            return { kind: "Unavailable" } as const;
+          if (route.resource === "processing")
+            return {
+              kind: "processing",
+              material,
+              files: await listMaterialFiles(materialId, signal),
+              jobs: await listMaterialJobs(materialId, 0, signal),
+            } as const;
           return {
             kind: "files",
             material,
@@ -200,6 +220,10 @@ export default function PrepareMaterialRoute({
             create: materialPath(courseId, "create"),
             detail: (id) => materialPath(courseId, "detail", id),
             files: (id) => materialPath(courseId, "files", id),
+            processing: (id) => materialPath(courseId, "processing", id),
+            brief: (id) => materialPath(courseId, "brief", id),
+            approval: (id) => materialPath(courseId, "approval", id),
+            revoke: (id) => materialPath(courseId, "revoke", id),
           }}
           unavailable={(error) => setState({ kind: "Unavailable", error })}
         />

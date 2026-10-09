@@ -21,7 +21,10 @@ import {
 import { SessionController } from "../../platform/session/sessionController";
 import { MaterialUploadQueue } from "./useMaterialUploadQueue";
 
-async function queueFixture(stopCompletes = true) {
+async function queueFixture(
+  stopCompletes = true,
+  initialState: Material["state"] = "draft",
+) {
   const fixture = courseUnitFixture();
   const id = toMaterialId("material_1");
   if (id === null) throw new Error("Invalid synthetic identity.");
@@ -32,21 +35,52 @@ async function queueFixture(stopCompletes = true) {
     scope: "course-wide",
     kind: "worksheet",
     format: "pdf",
-    state: "draft",
+    state: initialState,
     approved: false,
+    brief: null,
+    brief_source: null,
+    brief_updated_at: null,
+    approved_at: null,
+    failure_code: null,
+    created_at: "2026-10-09T10:00:00.000000Z",
+    updated_at: null,
   };
-  let state: Material["state"] = "draft";
+  let state: Material["state"] = initialState;
+  let includeFile = true;
+  let readRelease: Promise<void> | null = null;
   let reads = 0,
     deletes = 0,
     deleteStatus = 204;
+  let finalizations = 0;
+  let finalizeOutcome: "success" | "unknown" | "hidden" = "success";
+  let finalizeRelease: Promise<void> | null = null;
   const json = (body: unknown, status = 200) =>
     new HttpResponse(JSON.stringify(body), {
       status,
       headers: { "Content-Type": jsonApiMediaType },
     });
   server.use(
-    http.get("/api/v1/materials/material_1", () => {
+    http.post("/api/v1/materials/material_1/finalizations", async () => {
+      finalizations++;
+      if (finalizeRelease) await finalizeRelease;
+      if (finalizeOutcome === "hidden")
+        return json({ errors: [{ code: "material_not_found" }] }, 404);
+      state = "processing";
+      if (finalizeOutcome === "unknown") return HttpResponse.error();
+      return json({
+        data: {
+          type: "materials",
+          id,
+          attributes: { ...material, state },
+          relationships: {
+            course: { data: { type: "courses", id: material.courseId } },
+          },
+        },
+      });
+    }),
+    http.get("/api/v1/materials/material_1", async () => {
       reads++;
+      if (readRelease) await readRelease;
       return json({
         data: {
           type: "materials",
@@ -60,25 +94,33 @@ async function queueFixture(stopCompletes = true) {
     }),
     http.get("/api/v1/materials/material_1/files", () =>
       json({
-        data: [
-          {
-            type: "material-files",
-            id: "file_1",
-            attributes: {
-              original_filename: `${fixture.name}.pdf`,
-              media_type: "application/pdf",
-              size_bytes: 10,
-              page_count: 1,
-              state: "draft",
-              failure_code: null,
-            },
-            relationships: { material: { data: { type: "materials", id } } },
-          },
-        ],
+        data: includeFile
+          ? [
+              {
+                type: "material-files",
+                id: "file_1",
+                attributes: {
+                  original_filename: `${fixture.name}.pdf`,
+                  media_type: "application/pdf",
+                  size_bytes: 10,
+                  page_count: 1,
+                  state: "draft",
+                  failure_code: null,
+                },
+                relationships: {
+                  material: { data: { type: "materials", id } },
+                },
+              },
+            ]
+          : [],
       }),
     ),
     http.delete("/api/v1/material-files/file_1", () => {
       deletes++;
+      if (deleteStatus === 204 && initialState === "failed") {
+        state = "draft";
+        includeFile = false;
+      }
       return deleteStatus === 204
         ? new HttpResponse(null, { status: 204 })
         : json(
@@ -157,15 +199,183 @@ async function queueFixture(stopCompletes = true) {
     files,
     pending,
     queue,
-    counts: () => ({ reads, deletes, unavailable }),
+    counts: () => ({ reads, deletes, unavailable, finalizations }),
+    setFinalizeOutcome: (outcome: typeof finalizeOutcome) => {
+      finalizeOutcome = outcome;
+    },
+    setFinalizeRelease: (value: Promise<void>) => {
+      finalizeRelease = value;
+    },
     setState: (next: Material["state"]) => {
       state = next;
+    },
+    setReadRelease: (value: Promise<void>) => {
+      readRelease = value;
     },
     setDeleteStatus: (next: number) => {
       deleteStatus = next;
     },
   };
 }
+it("material failed source removal returns to draft only after the authoritative read", async () => {
+  const { queue, counts, files, fixture, setReadRelease } = await queueFixture(
+    true,
+    "failed",
+  );
+  let release: () => void = () => undefined;
+  setReadRelease(
+    new Promise<void>((resolve) => {
+      release = resolve;
+    }),
+  );
+  const file = files[0];
+  if (!file) throw new Error("Missing fixture source.");
+  queue.select([
+    new File([fixture.teachingText], "replacement.pdf", {
+      type: "application/pdf",
+    }),
+  ]);
+  expect(queue.getSnapshot()?.rows.length === 0).toBe(true);
+  queue.chooseRemoval(file.id);
+  const run = queue.deleteChosen();
+  await waitFor(() =>
+    expect(counts().deletes === 1 && counts().reads === 1).toBe(true),
+  );
+  expect(
+    queue.getSnapshot()?.material.state === "failed" &&
+      queue.getSnapshot()?.files.length === 0,
+  ).toBe(true);
+  release();
+  await run;
+  expect(
+    queue.getSnapshot()?.material.state === "draft" &&
+      queue.getSnapshot()?.files.length === 0,
+  ).toBe(true);
+  queue.select([
+    new File([fixture.teachingText], "replacement.pdf", {
+      type: "application/pdf",
+    }),
+  ]);
+  expect(queue.getSnapshot()?.rows.length === 1).toBe(true);
+  queue.destroy();
+});
+it("material failed processing may be deliberately re-finalized from fresh reviewed sources", async () => {
+  const { queue, counts } = await queueFixture(true, "failed");
+  queue.accept();
+  await queue.reviewFinalization();
+  expect(queue.getSnapshot()?.finalization === "Confirming").toBe(true);
+  await queue.finalize(() => undefined);
+  expect(
+    counts().finalizations === 1 &&
+      queue.getSnapshot()?.material.state === "processing",
+  ).toBe(true);
+  queue.destroy();
+});
+it("material changed preflight file identities invalidate acceptance before dispatch", async () => {
+  const { queue, counts } = await queueFixture();
+  queue.accept();
+  server.use(
+    http.get(
+      "/api/v1/materials/material_1/files",
+      () =>
+        new HttpResponse(JSON.stringify({ data: [] }), {
+          headers: { "Content-Type": jsonApiMediaType },
+        }),
+    ),
+  );
+  await queue.reviewFinalization();
+  await queue.finalize(() => undefined);
+  expect(
+    queue.getSnapshot()?.finalization === "Changed" &&
+      queue.getSnapshot()?.review.kind === "User review" &&
+      !queue.canFinalize() &&
+      counts().finalizations === 0,
+  ).toBe(true);
+  queue.destroy();
+});
+it("finalization requires current reviewed file sequence and freezes every queue edit until definitive response", async () => {
+  const { queue, counts, fixture } = await queueFixture();
+  expect(queue.canFinalize()).toBe(false);
+  queue.accept();
+  expect(queue.canFinalize()).toBe(true);
+  await queue.reviewFinalization();
+  expect(queue.getSnapshot()?.finalization === "Confirming").toBe(true);
+  queue.select([
+    new File([fixture.teachingText], "source.pdf", { type: "application/pdf" }),
+  ]);
+  expect(queue.getSnapshot()?.rows.length === 0).toBe(true);
+  let confirmed = 0;
+  const run = queue.finalize(() => confirmed++);
+  await queue.finalize(() => confirmed++);
+  await run;
+  expect(
+    counts().finalizations === 1 &&
+      confirmed === 1 &&
+      queue.getSnapshot()?.material.state === "processing" &&
+      !queue.canFinalize(),
+  ).toBe(true);
+  queue.destroy();
+});
+it("finalization preflight changed state invalidates review without dispatch", async () => {
+  const { queue, setState, counts } = await queueFixture();
+  queue.accept();
+  setState("processing");
+  await queue.reviewFinalization();
+  expect(
+    queue.getSnapshot()?.finalization === "Changed" &&
+      queue.getSnapshot()?.review.kind === "User review" &&
+      counts().finalizations === 0,
+  ).toBe(true);
+  queue.destroy();
+});
+it("unknown finalization uses explicit Refresh and never attributes observed processing to the attempt", async () => {
+  const { queue, setFinalizeOutcome, counts } = await queueFixture();
+  queue.accept();
+  await queue.reviewFinalization();
+  setFinalizeOutcome("unknown");
+  let confirmed = 0;
+  await queue.finalize(() => confirmed++);
+  expect(
+    queue.getSnapshot()?.finalization === "Outcome unknown" &&
+      queue.getSnapshot()?.material.state === "draft" &&
+      confirmed === 0,
+  ).toBe(true);
+  await queue.reconcile();
+  expect(
+    queue.getSnapshot()?.material.state === "processing" &&
+      queue.getSnapshot()?.review.kind !== "List accepted" &&
+      counts().finalizations === 1 &&
+      confirmed === 0,
+  ).toBe(true);
+  queue.destroy();
+});
+for (const outcome of ["success", "hidden"] as const)
+  it(`stopped finalization fences late ${outcome} but preserves current denial`, async () => {
+    const { queue, setFinalizeRelease, setFinalizeOutcome, counts } =
+      await queueFixture();
+    let release: () => void = () => undefined;
+    setFinalizeRelease(
+      new Promise<void>((resolve) => {
+        release = resolve;
+      }),
+    );
+    setFinalizeOutcome(outcome);
+    queue.accept();
+    await queue.reviewFinalization();
+    let confirmed = 0;
+    const run = queue.finalize(() => confirmed++);
+    await waitFor(() => expect(counts().finalizations === 1).toBe(true));
+    queue.stopFinalizationWaiting();
+    release();
+    await run;
+    expect(
+      confirmed === 0 &&
+        (outcome === "hidden"
+          ? counts().unavailable === 1 && queue.getSnapshot() === null
+          : queue.getSnapshot()?.finalization === "Outcome unknown"),
+    ).toBe(true);
+    queue.destroy();
+  });
 it("material queue serializes duplicate sources and pauses unknown until explicit reconciliation", async () => {
   const { fixture, queue, pending, counts, files } = await queueFixture();
   const file = new File([fixture.teachingText], `${fixture.name}.pdf`, {

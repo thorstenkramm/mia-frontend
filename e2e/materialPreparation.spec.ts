@@ -515,7 +515,10 @@ test(
     const control = await materialBackend(page);
     await page.goto("/prepare/courses/course_1");
     await ready(page, "Course preparation");
-    await page.locator(`main a[href="${list}"]`).click();
+    await page
+      .getByRole("navigation", { name: "Course preparation", exact: true })
+      .getByRole("link", { name: "Course materials", exact: true })
+      .click();
     await ready(page, "Course materials");
     await page.locator(`main a[href="${list}/new"]`).click();
     await ready(page, "Create course material");

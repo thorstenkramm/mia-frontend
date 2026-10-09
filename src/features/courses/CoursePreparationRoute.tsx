@@ -63,6 +63,13 @@ export default function CoursePreparationRoute({
                     courseTeachingFields[blocker.field].heading,
                   )}
                 </RouteDepartureLink>
+              ) : blocker.id === "qualifying_material" ? (
+                <RouteDepartureLink
+                  to={links.materials(preparation.course.id)}
+                  className={courseActionClass}
+                >
+                  {intl.formatMessage(messages.materialsHeading)}
+                </RouteDepartureLink>
               ) : null}
             </dd>
           </div>
@@ -82,6 +89,12 @@ export default function CoursePreparationRoute({
           className={courseActionClass}
         >
           {intl.formatMessage(messages.materialsHeading)}
+        </RouteDepartureLink>
+        <RouteDepartureLink
+          to={links.materials(preparation.course.id)}
+          className={courseActionClass}
+        >
+          {intl.formatMessage(messages.materialChooseBrief)}
         </RouteDepartureLink>
         {(
           [

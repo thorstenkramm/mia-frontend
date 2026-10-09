@@ -1,5 +1,6 @@
 import { expect, test } from "@playwright/test";
 import { expectRetainedSecret } from "./secretAssertions";
+import { materialBackend } from "./materialFixtures";
 import {
   browserCases,
   controlledFailure,
@@ -16,6 +17,107 @@ test.beforeEach(({ page }, info) => {
   void page;
   injectEarlyFailure(info.title);
 });
+
+for (const id of browserCases.slice(5))
+  test(id, async ({ page }) => {
+    const marker = process.env.MIA_SECRET_HYGIENE_RAW_ERROR;
+    if (marker === undefined)
+      throw new Error("Controlled material marker required.");
+    const backend = await materialBackend(page, { lifecycle: true });
+    backend.makeReady();
+    if (backend.brief) backend.brief.summary = marker;
+    let release: () => void = () => undefined;
+    try {
+      if (id === "browser-material-processing") {
+        backend.state = "processing";
+        backend.files = ["file_1"];
+        await page.goto(
+          "/prepare/courses/course_1/materials/material_1/processing",
+        );
+        await expect
+          .poll(() =>
+            page
+              .locator("h1")
+              .textContent()
+              .then((text) => text === "Course material processing"),
+          )
+          .toBe(true);
+      } else {
+        await page.goto("/prepare/courses/course_1/materials/material_1/brief");
+        await expect
+          .poll(() =>
+            page
+              .locator("#brief-summary")
+              .count()
+              .then((count) => count === 1),
+          )
+          .toBe(true);
+        expect(
+          (await page.locator("#brief-summary").inputValue()) === marker,
+        ).toBe(true);
+        if (
+          id === "browser-material-pending" ||
+          id === "browser-material-teardown"
+        )
+          backend.lifecycleRelease = new Promise<void>((resolve) => {
+            release = resolve;
+          });
+        if (id === "browser-material-unknown")
+          backend.lifecycleOutcome = "lose";
+        if (id === "browser-material-rejected")
+          backend.lifecycleOutcome = "reject";
+        if (id !== "browser-material-preview") {
+          await page.locator("#brief-summary").fill(`${marker}-changed`);
+          await page
+            .getByRole("button", { name: "Save complete brief", exact: true })
+            .click();
+          await expect.poll(() => backend.saves === 1).toBe(true);
+          if (id === "browser-material-unknown")
+            await expect
+              .poll(() =>
+                page
+                  .locator("main")
+                  .textContent()
+                  .then((text) => text?.includes("Outcome unknown.") === true),
+              )
+              .toBe(true);
+          if (id === "browser-material-rejected")
+            await expect
+              .poll(() =>
+                page
+                  .locator("main")
+                  .textContent()
+                  .then(
+                    (text) =>
+                      text?.includes("This operation was not accepted.") ===
+                      true,
+                  ),
+              )
+              .toBe(true);
+          if (id === "browser-material-teardown") {
+            await page.evaluate(() =>
+              window.dispatchEvent(
+                new PageTransitionEvent("pagehide", { persisted: true }),
+              ),
+            );
+            await expect
+              .poll(() =>
+                page
+                  .locator("#brief-summary")
+                  .count()
+                  .then((count) => count === 0),
+              )
+              .toBe(true);
+          }
+        }
+      }
+      await page.close();
+      controlledFailure(id, () => expect(false).toBe(true));
+    } finally {
+      release();
+      await page.close();
+    }
+  });
 
 test(browserCases[0], async ({ page, context }) => {
   const username = process.env.MIA_SECRET_HYGIENE_USERNAME;
