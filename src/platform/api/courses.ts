@@ -96,14 +96,26 @@ const blockerId = z.enum([
   "supervisor_presence",
   "qualifying_material",
 ]);
+const activationBlockerId = z.enum([
+  ...blockerId.options,
+  "course_already_active",
+  "assigned_supervisor_required",
+]);
 const preparationSchema = courseSchema.extend({
   attributes: courseSchema.shape.attributes.extend({
+    activated_at: utcInstant.nullable(),
+    deactivated_at: utcInstant.nullable(),
     description: z.string().nullable(),
     curriculum: z.string().nullable(),
     learning_goals: z.string().nullable(),
     ai_tutor_instructions: z.string().nullable(),
     language: z.string().nullable(),
     readiness: z.object({
+      activation: z.object({
+        eligible: z.boolean(),
+        blockers: z.array(activationBlockerId),
+        consequences: z.tuple([z.literal("activate_course")]),
+      }),
       state: z.enum([
         "inactive_incomplete",
         "inactive_activatable",
@@ -131,24 +143,32 @@ const preparationDocument = z.object({
       | "learning_goals"
       | "ai_tutor_instructions"
       | "language"
+      | "activated_at"
+      | "deactivated_at"
     > & {
       readiness: Pick<
         CourseDocument["data"]["attributes"]["readiness"],
-        "state" | "blockers"
+        "state" | "blockers" | "activation"
       >;
     };
   };
 }>;
 export type CoursePreparation = {
   readonly course: Course;
+  readonly activatedAt: number | null;
+  readonly deactivatedAt: number | null;
   readonly fields: Readonly<Record<CourseTeachingField, string | null>>;
   readonly readiness: {
+    readonly activation: z.infer<
+      typeof preparationSchema
+    >["attributes"]["readiness"]["activation"];
     readonly state: z.infer<
       typeof preparationSchema
     >["attributes"]["readiness"]["state"];
     readonly blockers: readonly {
       readonly id: z.infer<typeof blockerId>;
       readonly field: CourseTeachingField | null;
+      readonly materials: boolean;
     }[];
   };
 };
@@ -159,9 +179,23 @@ function toPreparation(
 ): CoursePreparation {
   const { attributes } = resource;
   const readiness = attributes.readiness;
+  const activation = readiness.activation;
+  const active = attributes.state === "active";
   if (
     new Set(readiness.blockers.map((item) => item.id)).size !==
-    readiness.blockers.length
+      readiness.blockers.length ||
+    new Set(activation.blockers).size !== activation.blockers.length ||
+    activation.eligible !== (activation.blockers.length === 0) ||
+    active !== readiness.state.startsWith("active_") ||
+    (active &&
+      (attributes.activated_at === null ||
+        attributes.deactivated_at !== null ||
+        activation.eligible)) ||
+    (attributes.deactivated_at !== null && attributes.activated_at === null) ||
+    (activation.eligible &&
+      (readiness.state !== "inactive_activatable" ||
+        readiness.blockers.length !== 0)) ||
+    (readiness.state === "inactive_incomplete" && activation.eligible)
   )
     throw new ApiProtocolError();
   const course = toCourse(resource);
@@ -174,6 +208,14 @@ function toPreparation(
   } as const;
   return {
     course,
+    activatedAt:
+      attributes.activated_at === null
+        ? null
+        : Date.parse(attributes.activated_at),
+    deactivatedAt:
+      attributes.deactivated_at === null
+        ? null
+        : Date.parse(attributes.deactivated_at),
     fields: {
       description: attributes.description,
       curriculum: attributes.curriculum,
@@ -182,6 +224,7 @@ function toPreparation(
       language: attributes.language,
     },
     readiness: {
+      activation,
       state: readiness.state,
       blockers: readiness.blockers.map((item) => ({
         id: item.id,
@@ -191,9 +234,39 @@ function toPreparation(
           item.link === `${path}/${encodeURIComponent(course.id)}`
             ? fieldBlockers[item.id]
             : null,
+        materials:
+          item.id === "qualifying_material" &&
+          item.link === `${path}/${encodeURIComponent(course.id)}/materials`,
       })),
     },
   };
+}
+// Scope restriction only; server eligibility remains the sole prerequisite authority.
+export function canFirstActivate(preparation: CoursePreparation): boolean {
+  return (
+    preparation.course.state === "inactive" &&
+    preparation.activatedAt === null &&
+    preparation.deactivatedAt === null &&
+    preparation.readiness.activation.eligible
+  );
+}
+export async function activateCourse(
+  id: CourseId,
+  csrfToken: string,
+): Promise<CoursePreparation> {
+  const response = await sendUnsafeRequest({
+    method: "POST",
+    path: `${path}/${encodeURIComponent(id)}/activations`,
+    csrfToken,
+  });
+  const document = await parseJsonApiResponse(
+    response,
+    preparationDocument,
+    200,
+  );
+  if (document.data.id !== id || document.data.attributes.state !== "active")
+    throw new ApiProtocolError();
+  return toPreparation(document.data);
 }
 export async function getCoursePreparation(
   id: CourseId,

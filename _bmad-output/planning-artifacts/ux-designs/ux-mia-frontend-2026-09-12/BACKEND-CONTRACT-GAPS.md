@@ -1068,6 +1068,24 @@ confirmed success, automatically retry an ambiguous reset, or reveal why an out-
 
 ### BCG-011: Course readiness and session-start eligibility
 
+#### Story 4.5 first-activation slice reconciliation — 2026-10-09
+
+The authorized unattended batch resumes assigned-supervisor readiness review, first activation and persisted-state
+reconciliation only. Current `getCourse` and `activateCourse` CourseDocument contracts supply server activation
+eligibility, stable blockers/consequences and lifecycle instants. The client must not reconstruct eligibility from
+teaching values, material counts, brief state or the Story 4.4 approval observation ledger. Activation is a bodyless
+CSRF-protected POST with definitive 200 CourseDocument; no activation ETag/version/request-ID precondition exists.
+The backend rechecks prerequisites transactionally; frontend rereading is not a transaction lock. Unknown outcomes
+remain unattributed after course-state reconciliation and never trigger replay or success navigation.
+
+Blocker resolution links are limited to exact same-course API links mapped to implemented teaching/material routes.
+Supervisor-presence gets truthful administrator guidance without an unimplemented assignment destination. Lifecycle
+instants withhold previously activated/deactivated courses from this first-activation surface. Reactivation belongs
+to Story 8.2; roster/provisioning belongs to 5.1. See `spec-4-5-activate-the-ready-course.md` under implementation artifacts
+for the bounded implementation and automated evidence. The Story 4.2 slice decision remains intact. BCG-011 is not
+globally closed: student-start, deactivation/relationship, comprehensive concurrency and manual/browser/release evidence
+remain outstanding.
+
 #### Story 4.2 readiness slice decision — 2026-10-08
 
 Owner approved resumption of the assigned-supervisor preparation hub and teaching-field read/edit slice only.
@@ -1085,7 +1103,7 @@ and CP-03 evidence notes reference this slice.
 
 #### BCG-011 frontend capability blocked
 
-Outside the approved Story 4.2 hub/read/edit slice, readiness review, truthful activation action, and student new-session
+Outside the approved Story 4.2 and Story 4.5 slices above, broader readiness actions and student new-session
 action remain blocked pending their applicable reconciliation and evidence.
 Course state alone cannot distinguish incomplete preparation, activation eligibility, or an active course that currently
 accepts no new sessions.

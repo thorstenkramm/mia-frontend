@@ -76,7 +76,14 @@ type EntryRoute =
       readonly path: (typeof courseRoutePaths)[keyof typeof courseRoutePaths];
       readonly gate: "Administer(courses)" | "Prepare(courses)";
       readonly resource:
-        "list" | "detail" | "create" | "prepare" | "hub" | CourseTeachingField;
+        | "list"
+        | "detail"
+        | "create"
+        | "prepare"
+        | "hub"
+        | "readiness"
+        | "activation"
+        | CourseTeachingField;
       readonly component: LazyExoticComponent<ComponentType<CourseRouteProps>>;
     })
   | (EntryRouteBase & {
@@ -114,6 +121,8 @@ export const courseRoutePaths = {
   detail: "/admin/courses/:courseId",
   prepare: "/prepare/courses",
   hub: "/prepare/courses/:courseId",
+  readiness: "/prepare/courses/:courseId/readiness",
+  activation: "/prepare/courses/:courseId/activate",
   description: "/prepare/courses/:courseId/details",
   curriculum: "/prepare/courses/:courseId/curriculum",
   learningGoals: "/prepare/courses/:courseId/learning-goals",
@@ -122,7 +131,7 @@ export const courseRoutePaths = {
 } as const;
 export function prepareCoursePath(
   id: CourseId,
-  field: CourseTeachingField | null = null,
+  field: CourseTeachingField | "readiness" | "activation" | null = null,
 ): string {
   return courseRoutePaths[field ?? "hub"].replace(
     ":courseId",
@@ -295,6 +304,31 @@ export const entryRoutes = {
     gate: "Prepare(materials)",
   },
   preparationHub: preparationHubRoute,
+  preparationReadiness: {
+    ...preparationHubRoute,
+    resource: "readiness",
+    path: courseRoutePaths.readiness,
+    parent: { path: courseRoutePaths.hub, label: messages.preparationHub },
+    titleMessage: messages.courseReadinessTitle,
+    headingMessage: messages.courseReadinessHeading,
+    component: lazy(
+      () => import("../../features/courses/CourseReadinessRoute"),
+    ),
+  },
+  preparationActivation: {
+    ...preparationHubRoute,
+    resource: "activation",
+    path: courseRoutePaths.activation,
+    parent: {
+      path: courseRoutePaths.readiness,
+      label: messages.courseReadinessHeading,
+    },
+    titleMessage: messages.courseActivationTitle,
+    headingMessage: messages.courseActivationHeading,
+    component: lazy(
+      () => import("../../features/courses/CourseActivationRoute"),
+    ),
+  },
   preparationDescription: teachingRoute("description"),
   preparationCurriculum: teachingRoute("curriculum"),
   preparationGoals: teachingRoute("learningGoals"),
@@ -581,6 +615,8 @@ const home: AuthenticatedRoute = {
   invitationId: null,
 };
 const preparationKeys = [
+  "preparationReadiness",
+  "preparationActivation",
   "preparationHub",
   "preparationDescription",
   "preparationCurriculum",

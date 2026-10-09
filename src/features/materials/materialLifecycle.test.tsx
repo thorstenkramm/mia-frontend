@@ -132,7 +132,19 @@ vi.mock("../../platform/api/courses", async (importOriginal) => ({
     readinessSettled++;
     if (readinessDenial) throw readinessDenial;
     if (readinessFailure) throw new ApiTransportError(null);
-    return { readiness: { state, blockers: [] } };
+    return {
+      activatedAt: null,
+      deactivatedAt: null,
+      readiness: {
+        state,
+        blockers: [],
+        activation: {
+          eligible: false,
+          blockers: ["assigned_supervisor_required"],
+          consequences: ["activate_course"],
+        },
+      },
+    };
   },
 }));
 let stopHistory: () => void = () => undefined;

@@ -31,9 +31,12 @@ export function PrepareCourseRoute({
           const field = route.resource;
           if (field === "list" || field === "detail" || field === "create")
             throw new Error("Prepare cannot admit administration resources.");
+          const preparation = await getCoursePreparation(courseId, signal);
+          if (field === "readiness" || field === "activation")
+            return { kind: field, preparation };
           return {
             kind: "preparation",
-            preparation: await getCoursePreparation(courseId, signal),
+            preparation,
             field: field === "hub" ? null : field,
           };
         }

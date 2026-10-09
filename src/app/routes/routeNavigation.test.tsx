@@ -22,10 +22,41 @@ import { MiaIntlProvider } from "../../platform/i18n/MiaIntlProvider";
 import { InvitationLink } from "../../platform/session/invitationLink";
 import { PasswordResetLink } from "../../platform/session/passwordResetLink";
 import { App } from "../App";
-import { authenticatedRoute, materialPath } from "./entryRoutes";
+import {
+  authenticatedRoute,
+  materialPath,
+  prepareCoursePath,
+  entryRoutes,
+} from "./entryRoutes";
 import { toCourseId, toMaterialId } from "../../platform/api/entry";
 
 const path = "/profile/security/mfa";
+it("readiness and activation preserve canonical opaque scope and explicit parents", () => {
+  const course = toCourseId("opaque/course");
+  const access = {
+    ownProfileView: false,
+    invitationAdministration: false,
+    courseRecords: true,
+    courseCreate: true,
+    supervisorAssignments: true,
+    courseSupervision: true,
+    supervisedCourseIds: [course],
+  };
+  for (const surface of ["readiness", "activation"] as const) {
+    const destination = prepareCoursePath(course, surface);
+    expect(
+      authenticatedRoute(destination, access).path === destination &&
+        authenticatedRoute(destination, { ...access, supervisedCourseIds: [] })
+          .key === "home" &&
+        authenticatedRoute(`${destination}/`, access).key === "home",
+    ).toBe(true);
+  }
+  expect(
+    entryRoutes.preparationActivation.parent.path.endsWith("/readiness") &&
+      entryRoutes.preparationReadiness.parent.path ===
+        "/prepare/courses/:courseId",
+  ).toBe(true);
+});
 it("material paths preserve opaque identity and require exact assigned supervision", () => {
   const course = toCourseId("opaque/course");
   const material = toMaterialId("opaque/material");

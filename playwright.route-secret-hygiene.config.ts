@@ -20,6 +20,7 @@ export default defineConfig({
     "invitationAdministration.spec.ts",
     "courseAdministration.spec.ts",
     "coursePreparation.spec.ts",
+    "courseActivation.spec.ts",
     "materialPreparation.spec.ts",
   ],
   grep: new RegExp(`${escaped}$`, "u"),

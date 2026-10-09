@@ -92,6 +92,7 @@ export async function checkRouteSecretHygiene() {
       "e2e/invitationAdministration.spec.ts",
       "e2e/courseAdministration.spec.ts",
       "e2e/coursePreparation.spec.ts",
+      "e2e/courseActivation.spec.ts",
       "e2e/materialPreparation.spec.ts",
       "--list",
       "--reporter=json",
@@ -132,27 +133,34 @@ export async function checkRouteSecretHygiene() {
     scope !== "supervisor-onboarding" &&
     scope !== "courses" &&
     scope !== "preparation" &&
-    scope !== "materials"
+    scope !== "materials" &&
+    scope !== "activation"
   )
     throw new Error("Unknown route-hygiene scope.");
   const selected =
-    scope === "materials"
-      ? routeHygieneCases.filter((item) => item.id.startsWith("material-"))
-      : scope === "preparation"
-        ? routeHygieneCases.filter((item) => item.id.startsWith("preparation-"))
-        : scope === "invitations"
+    scope === "activation"
+      ? routeHygieneCases.filter((item) =>
+          item.id.startsWith("preparation-activation-"),
+        )
+      : scope === "materials"
+        ? routeHygieneCases.filter((item) => item.id.startsWith("material-"))
+        : scope === "preparation"
           ? routeHygieneCases.filter((item) =>
-              item.id.startsWith("invitation-"),
+              item.id.startsWith("preparation-"),
             )
-          : scope === "supervisor-onboarding"
+          : scope === "invitations"
             ? routeHygieneCases.filter((item) =>
-                item.id.startsWith("supervisor-"),
+                item.id.startsWith("invitation-"),
               )
-            : scope === "courses"
+            : scope === "supervisor-onboarding"
               ? routeHygieneCases.filter((item) =>
-                  item.id.startsWith("course-"),
+                  item.id.startsWith("supervisor-"),
                 )
-              : routeHygieneCases;
+              : scope === "courses"
+                ? routeHygieneCases.filter((item) =>
+                    item.id.startsWith("course-"),
+                  )
+                : routeHygieneCases;
   const root = await mkdtemp(join(tmpdir(), "mia-route-hygiene-"));
   const evidence = [];
   try {

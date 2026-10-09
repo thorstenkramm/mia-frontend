@@ -40,9 +40,6 @@ import {
   type AuthenticatedRouteAccess,
   type EntryRouteKey,
 } from "./routes/entryRoutes";
-import { AdminInvitationRoute } from "./routes/AdminInvitationRoute";
-import { AdminCourseRoute } from "./routes/AdminCourseRoute";
-import { PrepareCourseRoute } from "./routes/PrepareCourseRoute";
 import { ProfileMfaRoute } from "./routes/ProfileMfaRoute";
 import { SimpleEntrySurface } from "./routes/SimpleEntrySurface";
 import { SessionPrivacyShield, SessionWarning } from "./SessionLifecycle";
@@ -61,6 +58,24 @@ type AppProps = {
 };
 const PrepareMaterialRoute = lazy(
   () => import("./routes/PrepareMaterialRoute"),
+);
+const AdminInvitationRoute = lazy(() =>
+  import("./routes/AdminInvitationRoute").then((module) => ({
+    default: module.AdminInvitationRoute,
+  })),
+);
+// Story 4.5 bounded FFR-955 mitigation, matching the material-host precedent.
+// Course code loads only after ordered session/scope admission; all seven
+// catalogs remain synchronous. No protected prefetch or gate-owner change.
+const AdminCourseRoute = lazy(() =>
+  import("./routes/AdminCourseRoute").then((module) => ({
+    default: module.AdminCourseRoute,
+  })),
+);
+const PrepareCourseRoute = lazy(() =>
+  import("./routes/PrepareCourseRoute").then((module) => ({
+    default: module.PrepareCourseRoute,
+  })),
 );
 
 export function App({
@@ -276,31 +291,27 @@ function CanonicalEntry({
 
   if (route.gate === "Profile(own MFA)")
     return <ProfileMfaRoute key={location.key} route={route} />;
-  if (route.gate === "Administer(invitations)")
-    return (
-      <AdminInvitationRoute
-        key={location.key}
-        route={route}
-        invitationId={authenticated.invitationId}
-      />
-    );
-
-  if (route.gate === "Administer(courses)")
-    return (
-      <AdminCourseRoute
-        key={`${location.key}:${access?.epoch}`}
-        route={route}
-        courseId={authenticated.courseId ?? null}
-      />
-    );
-  if (route.gate === "Prepare(materials)")
+  if (
+    route.gate === "Prepare(materials)" ||
+    route.gate === "Prepare(courses)" ||
+    route.gate === "Administer(courses)" ||
+    route.gate === "Administer(invitations)"
+  )
     return (
       <RouteRecoveryBoundary
         key={`${location.key}:${access?.epoch}`}
         recovery={
           <SimpleEntrySurface
-            titleMessage={messages.coursesUnavailableTitle}
-            headingMessage={messages.coursesUnavailableHeading}
+            titleMessage={
+              route.gate === "Administer(invitations)"
+                ? messages.invitationsUnavailablePageTitle
+                : messages.coursesUnavailableTitle
+            }
+            headingMessage={
+              route.gate === "Administer(invitations)"
+                ? messages.invitationsUnavailableHeading
+                : messages.coursesUnavailableHeading
+            }
           >
             <RouteRecoveryPanel
               heading={intl.formatMessage(messages.routeUnavailable)}
@@ -319,22 +330,34 @@ function CanonicalEntry({
         }
       >
         <Suspense fallback={<CheckingAccess />}>
-          <PrepareMaterialRoute
-            key={`${location.key}:${access?.epoch}`}
-            route={route}
-            courseId={authenticated.courseId ?? null}
-            materialId={authenticated.materialId ?? null}
-          />
+          {route.gate === "Administer(invitations)" ? (
+            <AdminInvitationRoute
+              key={location.key}
+              route={route}
+              invitationId={authenticated.invitationId}
+            />
+          ) : route.gate === "Prepare(materials)" ? (
+            <PrepareMaterialRoute
+              key={`${location.key}:${access?.epoch}`}
+              route={route}
+              courseId={authenticated.courseId ?? null}
+              materialId={authenticated.materialId ?? null}
+            />
+          ) : route.gate === "Prepare(courses)" ? (
+            <PrepareCourseRoute
+              key={`${location.key}:${access?.epoch}`}
+              route={route}
+              courseId={authenticated.courseId ?? null}
+            />
+          ) : (
+            <AdminCourseRoute
+              key={`${location.key}:${access?.epoch}`}
+              route={route}
+              courseId={authenticated.courseId ?? null}
+            />
+          )}
         </Suspense>
       </RouteRecoveryBoundary>
-    );
-  if (route.gate === "Prepare(courses)")
-    return (
-      <PrepareCourseRoute
-        key={`${location.key}:${access?.epoch}`}
-        route={route}
-        courseId={authenticated.courseId ?? null}
-      />
     );
   const RouteContent = route.component;
   const parent =

@@ -433,7 +433,15 @@ server-authored readiness states from course GET/PATCH and link only implemented
 or Start action. See `BACKEND-CONTRACT-GAPS.md` §Story 4.2 readiness slice decision; broader action/evidence obligations
 remain blocked. No full-machine or release Pass is implied.
 
-Outside that slice these states are `BLOCKED` on `BCG-011: Course readiness and session-start eligibility`. Do not count material rows,
+Story 4.5 batch decision, 2026-10-09: `BACKEND-CONTRACT-GAPS.md` §Story 4.5 first-activation slice reconciliation
+resumes assigned-supervisor readiness review/first activation with current server action eligibility and lifecycle facts.
+Checking, reviewed facts changed, mutation in flight, definitive rejection, outcome unknown, explicit reconciliation,
+local abandonment and definitive success are route-local operation states, not new course domain states. Only the
+original validated 200 active CourseDocument confirms this attempt; a later active read cannot attribute success.
+Stop waiting fences ordinary late results but not applicable hidden denial. Existing security/scope owners govern
+teardown. No Start, reactivation, deactivation, deletion or roster action is added; no full-machine/release Pass.
+
+Outside those slices these states are `BLOCKED` on `BCG-011: Course readiness and session-start eligibility`. Do not count material rows,
 inspect nullable fields, or probe activation or session creation to discover readiness.
 
 ## 13. Tutor Attempt Lineage and Stable DOM

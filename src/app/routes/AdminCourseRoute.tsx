@@ -71,6 +71,8 @@ export function AdminCourseRoute({
             };
           case "prepare":
           case "hub":
+          case "readiness":
+          case "activation":
           case "description":
           case "curriculum":
           case "learningGoals":
@@ -212,6 +214,8 @@ export function CourseResourceHost({
             detail: courseDetailPath,
             preparation: prepareCoursePath,
             materials: materialPath,
+            readiness: (id) => prepareCoursePath(id, "readiness"),
+            activation: (id) => prepareCoursePath(id, "activation"),
             invitation: access?.invitationAdministration
               ? invitationRoutePaths.create
               : null,

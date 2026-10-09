@@ -1165,6 +1165,15 @@ another action's blocker.
 | `CP-03/A02` | Upload and finalize course material | `PS-03` + `LP-UNK`; `EP-UNK` | None | Not run |
 | `CP-03/A03` | Approve or revoke material | `PS-03` + `LP-STA`; `EP-STA` | None | Not run |
 | `CP-03/A04` | Activate course | `PS-03` + `LP-SUC`; `EP-SUC` | `BCG-011` | Blocked |
+
+Story 4.5 slice disposition, 2026-10-09: the batch-authorized first-activation contract reconciliation in
+`BACKEND-CONTRACT-GAPS.md` resumes the bounded assigned-supervisor readiness/confirmation/hub subset of CP-03/A04.
+Focused bundled-Chromium tests cover keyboard confirmation, canonical parents/title/main/h1, corrective focus,
+blocker destinations, rejected/unknown/unavailable states, seven locales × three text modes at direct 320px and both
+new surfaces at real 200%/400% zoom with spacing/forced-colors/reduced-motion checks. Axe runs without rule exclusions.
+Actual check results/counts and content-free logs are recorded in the Story 4.5 implementation spec/report; this note
+does not mark CP-03 or its complete-process/release matrix Pass. Supported Chrome/Edge/Safari and assistive-technology
+manual evidence, full concurrency and wider action/process obligations remain outstanding.
 | `CP-04/A01` | Create and upload private material | `PS-04` + `LP-UNK`; `EP-UNK` | None | Not run |
 | `CP-04/A02` | Finalize or repair private material | `PS-04` + `LP-STA`; `EP-STA` | None | Not run |
 | `CP-04/A03` | Select private material for tutoring | `PS-04` + `LP-SUC`; `EP-SUC` | None | Not run |

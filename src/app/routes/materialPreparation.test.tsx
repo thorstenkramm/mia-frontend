@@ -134,7 +134,17 @@ function backend() {
             learning_goals: null,
             ai_tutor_instructions: null,
             language: null,
-            readiness: { state: "inactive_incomplete", blockers: [] },
+            activated_at: null,
+            deactivated_at: null,
+            readiness: {
+              state: "inactive_incomplete",
+              blockers: [],
+              activation: {
+                eligible: false,
+                blockers: ["qualifying_material"],
+                consequences: ["activate_course"],
+              },
+            },
           },
           relationships: {
             supervisors: { data: [{ type: "users", id: "supervisor_1" }] },

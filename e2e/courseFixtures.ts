@@ -42,6 +42,32 @@ export async function courseRoutes(page: Page) {
     patchRelease: null as Promise<void> | null,
     readUnavailable: false,
     readRelease: null as Promise<void> | null,
+    courseState: "inactive" as "inactive" | "active",
+    activatedAt: null as string | null,
+    deactivatedAt: null as string | null,
+    activationEligible: false,
+    activationBlockers: [
+      "learning_goals",
+      "ai_tutor_instructions",
+      "language",
+      "qualifying_material",
+    ] as string[],
+    activations: 0,
+    activationValid: false,
+    activationOutcome: "success" as
+      | "success"
+      | "conflict"
+      | "already-active"
+      | "lose"
+      | "malformed"
+      | "server-error"
+      | "csrf"
+      | "expired"
+      | "restricted",
+    activationReadiness: "active_accepting" as
+      "active_accepting" | "active_not_accepting",
+    activationRelease: null as Promise<void> | null,
+    name: fixture.courseName,
     readiness: "inactive_incomplete" as
       | "inactive_incomplete"
       | "inactive_activatable"
@@ -94,20 +120,20 @@ export async function courseRoutes(page: Page) {
     type: "courses",
     id,
     attributes: {
-      name: fixture.courseName,
-      state: "inactive",
+      name: control.name,
+      state: control.courseState,
       created_at: "2026-10-08T10:00:00.000000Z",
       ...control.teaching,
-      activated_at: null,
-      deactivated_at: null,
+      activated_at: control.activatedAt,
+      deactivated_at: control.deactivatedAt,
       updated_at: null,
       logo_url: null,
       readiness: {
         state: control.readiness,
         blockers: control.blockers,
         activation: {
-          eligible: control.readiness === "inactive_activatable",
-          blockers: control.blockers.map((item) => item.id),
+          eligible: control.activationEligible,
+          blockers: control.activationBlockers,
           consequences: ["activate_course"],
         },
         new_session: {
@@ -132,6 +158,11 @@ export async function courseRoutes(page: Page) {
       control.detailReads.push(path.slice("/api/v1/courses/".length));
     if (path.startsWith("/api/v1/courses/") && request.method() === "PATCH")
       control.patches++;
+    if (
+      path === "/api/v1/courses/course_1/activations" &&
+      request.method() === "POST"
+    )
+      control.activations++;
   });
   await page.route("**/api/v1/users/me/capabilities", (route) =>
     json(route, {
@@ -258,6 +289,49 @@ export async function courseRoutes(page: Page) {
     return control.readUnavailable
       ? fail(route, 503, "course_readiness_unavailable")
       : json(route, { data: resource(id) });
+  });
+  await page.route("**/api/v1/courses/course_1/activations", async (route) => {
+    const request = route.request();
+    control.activationValid =
+      request.method() === "POST" &&
+      request.postData() === null &&
+      request.headers()["accept"] === "application/vnd.api+json" &&
+      request.headers()["x-csrf-token"] === fixture.csrf &&
+      request.headers()["content-type"] === undefined &&
+      request.headers()["if-match"] === undefined;
+    if (control.activationRelease) await control.activationRelease;
+    if (control.denial) return fail(route, 404, "course_not_found");
+    if (control.activationOutcome === "conflict")
+      return fail(route, 409, "course_activation_unavailable");
+    if (control.activationOutcome === "already-active")
+      return fail(route, 409, "course_invalid_state");
+    if (control.activationOutcome === "csrf")
+      return fail(route, 403, "csrf_invalid");
+    if (control.activationOutcome === "expired")
+      return fail(route, 401, "unauthorized");
+    if (control.activationOutcome === "restricted")
+      return fail(route, 403, "auth_password_change_required");
+    if (control.activationOutcome === "server-error")
+      return fail(route, 503, "unavailable");
+    control.courseState = "active";
+    control.activatedAt = "2026-10-09T12:00:00.000000Z";
+    control.readiness = control.activationReadiness;
+    control.activationEligible = false;
+    control.activationBlockers = ["course_already_active"];
+    if (control.readiness === "active_not_accepting")
+      control.blockers = [
+        {
+          id: "qualifying_material",
+          link: "/api/v1/courses/course_1/materials",
+        },
+      ];
+    if (control.activationOutcome === "lose") return route.abort("failed");
+    return json(
+      route,
+      control.activationOutcome === "malformed"
+        ? { data: null }
+        : { data: resource() },
+    );
   });
   return control;
 }

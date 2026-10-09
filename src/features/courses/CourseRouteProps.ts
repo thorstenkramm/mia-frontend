@@ -8,6 +8,10 @@ import type { SupervisorCandidatePage } from "../../platform/api/administrationA
 import type { CourseId, EntryApiFailure } from "../../platform/api/entry";
 
 export type CourseRouteResource =
+  | {
+      readonly kind: "readiness" | "activation";
+      readonly preparation: CoursePreparation;
+    }
   | { readonly kind: "list"; readonly page: CoursePage }
   | { readonly kind: "detail"; readonly course: Course }
   | { readonly kind: "create"; readonly page: SupervisorCandidatePage | null }
@@ -29,6 +33,8 @@ export type CourseRouteProps = {
     readonly create: string;
     readonly invitation: string | null;
     readonly materials: (id: CourseId) => string;
+    readonly readiness: (id: CourseId) => string;
+    readonly activation: (id: CourseId) => string;
     readonly detail: (id: CourseId) => string;
     readonly preparation: (
       id: CourseId,

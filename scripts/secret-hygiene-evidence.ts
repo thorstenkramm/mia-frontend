@@ -32,6 +32,103 @@ export const unitCases = [
 type CaseId = (typeof browserCases)[number] | (typeof unitCases)[number];
 
 export const courseUnitCases = [
+  {
+    title:
+      "activation sends a single bodyless contract request and validates active persisted truth",
+    file: "src/platform/api/courses.test.ts",
+    points: ["activation-wire"],
+  },
+  {
+    title: "activation rejects contradictory protocol success without replay",
+    file: "src/platform/api/courses.test.ts",
+    points: ["activation-malformed"],
+  },
+  {
+    title:
+      "readiness retains server false independently of empty display blockers and rejects malformed action facts",
+    file: "src/platform/api/courses.test.ts",
+    points: ["activation-readiness"],
+  },
+  // Every connected activation case installs secret-bearing fixtures, including
+  // denied gates and each parameterized outcome. Inventory all actual tests.
+  ...["readiness", "activate"].map((path) => ({
+    title: `activation ${path} requires exact assigned scope before course discovery`,
+    file: "src/app/routes/courseActivation.test.tsx",
+    points: ["activation-gate"],
+  })),
+  {
+    title:
+      "readiness offers only implemented trusted blocker destinations and no local eligibility guess",
+    file: "src/app/routes/courseActivation.test.tsx",
+    points: ["activation-blockers"],
+  },
+  ...["active_accepting", "active_not_accepting"].map((acceptance) => ({
+    title: `activation definitive ${acceptance} installs only returned truth then re-admits hub`,
+    file: "src/app/routes/courseActivation.test.tsx",
+    points: ["activation-success"],
+  })),
+  ...["name", "teaching", "eligibility", "lifecycle"].map((change) => ({
+    title: `activation changed ${change} facts invalidate review before dispatch`,
+    file: "src/app/routes/courseActivation.test.tsx",
+    points: ["activation-changed"],
+  })),
+  ...["conflict", "already", "lose", "malformed", "server"].map((outcome) => ({
+    title: `activation ${outcome} never claims success or automatically repeats`,
+    file: "src/app/routes/courseActivation.test.tsx",
+    points: ["activation-outcome", "activation-reconciled"],
+  })),
+  ...["preflight", "post"].map((phase) => ({
+    title: `activation stopped ${phase} fences late completion and preserves applicable denial`,
+    file: "src/app/routes/courseActivation.test.tsx",
+    points: ["activation-hidden"],
+  })),
+  {
+    title:
+      "activation Stop waiting keeps late success unknown and reconciliation never attributes it",
+    file: "src/app/routes/courseActivation.test.tsx",
+    points: ["activation-stopped"],
+  },
+  ...["csrf", "expired", "restricted", "lifecycle"].map((loss) => ({
+    title: `activation ${loss} teardown fences protected completion without replay`,
+    file: "src/app/routes/courseActivation.test.tsx",
+    points: ["activation-teardown"],
+  })),
+  {
+    title:
+      "activation preflight failure disables confirmation until a successful explicit read",
+    file: "src/app/routes/courseActivation.test.tsx",
+    points: ["activation-read-failed"],
+  },
+  {
+    title:
+      "activation duplicate native submissions cannot queue another unsafe dispatch",
+    file: "src/app/routes/courseActivation.test.tsx",
+    points: ["activation-duplicate"],
+  },
+  {
+    title:
+      "activation stopped preflight cannot dispatch after a late eligible read",
+    file: "src/app/routes/courseActivation.test.tsx",
+    points: ["activation-preflight-stopped"],
+  },
+  {
+    title:
+      "activation preflight lifecycle shield prevents future unsafe dispatch and scope recovery prevents discovery",
+    file: "src/app/routes/courseActivation.test.tsx",
+    points: ["activation-preflight-shield"],
+  },
+  {
+    title:
+      "activation unknown departure asks before dropping attempt and security loss overrides the dialog",
+    file: "src/app/routes/courseActivation.test.tsx",
+    points: ["activation-departure"],
+  },
+  {
+    title:
+      "activation direct previously activated course stays unavailable even with server eligibility",
+    file: "src/app/routes/courseActivation.test.tsx",
+    points: ["activation-previously-active"],
+  },
   ...["stop", "teardown"].flatMap((disposition) =>
     [200, 404, 403].map((status) => ({
       title: `dependent readiness after definitive save ${disposition} fences ordinary results but handles applicable status ${status}`,

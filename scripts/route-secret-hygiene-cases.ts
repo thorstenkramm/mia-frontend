@@ -2,6 +2,61 @@
 // R1 repair. IDs/checkpoints are fixed public labels, never fixture-derived.
 export const routeHygieneCases = [
   {
+    id: "preparation-activation-not-accepting",
+    title:
+      "activation definitive response announces once and newer nonaccepting hub truth remains authoritative",
+    checkpoints: ["complete"],
+  },
+  {
+    id: "preparation-activation-hub-failed",
+    title:
+      "activation definitive success survives failed hub read without guessing current acceptance",
+    checkpoints: ["complete"],
+  },
+  {
+    id: "preparation-activation-blocked",
+    title:
+      "activation blocked readiness links resolve only implemented same-course prerequisites",
+    checkpoints: ["complete"],
+  },
+  ...["active_not_accepting", "previously-active"].map((state) => ({
+    id: `preparation-activation-state-${state}`,
+    title: `activation ${state} never becomes reactivation or viewer session eligibility`,
+    checkpoints: ["complete"],
+  })),
+  ...["en-US", "de-DE", "es-ES", "es-AR", "fr-FR", "pt-PT", "pt-BR"].flatMap(
+    (locale) =>
+      ["standard", "large", "extra-large"].map((mode) => ({
+        id: `preparation-activation-reflow-${locale}-${mode}`,
+        title: `activation readiness confirmation ${locale} ${mode} reflow at 320`,
+        checkpoints: ["complete"],
+      })),
+  ),
+  ...[2, 4].flatMap((factor) =>
+    ["standard", "large", "extra-large"].map((mode) => ({
+      id: `preparation-activation-zoom-${factor}-${mode}`,
+      title: `activation both surfaces browser zoom ${factor * 100} ${mode}`,
+      checkpoints: ["complete"],
+    })),
+  ),
+  {
+    id: "preparation-activation-connected",
+    title:
+      "activation connected approval readiness and keyboard confirmation end at authoritative hub",
+    checkpoints: ["activation-review", "activation-hub", "complete"],
+  },
+  ...["conflict", "lose", "malformed", "server-error"].map((outcome) => ({
+    id: `preparation-activation-${outcome}`,
+    title: `activation ${outcome} requires explicit reconciliation without success or replay`,
+    checkpoints: ["activation-outcome", "activation-reconciled", "complete"],
+  })),
+  {
+    id: "preparation-activation-stopped",
+    title:
+      "activation stopped pending response and lifecycle teardown fence late navigation",
+    checkpoints: ["activation-stopped", "activation-cleared", "complete"],
+  },
+  {
     id: "material-delete-new-attempt",
     title:
       "material deletion new attempt retires rejection and stopped late success stays unknown",

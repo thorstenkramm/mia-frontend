@@ -94,9 +94,16 @@ function backend() {
     attributes: {
       name: fixture.name,
       state: "inactive",
+      activated_at: null,
+      deactivated_at: null,
       created_at: "2026-10-08T10:00:00.000000Z",
       ...state.fields,
       readiness: {
+        activation: {
+          eligible: false,
+          blockers: ["learning_goals", "qualifying_material"],
+          consequences: ["activate_course"],
+        },
         state: "inactive_incomplete",
         blockers: [
           { id: "learning_goals", link: "/api/v1/courses/course_1" },
@@ -225,11 +232,14 @@ it("preparation gates assigned identities before any dependent course request", 
   ).toBe(true);
   for (const path of [
     "/prepare/courses/course_1",
-    "/prepare/courses/opaque%2Fidentity/activate",
     "/prepare/courses/opaque%2Fidentity/",
     "/prepare/courses/%/details",
   ])
     expect(authenticatedRoute(path, access).key === "home").toBe(true);
+  expect(
+    authenticatedRoute("/prepare/courses/opaque%2Fidentity/activate", access)
+      .key === "preparationActivation",
+  ).toBe(true);
   courseUnitCheckpoint("preparation-gate");
 });
 

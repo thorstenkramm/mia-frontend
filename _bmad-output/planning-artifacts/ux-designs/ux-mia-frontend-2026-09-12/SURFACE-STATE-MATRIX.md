@@ -303,6 +303,14 @@ links or accepting/start claims. The broader row's readiness states and other Pr
 
 ### Course content
 
+Story 4.5 batch decision, 2026-10-09 (`BACKEND-CONTRACT-GAPS.md` §Story 4.5 first-activation slice reconciliation),
+resumes the readiness review and first-activation confirmation rows for an admitted assigned supervisor. Hub/review/
+confirmation show only server-authored readiness and persisted active accepting/not-accepting truth. Trusted blocker
+links resolve implemented teaching/material destinations only; supervisor assignment has explanatory administrator
+guidance, not a future link. False eligibility, checking/read failure, prior activation and unknown outcome never enable
+activation. Reconciliation does not attribute an ambiguous attempt. The story ends at freshly admitted hub truth, not
+roster/provisioning. Reactivation and wider BCG-011/manual/release obligations remain outside this slice.
+
 Story 4.2 owner decision, 2026-10-08, at `BACKEND-CONTRACT-GAPS.md` §Story 4.2 readiness slice decision resumes the
 assigned-supervisor hub and the five teaching-field surfaces below using authoritative course GET/PATCH readiness.
 All authoritative unmet blockers may be shown, but only implemented field destinations are linked; materials, brief,

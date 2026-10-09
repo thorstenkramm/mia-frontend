@@ -199,13 +199,21 @@ async function runFailures(runner, earlyId) {
 
 async function checkCourseUnitHygiene() {
   const selected =
-    process.env.MIA_SECRET_HYGIENE_SCOPE === "material-unit"
-      ? courseUnitCases.filter((item) => item.title.startsWith("material "))
-      : process.env.MIA_SECRET_HYGIENE_SCOPE === "preparation-unit"
-        ? courseUnitCases.filter((item) =>
-            item.title.startsWith("preparation "),
-          )
-        : courseUnitCases;
+    process.env.MIA_SECRET_HYGIENE_SCOPE === "activation-unit"
+      ? courseUnitCases.filter(
+          (item) =>
+            item.file === "src/app/routes/courseActivation.test.tsx" ||
+            (item.file === "src/platform/api/courses.test.ts" &&
+              item.title.startsWith("activation ")) ||
+            item.title.startsWith("readiness retains server false"),
+        )
+      : process.env.MIA_SECRET_HYGIENE_SCOPE === "material-unit"
+        ? courseUnitCases.filter((item) => item.title.startsWith("material "))
+        : process.env.MIA_SECRET_HYGIENE_SCOPE === "preparation-unit"
+          ? courseUnitCases.filter((item) =>
+              item.title.startsWith("preparation "),
+            )
+          : courseUnitCases;
   const probes = selected.flatMap((item) =>
     item.points.map((point) => ({ item, point, early: false })),
   );
@@ -298,9 +306,12 @@ async function checkCourseUnitHygiene() {
 try {
   await checkCourseUnitHygiene();
   if (
-    !["course-unit", "preparation-unit", "material-unit"].includes(
-      process.env.MIA_SECRET_HYGIENE_SCOPE,
-    )
+    ![
+      "course-unit",
+      "preparation-unit",
+      "material-unit",
+      "activation-unit",
+    ].includes(process.env.MIA_SECRET_HYGIENE_SCOPE)
   ) {
     for (const [runner, cases] of [
       ["playwright", browserCases],

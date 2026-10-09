@@ -1,6 +1,96 @@
 import { defineMessages } from "react-intl";
 
 export const messages = defineMessages({
+  courseReadinessTitle: {
+    id: "activation.readinessTitle",
+    defaultMessage: "Course readiness | MIA",
+  },
+  courseReadinessHeading: {
+    id: "activation.readiness",
+    defaultMessage: "Course readiness",
+  },
+  courseActivationTitle: {
+    id: "activation.title",
+    defaultMessage: "Activate course | MIA",
+  },
+  courseActivationHeading: {
+    id: "activation.heading",
+    defaultMessage: "Activate course",
+  },
+  courseActivationConfirm: {
+    id: "activation.confirm",
+    defaultMessage: "Confirm activation",
+  },
+  courseActivationEffect: {
+    id: "activation.effect",
+    defaultMessage:
+      "Activation makes this course active. New tutoring sessions require current course readiness and student eligibility.",
+  },
+  courseActivationMaterial: {
+    id: "activation.material",
+    defaultMessage:
+      "Qualifying material needs technical readiness and separate educational approval. Review the chosen material for details.",
+  },
+  courseActivationSupervisor: {
+    id: "activation.supervisor",
+    defaultMessage:
+      "An administrator must resolve supervisor assignment. Assignment management is not available here.",
+  },
+  courseActivationUnavailable: {
+    id: "activation.unavailable",
+    defaultMessage:
+      "Activation is unavailable. Review current readiness and resolve the reported requirements.",
+  },
+  courseActivationPrevious: {
+    id: "activation.previous",
+    defaultMessage:
+      "This course was previously activated. Reactivation is not available on this surface.",
+  },
+  courseActivationAssigned: {
+    id: "activation.assigned",
+    defaultMessage: "Activation requires an assigned supervisor.",
+  },
+  courseActivationChecking: {
+    id: "activation.checking",
+    defaultMessage: "Checking current course before activation…",
+  },
+  courseActivationSending: {
+    id: "activation.sending",
+    defaultMessage: "Waiting for activation…",
+  },
+  courseActivationChanged: {
+    id: "activation.changed",
+    defaultMessage:
+      "Course facts changed. Review the current course before confirming again.",
+  },
+  courseActivationRejected: {
+    id: "activation.rejected",
+    defaultMessage:
+      "Activation was not accepted. Refresh current readiness before confirming again.",
+  },
+  courseActivationUnknown: {
+    id: "activation.unknown",
+    defaultMessage:
+      "Activation outcome unknown. Refresh to check the current course; this does not confirm what happened to this attempt.",
+  },
+  courseActivationAbandon: {
+    id: "activation.abandon",
+    defaultMessage: "Abandon unknown attempt",
+  },
+  courseActivationAbandoned: {
+    id: "activation.abandoned",
+    defaultMessage:
+      "The unknown attempt was abandoned locally, not cancelled on the server. Review current readiness before a new attempt.",
+  },
+  courseActivationSuccess: {
+    id: "activation.success",
+    defaultMessage: "Course activation confirmed.",
+  },
+  courseActivationLeave: {
+    id: "activation.leave",
+    defaultMessage:
+      "An activation attempt is pending or unconfirmed. Leaving drops this page’s attempt record; it does not cancel server work.",
+  },
   materialRequired: {
     id: "materials.required",
     defaultMessage: "Required. Enter at least one character.",

@@ -15,6 +15,14 @@ function readCatalog(path: string): Record<string, string> {
     throw new Error("Invalid message catalog entry.");
   return Object.fromEntries(entries);
 }
+// Public message strings have no unit-separator bytes. Joining a complete table
+// removes repeated JSON entry punctuation without changing any ICU/message byte.
+function packedStrings(values: readonly string[]): string {
+  const separator = "\u001f";
+  if (values.some((value) => value.includes(separator)))
+    throw new Error("Catalog contains the packing separator.");
+  return `${JSON.stringify(values.join(separator))}.split("\\x1f")`;
+}
 
 // Build-time compact value tables only: canonical catalogs remain complete.
 // All strings survive; public keys are shared, switching stays synchronous.
@@ -38,13 +46,13 @@ export function messageCatalogModule(
   });
   if (baseName === null)
     return {
-      code: `import {catalogMessageIds as keys} from "../messages";\nconst values=${JSON.stringify(values)};\nexport default Object.fromEntries(keys.map((key,index)=>[key,values[index]]));`,
+      code: `import {catalogMessageIds as keys} from "../messages";\nconst values=${packedStrings(values)};\nexport default Object.fromEntries(keys.map((key,index)=>[key,values[index]]));`,
     };
   const overrides = values.flatMap((value, index) =>
     value === base[keys[index] ?? ""] ? [] : [[index, value] as const],
   );
   return {
-    code: `import base from ${JSON.stringify(`./${baseName}`)};\nimport {catalogMessageIds as keys} from "../messages";\nexport default {...base,...Object.fromEntries(${JSON.stringify(overrides)}.map(([index,value])=>[keys[index],value]))};`,
+    code: `import base from ${JSON.stringify(`./${baseName}`)};\nimport {catalogMessageIds as keys} from "../messages";\nconst indices=${JSON.stringify(overrides.map(([index]) => index))};\nconst values=${packedStrings(overrides.map(([, value]) => value))};\nexport default {...base,...Object.fromEntries(indices.map((index,position)=>[keys[index],values[position]]))};`,
   };
 }
 
@@ -65,7 +73,7 @@ export function messageDescriptorModule(path: string): {
   )
     throw new Error("Descriptor packing must preserve the complete catalog.");
   return {
-    code: `import {defineMessages} from "react-intl";\nexport const messages=defineMessages(Object.fromEntries(${JSON.stringify(entries)}.map(([name,id,defaultMessage])=>[name,{id,defaultMessage}])));\nexport const catalogMessageIds=Object.values(messages).map(message=>message.id).sort();`,
+    code: `import {defineMessages} from "react-intl";\nconst names=${packedStrings(entries.map((entry) => entry[0] ?? ""))};\nconst identities=${packedStrings(entries.map((entry) => entry[1] ?? ""))};\nconst defaults=${packedStrings(entries.map((entry) => entry[2] ?? ""))};\nexport const messages=defineMessages(Object.fromEntries(names.map((name,index)=>[name,{id:identities[index],defaultMessage:defaults[index]}])));\nexport const catalogMessageIds=Object.values(messages).map(message=>message.id).sort();`,
   };
 }
 export function compactMessageCatalogs(): Plugin {

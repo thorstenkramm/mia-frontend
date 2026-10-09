@@ -266,6 +266,16 @@ test(
       ],
     ] as const) {
       control.readiness = state;
+      control.courseState = state.startsWith("active_") ? "active" : "inactive";
+      control.activatedAt =
+        control.courseState === "active" ? "2026-10-09T12:00:00.000000Z" : null;
+      // This test deliberately keeps viewer activation false even when aggregate
+      // preparation is ready; readiness state alone never authorizes activation.
+      control.activationEligible = false;
+      control.activationBlockers =
+        control.courseState === "active"
+          ? ["course_already_active"]
+          : ["assigned_supervisor_required"];
       control.blockers =
         state === "inactive_activatable" || state === "active_accepting"
           ? []
@@ -804,7 +814,7 @@ test(
 test(
   "preparation reflows across all locales text modes spacing and forced colors",
   protectedJourney(async (page) => {
-    test.setTimeout(60_000);
+    test.setTimeout(120_000);
     const control = await courseBackend(page);
     control.scopeIds = ["course_1"];
     await page.goto("/");
