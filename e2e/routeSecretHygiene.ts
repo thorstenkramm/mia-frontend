@@ -151,7 +151,33 @@ export async function routeHygieneCheckpoint(
   // Confirm exposure with boolean assertions only. No marker enters a matcher,
   // checkpoint, test name, exception or report. Cookie-only tests use public
   // settled-state assertions in their original bodies before `complete`.
-  if (point === "preparation-input" || point === "preparation-unknown") {
+  if (
+    point === "material-create-input" ||
+    point === "material-create-unknown"
+  ) {
+    expect(
+      (await page.locator("#material-name").inputValue()) ===
+        fixture.courseName,
+    ).toBe(true);
+  } else if (
+    [
+      "material-selected",
+      "material-persisted",
+      "material-unknown",
+      "material-reconciled",
+      "material-many",
+      "material-delete-unknown",
+    ].includes(point)
+  ) {
+    expect(
+      await page
+        .locator("main")
+        .textContent()
+        .then((text) => text?.includes(fixture.courseName) === true),
+    ).toBe(true);
+  } else if (point === "material-cleared") {
+    expect((await page.locator("#material-picker").count()) === 0).toBe(true);
+  } else if (point === "preparation-input" || point === "preparation-unknown") {
     expect(
       (await page.locator("#teaching-field").inputValue()).includes(
         fixture.teachingText,
@@ -183,7 +209,11 @@ export async function routeHygieneCheckpoint(
         ),
       )
       .toBe(true);
-  } else if (point === "course-error" || point === "preparation-error") {
+  } else if (
+    point === "course-error" ||
+    point === "preparation-error" ||
+    point === "material-error"
+  ) {
     await page
       .getByRole("button", { name: "Technical details", exact: true })
       .click();

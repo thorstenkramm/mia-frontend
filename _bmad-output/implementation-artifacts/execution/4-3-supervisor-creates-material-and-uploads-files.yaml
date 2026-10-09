@@ -1,0 +1,105 @@
+story: 4-3-supervisor-creates-material-and-uploads-files
+phase: commit-pending
+spec: _bmad-output/implementation-artifacts/spec-4-3-supervisor-creates-material-and-uploads-files.md
+baseline_commit: 3c04d84976f6c0bc5d53228d2cc8d15683155e55
+pre_existing_changes:
+  - ".opencode/ agent and protocol edits (owner workflow updates, uncommitted)"
+  - "execution checkpoints for stories 2-1, 2-2, 3-1, 3-2, 4-1 (bookkeeping, uncommitted)"
+  - "sprint-status.yaml unstaged hunk (Epic 2 retrospective closure, uncommitted)"
+  - "_bmad-output/implementation-artifacts/epic-2-retro-2026-10-07.md (untracked)"
+files: []
+worker_session: ses_ee43125e4ffeCvhTYUeF73bV9c
+reviewer_session: ses_ee30401aeffehWQCfUsW2dHbt6
+models:
+  prepare: openai/gpt-6.1-sol#high
+  implement: openai/gpt-6.1-sol#high
+  review: openai/gpt-6-astra#high
+completed_blocks:
+  - "Story 4.2 closed: commit 3c04d84976f6c0bc5d53228d2cc8d15683155e55 confirmed at HEAD on 2026-10-08."
+  - "Prepare complete: bounded spec, manifest, contract operations verified, tooling/blueprints passed; B1/B2 settled by owner decisions; backend RFC at mia/tmp/frontend-request-upload-limits-discovery-2026-10-08.md; BCG-018/BCG-019 recorded."
+  - "Implementation complete (batch 0): 179 unit + 20 Chromium tests, static/format/i18n/duplication passed, hygiene zero leaks, bundle 246097/256000 via approved mitigation."
+  - "Review round 1: findings R1-R4. Repair batch 1 fixed all four; 185 unit + 26 Chromium passed, bundle 246379."
+  - "Re-review 1: R1/R3/R4 cleared; R2 residual (post-204 reconciliation read failure rendered rejection wording). Repair batch 2 fixed it; 189 unit + 30 Chromium, hygiene zero leaks, seven catalogs, bundle 246849/256000."
+  - "Re-review 2: R2 residual cleared; NEW repair-introduced regression found on the same outcome-truth boundary (R2-repair-regression). Two repair batches spent on the R2 blocker; escalated per protocol."
+repair_queue:
+  - id: R1
+    severity: high
+    finding: CSRF rejection did not stop subsequent queued uploads.
+    disposition: "Cleared (batch 1): csrf_invalid enters session-owned destroying invalidation; transfer teardown fences queue; connected coverage asserts exactly one POST and explicit ordered Refresh recovery."
+  - id: R2
+    severity: medium
+    finding: Unknown create/delete outcomes claimed rejection.
+    disposition: "Cleared for original and post-success-residual scenarios (batches 1-2); batch 2 introduced R2-repair-regression below. BLOCKER OPEN."
+  - id: R3
+    severity: medium
+    finding: Create/deletion outcome messages not announced.
+    disposition: "Cleared (batch 1): localized deduplicated announcements with teardown retirement; connected live-region tests."
+  - id: R4
+    severity: medium
+    finding: Name validation supplied no corrective error text.
+    disposition: "Cleared (batch 1): reason-specific associated corrective text, required/invalid semantics, focus retention, stale-error clearing."
+  - id: R2-repair-regression
+    severity: medium
+    finding: "A previous rejection survives a new deletion attempt and contradicts Stop waiting: after a definitive DELETE rejection (e.g. 406), a second deliberate DELETE plus Stop waiting shows both 'File deletion is unconfirmed' and stale 'This operation was not accepted' (error.kind=rejected from attempt 1 is never cleared; rendering now keys on error.kind). Evidence: src/features/materials/useMaterialUploadQueue.ts:517-546,583-600; src/features/materials/MaterialFilesRoute.tsx:320-327,358-370."
+    disposition: "Cleared (owner-approved batch 3, 2026-10-09): prior-attempt mutation feedback retired on new-attempt start; Stop waiting unconfirmed-only; late 204 fenced via deletionSequence; reviewer-verified cleared with no repair-introduced regression. Final review verdict: pass."
+repair_batch: 3
+last_verification:
+  status: passed
+  command: ./run-all-tests.sh
+  exit_code: 0
+  stages_completed: 17
+  skipped: []
+  unit_tests: 728
+  browser_tests: 194
+  build_count: 1
+  bundle_gzip_bytes: 246857
+  bundle_budget_bytes: 256000
+  fingerprint_stability: "pre/post-gate input fingerprints identical"
+  report: tmp/agent-execution/4-3-supervisor-creates-material-and-uploads-files/verify-report.json
+  history: "First gate run exited 1 on stale mfaEnrollment.test.ts expectation (pre-R1 behavior); test-only correction asserting the reviewer-approved R1 teardown; focused 429/429 re-checks; fresh full gate then passed uninterrupted."
+resume_attempts: 0
+commit:
+  intended_message: "feat: add course material creation and file upload"
+  sha: null
+next_action: "Worker runs the authoritative final gate ./run-all-tests.sh for the final input fingerprint; on pass, prepare commit-pending."
+blocked_on: "R2 outcome-truth blocker after two repair batches: stale prior-rejection feedback contradicts Stop-waiting unknown state on deletion retry. Reviewer reproduction: 406 first DELETE, second deliberate DELETE held, Stop waiting; assert unconfirmed-only wording, exactly two DELETEs, no replay; late 204 must not resolve the stopped attempt."
+owner_decisions:
+  b1_upload_limits:
+    date: 2026-10-08
+    status: superseded
+    scope: "Initially deferred entirely; superseded same day: proceed with hardcoded documented-contract limits (defaults/hard caps per product-requirements.md:1050-1081), advisory client checks, server validation authoritative (state machine §10). BCG-018 reclassified non-blocking; backend RFC at mia/tmp/frontend-request-upload-limits-discovery-2026-10-08.md."
+  b2_material_projection:
+    date: 2026-10-08
+    status: accepted-exception
+    scope: "Generic all-visible authorized listMaterials/getMaterial accepted for the milestone surface: authoritative scope labels, no student-private row actions (8.2), no client-side hiding of unauthorized data. BCG-019 non-blocking follow-up."
+  bundle_mitigation:
+    date: 2026-10-08
+    status: approved
+    scope: "Bounded manifest expansion to reduce initial JavaScript below the fixed 256000-gzip-byte budget (observed 271353). Same pattern as 4.2; landed at 246849 with all seven languages retained."
+  announcements:
+    date: 2026-10-08
+    status: resolved-by-contract
+    scope: "State machine §10 wins: aria-live announcements state filename + state as escaped text."
+  hub_test_extension:
+    date: 2026-10-08
+    status: approved
+    scope: "e2e/coursePreparation.spec.ts added to manifest: expect the 4.3 material entry link, preserve 4.4/4.5 and denial negatives."
+  repair_batch_3:
+    date: 2026-10-09
+    status: approved
+    scope: "One bounded repair batch on R2-repair-regression: retire prior-attempt mutation feedback on new deletion; Stop waiting keeps unconfirmed-only wording; reviewer regression (406, second DELETE held, Stop waiting, late 204 must not resolve). If this batch fails, story stays checkpointed."
+prepare_report: tmp/agent-execution/4-3-supervisor-creates-material-and-uploads-files/prepare-report.json
+implementation_evidence:
+  implement_report: tmp/agent-execution/4-3-supervisor-creates-material-and-uploads-files/implement-report.json
+  fix_report: tmp/agent-execution/4-3-supervisor-creates-material-and-uploads-files/fix-report.json
+  review_report: tmp/agent-execution/4-3-supervisor-creates-material-and-uploads-files/review-report.json
+  rereview_report: tmp/agent-execution/4-3-supervisor-creates-material-and-uploads-files/rereview-report.json
+  diff: tmp/agent-execution/4-3-supervisor-creates-material-and-uploads-files/story.diff
+  manifest: tmp/agent-execution/4-3-supervisor-creates-material-and-uploads-files/manifest.json
+notifications:
+  - "2026-10-08 worker: interaction needed B1/B2 (delivered)"
+  - "2026-10-08 solver: 4-3 blocked after owner deferral (delivered); superseded by owner reversal"
+  - "2026-10-08 worker: announcement conflict question (delivered); solver resolved by contract"
+  - "2026-10-08 worker: bundle mitigation approval request (delivered); owner approved option 1"
+  - "2026-10-08 solver: 4-3 entering review (delivered)"
+  - "2026-10-08 reviewer: interaction needed — R2 blocker after two repair batches (delivered)"

@@ -77,6 +77,12 @@ export default function CoursePreparationRoute({
         aria-label={intl.formatMessage(messages.preparationHub)}
         className="mt-6 flex flex-wrap gap-3"
       >
+        <RouteDepartureLink
+          to={links.materials(preparation.course.id)}
+          className={courseActionClass}
+        >
+          {intl.formatMessage(messages.materialsHeading)}
+        </RouteDepartureLink>
         {(
           [
             "description",

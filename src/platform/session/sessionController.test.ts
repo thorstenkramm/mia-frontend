@@ -6,6 +6,12 @@ import { server } from "../../../test/server";
 import { captureInvitationLink } from "./invitationLink";
 import { capturePasswordResetLink } from "./passwordResetLink";
 import { SessionController } from "./sessionController";
+import { MaterialUpload } from "../transfer/materialUpload";
+import { ApiHttpError } from "../api/client";
+import {
+  courseUnitFixture,
+  courseUnitCheckpoint,
+} from "../../../scripts/secret-hygiene-evidence";
 import {
   authenticatedSessionResponse,
   ownProfileCapabilities,
@@ -13,6 +19,119 @@ import {
 } from "../../../test/mfaFixtures";
 
 const mediaType = "application/vnd.api+json";
+it("material CSRF rejection destroys authenticated work and only explicit recovery restores admission", async () => {
+  const fixture = courseUnitFixture();
+  document.cookie = `mia_csrf=${fixture.csrf}; Path=/; SameSite=Strict`;
+  const reads: string[] = [];
+  server.use(
+    http.get("/api/v1/auth/session", () => {
+      reads.push("session");
+      return authenticatedSessionResponse();
+    }),
+    http.get("/api/v1/users/me/capabilities", () => {
+      reads.push("capabilities");
+      return ownProfileCapabilities();
+    }),
+  );
+  const controller = new SessionController();
+  controller.start();
+  let teardown = 0;
+  const unregister = controller.registerSecurityTeardown((scope) => {
+    if (scope === "destroy") teardown++;
+  });
+  try {
+    await waitFor(() =>
+      expect(controller.getSnapshot().kind).toBe("Authenticated"),
+    );
+    teardown = 0;
+    const before = reads.length;
+    let sends = 0;
+    const result = await controller.runAuthenticatedMutation(
+      {
+        send: async (csrf) => {
+          sends++;
+          expect(csrf === fixture.csrf).toBe(true);
+          throw new ApiHttpError({
+            status: 403,
+            body: JSON.stringify({
+              errors: [{ code: "csrf_invalid", detail: fixture.rawError }],
+            }),
+          });
+        },
+      },
+      () => true,
+    );
+    const next = await controller.runAuthenticatedMutation(
+      {
+        send: async () => {
+          sends++;
+          return true;
+        },
+      },
+      () => true,
+    );
+    controller.observeLifecycle();
+    expect(
+      result.kind === "superseded" &&
+        next.kind === "superseded" &&
+        controller.getSnapshot().kind === "Privacy shield" &&
+        teardown === 1 &&
+        sends === 1 &&
+        reads.length === before,
+    ).toBe(true);
+    courseUnitCheckpoint("material-csrf-state");
+    await controller.refreshSession();
+    expect(
+      controller.getSnapshot().kind === "Authenticated" &&
+        reads.slice(before).join() === "session,capabilities" &&
+        sends === 1,
+    ).toBe(true);
+  } finally {
+    unregister();
+    controller.stop();
+  }
+});
+it("material route references clear synchronously before protected purge without renewing sign-in", async () => {
+  let reads = 0;
+  server.use(
+    http.get("/api/v1/auth/session", () => {
+      reads++;
+      return authenticatedSessionResponse();
+    }),
+    http.get("/api/v1/users/me/capabilities", () => ownProfileCapabilities()),
+  );
+  const controller = new SessionController();
+  const transfer = new MaterialUpload(controller);
+  const order: string[] = [];
+  const unregister = controller.registerSecurityTeardown(() =>
+    transfer.destroy(),
+  );
+  let unregisterRoute: () => void = () => undefined;
+  const unregisterPurge = controller.registerSecurityTeardown(() =>
+    order.push("purged"),
+  );
+  controller.start();
+  try {
+    await waitFor(() =>
+      expect(controller.getSnapshot().kind).toBe("Authenticated"),
+    );
+    order.length = 0;
+    unregisterRoute = transfer.registerRouteTeardown(() =>
+      order.push("route-cleared"),
+    );
+    const before = reads;
+    controller.observeLifecycle();
+    expect(order).toEqual(["route-cleared", "purged"]);
+    expect(
+      reads === before && controller.getSnapshot().kind === "Privacy shield",
+    ).toBe(true);
+  } finally {
+    unregisterRoute();
+    unregister();
+    unregisterPurge();
+    controller.stop();
+  }
+});
 
 describe("deliberate route admission", () => {
   it("fences pending course reads and replaces supervision scope on fresh admission", async () => {

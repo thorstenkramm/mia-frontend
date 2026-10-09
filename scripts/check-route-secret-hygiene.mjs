@@ -92,6 +92,7 @@ export async function checkRouteSecretHygiene() {
       "e2e/invitationAdministration.spec.ts",
       "e2e/courseAdministration.spec.ts",
       "e2e/coursePreparation.spec.ts",
+      "e2e/materialPreparation.spec.ts",
       "--list",
       "--reporter=json",
     ],
@@ -130,21 +131,28 @@ export async function checkRouteSecretHygiene() {
     scope !== "invitations" &&
     scope !== "supervisor-onboarding" &&
     scope !== "courses" &&
-    scope !== "preparation"
+    scope !== "preparation" &&
+    scope !== "materials"
   )
     throw new Error("Unknown route-hygiene scope.");
   const selected =
-    scope === "preparation"
-      ? routeHygieneCases.filter((item) => item.id.startsWith("preparation-"))
-      : scope === "invitations"
-        ? routeHygieneCases.filter((item) => item.id.startsWith("invitation-"))
-        : scope === "supervisor-onboarding"
+    scope === "materials"
+      ? routeHygieneCases.filter((item) => item.id.startsWith("material-"))
+      : scope === "preparation"
+        ? routeHygieneCases.filter((item) => item.id.startsWith("preparation-"))
+        : scope === "invitations"
           ? routeHygieneCases.filter((item) =>
-              item.id.startsWith("supervisor-"),
+              item.id.startsWith("invitation-"),
             )
-          : scope === "courses"
-            ? routeHygieneCases.filter((item) => item.id.startsWith("course-"))
-            : routeHygieneCases;
+          : scope === "supervisor-onboarding"
+            ? routeHygieneCases.filter((item) =>
+                item.id.startsWith("supervisor-"),
+              )
+            : scope === "courses"
+              ? routeHygieneCases.filter((item) =>
+                  item.id.startsWith("course-"),
+                )
+              : routeHygieneCases;
   const root = await mkdtemp(join(tmpdir(), "mia-route-hygiene-"));
   const evidence = [];
   try {

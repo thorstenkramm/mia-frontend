@@ -128,6 +128,16 @@ declare const accountIdBrand: unique symbol;
 export type AccountId = string & { readonly [accountIdBrand]: "AccountId" };
 declare const courseIdBrand: unique symbol;
 export type CourseId = string & { readonly [courseIdBrand]: "CourseId" };
+// Primitive route identity conversion stays eager; material resource parsers do not.
+declare const materialIdBrand: unique symbol;
+declare const materialFileIdBrand: unique symbol;
+export type MaterialId = string & { readonly [materialIdBrand]: "MaterialId" };
+export type MaterialFileId = string & {
+  readonly [materialFileIdBrand]: "MaterialFileId";
+};
+export function toMaterialId(value: string): MaterialId | null {
+  return resourceId.safeParse(value).success ? (value as MaterialId) : null;
+}
 export function toCourseId(id: string): CourseId {
   return id as CourseId;
 }

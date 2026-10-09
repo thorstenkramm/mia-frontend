@@ -171,9 +171,12 @@ test(
     expect(
       (await page
         .locator(
-          'main a[href*="materials"], main a[href*="activate"], main a[href*="supervisors"]',
+          'main a[href*="activate"], main a[href*="supervisors"], main a[href*="brief"], main a[href*="assignments"]',
         )
         .count()) === 0,
+    ).toBe(true);
+    expect(
+      (await page.locator(`main a[href="${hub}/materials"]`).count()) === 1,
     ).toBe(true);
     await routeHygieneCheckpoint(page, "preparation-persisted");
     expect(

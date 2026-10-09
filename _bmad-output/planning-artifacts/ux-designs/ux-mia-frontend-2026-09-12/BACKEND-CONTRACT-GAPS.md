@@ -17,9 +17,9 @@ sources:
 
 ## Purpose
 
-This is a decision-grade dependency handoff from frontend planning to the MIA backend contract owners. It contains only
+This is a decision-grade dependency handoff from frontend planning to the MIA backend contract owners. It records
 confirmed release blockers that prevent the frontend from implementing required behavior without guessing, probing, or
-weakening a security boundary.
+weakening a security boundary, plus explicitly non-blocking backend follow-up requests under Non-Blocking OpenAPI Details.
 
 The backend product requirements remain authoritative. OpenAPI remains authoritative for concrete HTTP transport. This
 document proposes no silent behavior change. Where the observable contract below is not already confirmed product
@@ -1551,6 +1551,109 @@ detail only when the owning feature is implemented.
 - Accessible authentication controls, rich-text safety, dialogs, reflow, localization, telemetry policy, sensitive copy
   and print handling, and shared-device download warnings remain release work but do not require new backend schemas,
   except for the response policy in BCG-005.
+
+### BCG-018: Authoritative current upload-limit discovery
+
+Status: **NON-BLOCKING FOLLOW-UP — Story 4.3 unblocked by the owner's revised decision, 2026-10-08. Documented-contract
+hardcoded limits accepted for the milestone; discovery remains requested. Not counted under Release Blockers.**
+
+#### BCG-018 accepted milestone capability and revised owner exception
+
+The owner initially deferred all of Story 4.3 pending discovery transport on 2026-10-08, then explicitly reversed that
+decision later the same date. The later decision is authoritative: proceed with supported formats and hardcoded documented
+defaults/hard caps from `mia/docs/product-requirements.md:1050–1081` before the native picker. Client checks are advisory;
+server validation and definitive rejection remain authoritative. Story 4.3 no longer waits for discovery transport.
+
+This follows machine 10's current-documented-contract clause for extensions, media types, count and size limits. It is a
+bounded milestone exception to current-operator-limit discovery, not a claim that documented defaults equal effective
+operator settings. Label defaults and hard maxima accurately; operators may configure different permitted limits. The
+frontend will adopt authoritative discovery when delivered. No edit to FFR-402/Foundation is made by this disposition.
+
+The declaration includes 100/512 MiB default/hard per file, 200/512 MiB per material, 1,000/2,000 material pages, 200
+default/hard source files (operators may lower it), 40/100 megapixels default/hard per JPEG/PNG and 20,000 pixels per
+dimension. Fixed DOCX bounds are 10,000 entries, 512 MiB total expansion, 100 MiB per entry and 100:1 per-entry expansion
+ratio. Accepted formats remain PDF, JPEG, PNG, UTF-8 text, UTF-8 Markdown and macro-free DOCX; server signature/content and
+material-wide format validation remain authoritative. Hardcoded declarations do not prove actual page/image/archive safety.
+
+#### BCG-018 authoritative product and current transport context
+
+Foundation FFR-402, Experience Flow 2 and AC-014 require pre-selection limits/formats; backend Upload limits allows operator
+configuration within safety maxima. `mia/api-doc/schemas/requests/requests.yaml#/MaterialFileUploadRequest` defines one
+binary multipart `file` part but no effective-limit discovery schema. Existing draft/upload/file-list operations do not
+provide current operator configuration. That absence remains a backend follow-up, not a blocker of the owner-approved slice.
+
+#### BCG-018 requested backend follow-up contract
+
+- Expose authoritative current effective file/material byte limits, source-file count, material pages and decoded-image
+  bounds with accepted formats/extensions/media types and applicable fixed constraints before selection.
+- Define scope/authorization, method/path, request bounds/parameters, response schemas/media, session/CSRF where applicable,
+  stable errors and sign-in/scope-loss behavior in OpenAPI. The backend owns endpoint/schema composition.
+- Apply `Cache-Control: no-store` and define freshness/configuration-change behavior. Upload validation remains authoritative.
+- Keep discovery minimal: no credentials, internal configuration paths, provider diagnostics or protected file content.
+
+#### BCG-018 forbidden frontend workaround
+
+Do not invent discovery transport, read server configuration in the browser, probe oversized uploads, or label hardcoded
+defaults/hard caps as discovered current operator values. Do not treat advisory checks as proof of backend acceptance or
+decode documents locally to claim signature/page/image/archive validation. Do not revive the superseded whole-story deferral
+or treat this non-blocking request as a new milestone prerequisite. No unsafe upload replay is allowed.
+
+#### BCG-018 follow-up evidence requested
+
+- Product/OpenAPI agreement on effective formats/limits, scope, security, media, cache policy and errors.
+- Tests proving discovery matches validator configuration for lowered/default/raised-within-cap settings, every configurable
+  dimension and configuration changes; authorization, dependency/invalid-configuration failures and no-store/errors.
+- Milestone regression evidence for pre-picker documented-default/hard-cap disclosure, advisory feedback and authoritative
+  server rejection; discovery integration evidence when its transport is delivered and adopted.
+
+Backend request: `mia/tmp/frontend-request-upload-limits-discovery-2026-10-08.md` (frontend-workspace-relative path).
+
+### BCG-019: Server-enforced course-wide material filter and minimized projection
+
+Status: **NON-BLOCKING FOLLOW-UP — generic authorized material list/detail accepted for the milestone by owner decision,
+2026-10-08. Not counted under Release Blockers.**
+
+#### BCG-019 accepted milestone capability and owner exception
+
+The owner explicitly accepts the existing generic all-visible authorized `listMaterials`/`getMaterial` contract for the
+Story 4.3 milestone surface. Assigned supervisors are authorized for both course-wide and student-private material in
+their assigned course. Render returned rows with their authoritative scope label; student-private rows receive **no row
+actions**, including detail links or private-material controls, which remain deferred to Story 8.2. Do not fetch and hide
+unauthorized data or client-side hide private rows to simulate a server filter.
+
+This is an explicit, bounded exception to the milestone surface's least-data/privacy projection requirement, not a grant
+of new authorization or a general overfetching policy. The backend continues to authorize every operation; course binding
+and assignment gates remain mandatory. B2 remains settled for Story 4.3; BCG-018's later same-day owner exception also
+unblocks B1. Recording these decisions is documentation-only; application implementation follows in its separate phase.
+
+#### BCG-019 authoritative product and current transport context
+
+`mia/docs/product-requirements.md` §Course-wide material and §Student-private material authorize assigned supervisors for
+both scopes. `mia/api-doc/paths/materials.yaml` declares `listMaterials` as a paginated list visible to the caller, with
+only course/pagination parameters, and generic `getMaterial`; both return the full `Material` representation from
+`mia/api-doc/schemas/resources/resources.yaml`. No server-enforced course-wide filter/minimized projection is declared.
+The privacy/least-data contracts remain binding outside the dated exception above.
+
+#### BCG-019 requested backend follow-up contract
+
+Provide a server-enforced course-wide collection filter and minimized list/detail projection with authoritative course
+binding, sufficient identity/scope/technical-state/approval data for preparation, and no unnecessary private-material or
+brief content. The backend owns endpoint/schema composition; the frontend must not guess filter names or alternative routes.
+Define supported parameters/pagination, authorization, media, stable errors and no-store/freshness policy in OpenAPI.
+
+#### BCG-019 forbidden frontend workaround
+
+Do not add an unsupported `filter[scope]`, enumerate IDs, filter out private rows to claim a scoped server collection, infer
+authorization from roles or resource absence, or expose private upload/edit/delete/download/brief controls in this milestone.
+The accepted generic response is rendered with truthful scope labels and the existing authorized gates, not presented as
+a course-wide-only transport response. Do not remove the owner exception or treat this follow-up as a new milestone blocker.
+
+#### BCG-019 follow-up evidence requested
+
+- Product/OpenAPI agreement and tests for course-wide filtering and minimal collection/detail representations.
+- Assigned/unassigned, multi-role, cross-course and private-scope authorization/non-fetch tests, stable pagination and no-store.
+- Milestone regression evidence: scope labels on all returned rows, no private-material actions,
+  no client-side unauthorized-data hiding, and no claim that the generic list is server-filtered.
 
 ## Release Gate
 

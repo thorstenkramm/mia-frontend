@@ -57,6 +57,7 @@ export {
   useAuthenticatedAccess,
   useAuthenticationBootstrapState,
   useMfaEnrollment,
+  useMaterialUpload,
   useSessionActions,
 } from "../session/SessionProvider";
 export type { AuthenticationBootstrapState } from "../session/sessionController";

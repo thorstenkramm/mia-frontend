@@ -444,7 +444,7 @@ export class SessionController {
     }
   }
 
-  // A definitive sign-in or stage loss on an authenticated operation destroys
+  // A definitive sign-in, stage or CSRF-generation rejection destroys
   // protected state. Recovery is the explicit Refresh of the privacy shield.
   private loseAuthenticatedAccess(failure: EntryApiFailure): void {
     if (this.state.kind.startsWith("Logout")) return;
@@ -2030,13 +2030,15 @@ function mfaOutcomeKind(failure: HttpFailure): MfaOutcome["kind"] {
   return "failed";
 }
 
-// Sign-in loss or a restricted stage on an authenticated operation.
+// Authenticated admission is invalid after sign-in/stage loss or CSRF-generation
+// rejection. Recovery is explicit; no token refresh, discovery or unsafe replay.
 function isAccessLoss(failure: EntryApiFailure): boolean {
   return (
     failure.kind === "http" &&
     (failure.disclosure.status === 401 ||
       (failure.disclosure.status === 403 &&
-        failure.code === "auth_password_change_required"))
+        (failure.code === "auth_password_change_required" ||
+          failure.code === "csrf_invalid")))
   );
 }
 

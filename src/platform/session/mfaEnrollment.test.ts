@@ -647,9 +647,18 @@ describe("TOTP verification and recovery codes", () => {
     },
   );
 
-  it("does not replay a CSRF rejection", async () => {
+  it("destroys stale setup after a CSRF rejection without replay or automatic recovery", async () => {
     let verifies = 0;
+    const accessReads: string[] = [];
     const fixture = await startedSetup([
+      http.get("/api/v1/auth/session", () => {
+        accessReads.push("session");
+        return authenticatedSessionResponse();
+      }),
+      http.get("/api/v1/users/me/capabilities", () => {
+        accessReads.push("capabilities");
+        return ownProfileCapabilities();
+      }),
       http.post(
         `/api/v1/users/me/mfa-enrollments/${pendingId}/verifications`,
         () => {
@@ -658,13 +667,46 @@ describe("TOTP verification and recovery codes", () => {
         },
       ),
     ]);
-    await fixture.mfa.verify("012345");
-    expect(verifies).toBe(1);
-    expect(fixture.mfa.getSnapshot().activity).toMatchObject({
-      kind: "Settled",
-      outcome: { kind: "verify-rejected" },
-    });
-    fixture.controller.stop();
+    const code = String(crypto.getRandomValues(new Uint32Array(1))[0] ?? 0)
+      .slice(-6)
+      .padStart(6, "0");
+    try {
+      const readsBefore = fixture.counts.reads;
+      await fixture.mfa.verify(code);
+      const session = fixture.controller.getSnapshot();
+      expect(
+        session.kind === "Privacy shield" && session.reason === "access lost",
+      ).toBe(true);
+      expect(fixture.controller.getAuthenticatedAccess()).toBeNull();
+      // CSRF invalidates authenticated admission, rather than leaving an
+      // actionable local rejection with stale provisioning data.
+      const snapshot = fixture.mfa.getSnapshot();
+      expect(snapshot.read.kind).toBe("Checking");
+      expect(snapshot.activity.kind).toBe("Idle");
+      expect(snapshot.setup.kind).toBe("None");
+      expect(snapshot.codes.kind).toBe("None");
+      fixture.controller.observeLifecycle();
+      await fixture.mfa.verify(code);
+      expect(verifies).toBe(1);
+      expect(fixture.counts.reads).toBe(readsBefore);
+      expect(accessReads).toEqual(["session", "capabilities"]);
+      await fixture.controller.refreshSession();
+      await fixture.mfa.check(mfaPaths.verify);
+      expect(fixture.controller.getSnapshot().kind).toBe("Authenticated");
+      expect(accessReads).toEqual([
+        "session",
+        "capabilities",
+        "session",
+        "capabilities",
+      ]);
+      expect(fixture.counts.reads).toBe(readsBefore + 1);
+      fixture.mfa.reveal();
+      expect(fixture.mfa.getSnapshot().setup.kind).toBe("None");
+      expect(fixture.mfa.getSnapshot().codes.kind).toBe("None");
+      expect(verifies).toBe(1);
+    } finally {
+      fixture.controller.stop();
+    }
   });
 
   it.each([

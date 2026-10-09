@@ -2,6 +2,117 @@
 // R1 repair. IDs/checkpoints are fixed public labels, never fixture-derived.
 export const routeHygieneCases = [
   {
+    id: "material-delete-new-attempt",
+    title:
+      "material deletion new attempt retires rejection and stopped late success stays unknown",
+    checkpoints: [
+      "material-delete-prior-rejected",
+      "material-delete-new-chosen",
+      "material-delete-new-stopped",
+      "material-delete-new-late-success",
+      "complete",
+    ],
+  },
+  ...["material", "files"].flatMap((path) =>
+    ["http", "transport"].map((outcome) => ({
+      id: `material-deleted-refresh-${path}-${outcome}`,
+      title: `material confirmed deletion survives ${path} ${outcome} refresh failure`,
+      checkpoints: [
+        `material-deleted-read-failed-${path}-${outcome}`,
+        `material-deleted-read-recovered-${path}-${outcome}`,
+        "complete",
+      ],
+    })),
+  ),
+  {
+    id: "material-csrf",
+    title:
+      "material CSRF rejection fences the queue until explicit ordered recovery",
+    checkpoints: [
+      "material-csrf-cleared",
+      "material-csrf-recovered",
+      "complete",
+    ],
+  },
+  ...["create", "delete"].flatMap((operation) =>
+    ["unknown", "rejected"].map((outcome) => ({
+      id: `material-feedback-${operation}-${outcome}`,
+      title: `material ${operation} ${outcome} live feedback is truthful deduplicated and retired`,
+      checkpoints: [
+        `material-${operation}-feedback-${outcome}`,
+        `material-${operation}-retired-${outcome}`,
+        "complete",
+      ],
+    })),
+  ),
+  {
+    id: "material-validation",
+    title:
+      "material name errors are associated corrective and cleared before valid dispatch",
+    checkpoints: [
+      "material-validation-long",
+      "material-validation-corrected",
+      "complete",
+    ],
+  },
+  {
+    id: "material-loading",
+    title:
+      "material lazy loading failure stays neutral with a localized safe exit",
+    checkpoints: ["complete"],
+  },
+  {
+    id: "material-mutations",
+    title:
+      "material unknown creation and removal retain truth without automatic unsafe replay",
+    checkpoints: [
+      "material-create-unknown",
+      "material-delete-unknown",
+      "complete",
+    ],
+  },
+  {
+    id: "material-connected",
+    title:
+      "material connected native picker serializes persisted review and exact removal",
+    checkpoints: [
+      "material-create-input",
+      "material-selected",
+      "material-persisted",
+      "complete",
+    ],
+  },
+  {
+    id: "material-unknown",
+    title:
+      "material lost upload pauses duplicate sources and reconciles without correlation or replay",
+    checkpoints: ["material-unknown", "material-reconciled", "complete"],
+  },
+  {
+    id: "material-security",
+    title:
+      "material denial lifecycle and private scope destroy controls before dependent work",
+    checkpoints: ["material-cleared", "material-error", "complete"],
+  },
+  {
+    id: "material-keyboard",
+    title:
+      "material keyboard review handles 200 rows mixed formats and explicit row fallback",
+    checkpoints: ["material-many", "complete"],
+  },
+  {
+    id: "material-locales",
+    title:
+      "material all locales and text modes preserve native queue reflow and stable controls",
+    checkpoints: ["complete"],
+  },
+  {
+    id: "material-zoom",
+    title:
+      "material connected process remains usable at real 200 percent browser zoom",
+    checkpoints: ["complete"],
+  },
+  {
     id: "preparation-stopped-denial",
     title:
       "preparation stopped operations retain applicable hidden denial teardown",

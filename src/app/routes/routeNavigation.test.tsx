@@ -22,9 +22,49 @@ import { MiaIntlProvider } from "../../platform/i18n/MiaIntlProvider";
 import { InvitationLink } from "../../platform/session/invitationLink";
 import { PasswordResetLink } from "../../platform/session/passwordResetLink";
 import { App } from "../App";
-import { authenticatedRoute } from "./entryRoutes";
+import { authenticatedRoute, materialPath } from "./entryRoutes";
+import { toCourseId, toMaterialId } from "../../platform/api/entry";
 
 const path = "/profile/security/mfa";
+it("material paths preserve opaque identity and require exact assigned supervision", () => {
+  const course = toCourseId("opaque/course");
+  const material = toMaterialId("opaque/material");
+  if (material === null) throw new Error("Invalid synthetic route identity.");
+  const access = {
+    ownProfileView: false,
+    invitationAdministration: false,
+    courseRecords: true,
+    courseCreate: true,
+    supervisorAssignments: true,
+    courseSupervision: true,
+    supervisedCourseIds: [course],
+  };
+  for (const destination of [
+    materialPath(course),
+    materialPath(course, "create"),
+    materialPath(course, "detail", material),
+    materialPath(course, "files", material),
+  ]) {
+    expect(authenticatedRoute(destination, access).path === destination).toBe(
+      true,
+    );
+    expect(
+      authenticatedRoute(destination, { ...access, supervisedCourseIds: [] })
+        .key,
+    ).toBe("home");
+    expect(
+      authenticatedRoute(destination, { ...access, courseSupervision: false })
+        .key,
+    ).toBe("home");
+  }
+  for (const suffix of ["/", "/review", "/finalize", "/brief", "/activate"])
+    expect(
+      authenticatedRoute(
+        `${materialPath(course, "detail", material)}${suffix}`,
+        access,
+      ).key,
+    ).toBe("home");
+});
 it("course route dispatch keeps opaque identity canonical and excludes later actions", () => {
   const access = {
     ownProfileView: false,

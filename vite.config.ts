@@ -4,6 +4,7 @@ import tailwindcss from "@tailwindcss/vite";
 import react from "@vitejs/plugin-react";
 import { defineConfig } from "vite";
 import { createBuildIdentifier } from "./scripts/build-identifier.ts";
+import { compactMessageCatalogs } from "./scripts/message-catalogs.ts";
 
 const packageFile = fileURLToPath(new URL("./package.json", import.meta.url));
 const packageVersion = JSON.parse(readFileSync(packageFile, "utf8")).version;
@@ -13,7 +14,7 @@ const buildIdentifier = createBuildIdentifier(
 );
 
 export default defineConfig({
-  plugins: [react(), tailwindcss()],
+  plugins: [react(), tailwindcss(), compactMessageCatalogs()],
   define: {
     __MIA_BUILD_ID__: JSON.stringify(buildIdentifier),
   },

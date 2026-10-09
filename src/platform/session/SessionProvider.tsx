@@ -8,6 +8,7 @@ import {
 } from "react";
 import { flushSync } from "react-dom";
 import { MfaEnrollment } from "./mfaEnrollment";
+import { MaterialUpload } from "../transfer/materialUpload";
 import {
   SessionController,
   type AuthenticatedAccess,
@@ -27,6 +28,7 @@ import type {
 type SessionContextValue = {
   readonly controller: SessionController;
   readonly mfaEnrollment: MfaEnrollment;
+  readonly materialUpload: MaterialUpload;
 };
 
 const SessionContext = createContext<SessionContextValue | null>(null);
@@ -47,7 +49,12 @@ export function SessionProvider({
   );
   const controller = suppliedController ?? ownedController;
   const [mfaEnrollment] = useState(() => new MfaEnrollment(controller));
+  const [materialUpload] = useState(() => new MaterialUpload(controller));
   useEffect(() => {
+    // Abort transfer work before cache purge and protected UI notification.
+    const unregisterTransfer = controller.registerSecurityTeardown(() =>
+      materialUpload.destroy(),
+    );
     const unregister = controller.registerSecurityTeardown(onSecurityTeardown);
     const unregisterMfa = controller.registerSecurityTeardown((scope) =>
       mfaEnrollment.observeTeardown(scope),
@@ -57,6 +64,7 @@ export function SessionProvider({
     // Only a page that may enter BFCache keeps masked MFA secrets.
     const pageHide = (event: PageTransitionEvent) =>
       flushSync(() => {
+        materialUpload.destroy();
         if (!event.persisted) mfaEnrollment.destroy();
         controller.shield("lifecycle", true);
       });
@@ -83,15 +91,17 @@ export function SessionProvider({
       document.removeEventListener("visibilitychange", observe);
       connection?.removeEventListener("change", observe);
       controller.stop();
+      materialUpload.destroy();
       onSecurityTeardown();
       mfaEnrollment.destroy();
       unregisterMfa();
+      unregisterTransfer();
       unregister();
     };
-  }, [controller, mfaEnrollment, onSecurityTeardown]);
+  }, [controller, materialUpload, mfaEnrollment, onSecurityTeardown]);
 
   return (
-    <SessionContext value={{ controller, mfaEnrollment }}>
+    <SessionContext value={{ controller, mfaEnrollment, materialUpload }}>
       {children}
     </SessionContext>
   );
@@ -121,6 +131,10 @@ export function useAuthenticatedAccess(): AuthenticatedAccess | null {
 
 export function useMfaEnrollment(): MfaEnrollment {
   return useSessionContext().mfaEnrollment;
+}
+
+export function useMaterialUpload(): MaterialUpload {
+  return useSessionContext().materialUpload;
 }
 
 export function useAuthenticationBootstrapState(): AuthenticationBootstrapState {

@@ -199,9 +199,13 @@ async function runFailures(runner, earlyId) {
 
 async function checkCourseUnitHygiene() {
   const selected =
-    process.env.MIA_SECRET_HYGIENE_SCOPE === "preparation-unit"
-      ? courseUnitCases.filter((item) => item.title.startsWith("preparation "))
-      : courseUnitCases;
+    process.env.MIA_SECRET_HYGIENE_SCOPE === "material-unit"
+      ? courseUnitCases.filter((item) => item.title.startsWith("material "))
+      : process.env.MIA_SECRET_HYGIENE_SCOPE === "preparation-unit"
+        ? courseUnitCases.filter((item) =>
+            item.title.startsWith("preparation "),
+          )
+        : courseUnitCases;
   const probes = selected.flatMap((item) =>
     item.points.map((point) => ({ item, point, early: false })),
   );
@@ -294,7 +298,7 @@ async function checkCourseUnitHygiene() {
 try {
   await checkCourseUnitHygiene();
   if (
-    !["course-unit", "preparation-unit"].includes(
+    !["course-unit", "preparation-unit", "material-unit"].includes(
       process.env.MIA_SECRET_HYGIENE_SCOPE,
     )
   ) {

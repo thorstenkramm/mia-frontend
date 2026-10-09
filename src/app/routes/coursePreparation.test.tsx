@@ -227,7 +227,6 @@ it("preparation gates assigned identities before any dependent course request", 
     "/prepare/courses/opaque%2Fidentity/activate",
     "/prepare/courses/opaque%2Fidentity/",
     "/prepare/courses/%/details",
-    "/prepare/courses/opaque%2Fidentity/materials",
   ])
     expect(authenticatedRoute(path, access).key === "home").toBe(true);
   courseUnitCheckpoint("preparation-gate");
@@ -270,10 +269,13 @@ it("preparation validates Unicode bounds then installs persisted distinct teachi
   expect(
     Array.from(document.querySelectorAll("main a")).every(
       (node) =>
-        !/(materials|activate|supervisors)/u.test(
-          node.getAttribute("href") ?? "",
-        ),
+        !/(activate|supervisors|brief)/u.test(node.getAttribute("href") ?? ""),
     ),
+  ).toBe(true);
+  expect(
+    document.querySelectorAll(
+      'main a[href="/prepare/courses/course_1/materials"]',
+    ).length === 1,
   ).toBe(true);
   await user.click(
     screen.getAllByRole("link", { name: "AI instructions" })[0] as HTMLElement,

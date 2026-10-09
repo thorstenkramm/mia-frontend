@@ -24,6 +24,7 @@ import {
   courseRoutePaths,
   invitationRoutePaths,
   prepareCoursePath,
+  materialPath,
   type CourseEntryRoute,
 } from "./entryRoutes";
 import { SimpleEntrySurface } from "./SimpleEntrySurface";
@@ -151,6 +152,7 @@ export function CourseResourceHost({
     );
   if (state.kind === "Check failed" || state.kind === "Unavailable")
     return (
+      // Same fixed unavailable JSX: minimal duplication marker lives in PrepareMaterialRoute.
       <SimpleEntrySurface
         titleMessage={messages.coursesUnavailableTitle}
         headingMessage={messages.coursesUnavailableHeading}
@@ -209,6 +211,7 @@ export function CourseResourceHost({
             create: courseRoutePaths.create,
             detail: courseDetailPath,
             preparation: prepareCoursePath,
+            materials: materialPath,
             invitation: access?.invitationAdministration
               ? invitationRoutePaths.create
               : null,

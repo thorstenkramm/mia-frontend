@@ -1,6 +1,294 @@
 import { defineMessages } from "react-intl";
 
 export const messages = defineMessages({
+  materialCancel: { id: "materials.cancel", defaultMessage: "Cancel" },
+  materialsTitle: {
+    id: "materials.title",
+    defaultMessage: "Course materials | MIA",
+  },
+  materialsHeading: {
+    id: "materials.heading",
+    defaultMessage: "Course materials",
+  },
+  materialCreateTitle: {
+    id: "materials.createTitle",
+    defaultMessage: "Create course material | MIA",
+  },
+  materialCreate: {
+    id: "materials.create",
+    defaultMessage: "Create course material",
+  },
+  materialDetailTitle: {
+    id: "materials.detailTitle",
+    defaultMessage: "Course material | MIA",
+  },
+  materialDetail: { id: "materials.detail", defaultMessage: "Course material" },
+  materialFilesTitle: {
+    id: "materials.filesTitle",
+    defaultMessage: "Course material files | MIA",
+  },
+  materialFiles: {
+    id: "materials.files",
+    defaultMessage: "Course material files",
+  },
+  materialName: { id: "materials.name", defaultMessage: "Material name" },
+  materialNameHelp: {
+    id: "materials.nameHelp",
+    defaultMessage:
+      "A unique name within this course; at most 200 characters and 800 UTF-8 bytes after trimming.",
+  },
+  materialNameRequired: {
+    id: "materials.nameRequired",
+    defaultMessage: "Enter a material name.",
+  },
+  materialNameTooLong: {
+    id: "materials.nameTooLong",
+    defaultMessage:
+      "Use at most 200 characters and 800 UTF-8 bytes after trimming.",
+  },
+  materialDeleted: {
+    id: "materials.deleted",
+    defaultMessage: "The selected persisted file was deleted.",
+  },
+  materialKind: { id: "materials.kind", defaultMessage: "Material kind" },
+  materialFormat: { id: "materials.format", defaultMessage: "Source format" },
+  materialTextBook: { id: "materials.textBook", defaultMessage: "Textbook" },
+  materialExam: { id: "materials.exam", defaultMessage: "Exam" },
+  materialWorksheet: { id: "materials.worksheet", defaultMessage: "Worksheet" },
+  materialWebsite: { id: "materials.website", defaultMessage: "Website link" },
+  materialYoutube: { id: "materials.youtube", defaultMessage: "YouTube link" },
+  materialPdf: { id: "materials.pdf", defaultMessage: "PDF (.pdf)" },
+  materialJpeg: { id: "materials.jpeg", defaultMessage: "JPEG (.jpg, .jpeg)" },
+  materialPng: { id: "materials.png", defaultMessage: "PNG (.png)" },
+  materialText: {
+    id: "materials.text",
+    defaultMessage: "UTF-8 plain text (.txt)",
+  },
+  materialMarkdown: {
+    id: "materials.markdown",
+    defaultMessage: "UTF-8 Markdown (.md)",
+  },
+  materialDocx: {
+    id: "materials.docx",
+    defaultMessage: "Macro-free DOCX (.docx)",
+  },
+  materialLink: { id: "materials.link", defaultMessage: "Link" },
+  materialCourseWide: {
+    id: "materials.courseWide",
+    defaultMessage: "Course-wide",
+  },
+  materialPrivate: {
+    id: "materials.private",
+    defaultMessage: "Student-private; no actions on this surface",
+  },
+  materialDraft: { id: "materials.draft", defaultMessage: "Draft" },
+  materialProcessing: {
+    id: "materials.processing",
+    defaultMessage: "Processing",
+  },
+  materialReady: { id: "materials.ready", defaultMessage: "Ready" },
+  materialFailed: { id: "materials.failed", defaultMessage: "Failed" },
+  materialApproved: {
+    id: "materials.approved",
+    defaultMessage: "Supervisor approval: approved",
+  },
+  materialUnapproved: {
+    id: "materials.unapproved",
+    defaultMessage: "Supervisor approval: not approved",
+  },
+  materialEmpty: {
+    id: "materials.empty",
+    defaultMessage: "No materials in this returned collection page.",
+  },
+  materialError: {
+    id: "materials.error",
+    defaultMessage:
+      "This operation was not accepted. Correct the input or review current material state.",
+  },
+  materialReadFailed: {
+    id: "materials.readFailed",
+    defaultMessage:
+      "Could not refresh material and files. Any confirmed changes remain confirmed. Reconcile to read the current state again.",
+  },
+  materialUnknownCreate: {
+    id: "materials.unknownCreate",
+    defaultMessage:
+      "Creation is unconfirmed. Do not create again automatically. Abandon this local attempt and return to the course list to inspect saved drafts; names cannot identify this attempt.",
+  },
+  materialAbandonCreate: {
+    id: "materials.abandonCreate",
+    defaultMessage: "Abandon unconfirmed creation and return to list",
+  },
+  materialLimits: {
+    id: "materials.limits",
+    defaultMessage: "Documented defaults and hard safety maxima",
+  },
+  materialLimitsCaveat: {
+    id: "materials.limitsCaveat",
+    defaultMessage:
+      "These are hardcoded documented values, not discovered current operator settings. Operators may lower limits or raise defaults within the hard maxima. Client checks are advisory; the server validates each upload.",
+  },
+  materialByteLimits: {
+    id: "materials.byteLimits",
+    defaultMessage:
+      "Per file: {fileDefault} MiB default / {fileHard} MiB hard maximum. Combined material: {materialDefault} MiB default / {materialHard} MiB hard maximum. Source files: {count} default and maximum; operators may lower the count.",
+  },
+  materialPageLimits: {
+    id: "materials.pageLimits",
+    defaultMessage:
+      "Material: {pageDefault} pages default / {pageHard} hard maximum. Each PDF page or JPEG/PNG file counts as one page; DOCX, text and Markdown are non-paged. Images: {imageDefault} megapixels default / {imageHard} hard maximum; each dimension at most {dimension} pixels.",
+  },
+  materialArchiveLimits: {
+    id: "materials.archiveLimits",
+    defaultMessage:
+      "DOCX: {entries} entries maximum, {total} MiB total expansion, {entry} MiB per entry and {ratio}:1 per-entry expansion ratio. The server inspects content; MIA does not scan for malware or certify safety. External links are not fetched.",
+  },
+  materialFilenameHelp: {
+    id: "materials.filenameHelp",
+    defaultMessage:
+      "Filename: NFC UTF-8 basename, at most 255 code points and 1 KiB. No controls, bidirectional controls or path separators. Use an unprotected file; encrypted/password-protected PDF or DOCX, macros, executable content, HTML, SVG and other archives are unsupported.",
+  },
+  materialPicker: {
+    id: "materials.picker",
+    defaultMessage: "Select source files",
+  },
+  materialPickerHelp: {
+    id: "materials.pickerHelp",
+    defaultMessage:
+      "Select one or more files, all in this material's chosen format. Files remain in page memory only and are lost on reload or departure.",
+  },
+  materialQueue: {
+    id: "materials.queue",
+    defaultMessage: "Local upload queue",
+  },
+  materialQueueStart: {
+    id: "materials.queueStart",
+    defaultMessage: "Queue selected files",
+  },
+  materialQueueContinue: {
+    id: "materials.queueContinue",
+    defaultMessage: "Upload remaining queued files",
+  },
+  materialSelected: { id: "materials.selected", defaultMessage: "Selected" },
+  materialQueued: { id: "materials.queued", defaultMessage: "Queued" },
+  materialUploading: { id: "materials.uploading", defaultMessage: "Uploading" },
+  materialVerifying: {
+    id: "materials.verifying",
+    defaultMessage: "Verifying upload",
+  },
+  materialUploaded: { id: "materials.uploaded", defaultMessage: "Uploaded" },
+  materialRejected: { id: "materials.rejected", defaultMessage: "Rejected" },
+  materialUnknown: {
+    id: "materials.unknown",
+    defaultMessage: "Upload outcome unknown; queue paused",
+  },
+  materialUnknownAbandonable: {
+    id: "materials.unknownAbandonable",
+    defaultMessage:
+      "Outcome unknown; current list reviewed, attempt may be abandoned",
+  },
+  materialCancelled: {
+    id: "materials.cancelled",
+    defaultMessage: "Cancelled before dispatch",
+  },
+  materialMismatch: {
+    id: "materials.mismatch",
+    defaultMessage:
+      "The selected file does not match the chosen format. Remove it and select a matching file.",
+  },
+  materialAdvice: {
+    id: "materials.advice",
+    defaultMessage:
+      "This selection exceeds a documented default or count maximum. This feedback is advisory, not proof of rejection; the operator's actual limits and server validation decide acceptance.",
+  },
+  materialRow: {
+    id: "materials.row",
+    defaultMessage: "File {position}: {name}",
+  },
+  materialBytes: {
+    id: "materials.bytes",
+    defaultMessage: "{bytes, number} bytes",
+  },
+  materialProgress: {
+    id: "materials.progress",
+    defaultMessage:
+      "{loaded, number} of {total, number} bytes transferred; awaiting server confirmation",
+  },
+  materialIndeterminate: {
+    id: "materials.indeterminate",
+    defaultMessage:
+      "Upload progress is not measurable; awaiting server confirmation",
+  },
+  materialAnnouncement: {
+    id: "materials.announcement",
+    defaultMessage: "{name}: {state}",
+  },
+  materialRemoveLocal: {
+    id: "materials.removeLocal",
+    defaultMessage: "Remove local row",
+  },
+  materialReconcile: {
+    id: "materials.reconcile",
+    defaultMessage: "Reconcile material and complete file list",
+  },
+  materialAbandon: {
+    id: "materials.abandon",
+    defaultMessage: "Abandon unknown attempt",
+  },
+  materialNewUpload: {
+    id: "materials.newUpload",
+    defaultMessage: "Upload as a new file",
+  },
+  materialDuplicateRisk: {
+    id: "materials.duplicateRisk",
+    defaultMessage:
+      "I accept that a new upload may duplicate bytes already saved by the unknown attempt.",
+  },
+  materialReview: {
+    id: "materials.review",
+    defaultMessage: "Authoritative persisted file list",
+  },
+  materialAccept: {
+    id: "materials.accept",
+    defaultMessage: "Accept authoritative file list",
+  },
+  materialAccepted: {
+    id: "materials.accepted",
+    defaultMessage:
+      "Current material and complete file list accepted for this page. A new read or edit requires new review.",
+  },
+  materialFrozen: {
+    id: "materials.frozen",
+    defaultMessage:
+      "Source changes are frozen. Reconcile current material state; only an authoritative draft permits upload or removal.",
+  },
+  materialNoFiles: {
+    id: "materials.noFiles",
+    defaultMessage: "No persisted files in the current authoritative list.",
+  },
+  materialRemove: {
+    id: "materials.remove",
+    defaultMessage: "Delete this persisted file",
+  },
+  materialRemoveConfirm: {
+    id: "materials.removeConfirm",
+    defaultMessage: "Delete the selected persisted file?",
+  },
+  materialRemoveHelp: {
+    id: "materials.removeHelp",
+    defaultMessage:
+      "Only this exact server file will be deleted. An unknown upload attempt cannot be identified by its filename or size.",
+  },
+  materialDeleteUnknown: {
+    id: "materials.deleteUnknown",
+    defaultMessage:
+      "File deletion is unconfirmed. The retained row is not proof the file still exists. Reconcile explicitly; never repeat this deletion automatically.",
+  },
+  materialDeleting: {
+    id: "materials.deleting",
+    defaultMessage: "Deleting selected file; not yet confirmed",
+  },
+  materialProcessed: { id: "materials.processed", defaultMessage: "Processed" },
   coursesPagination: {
     id: "courses.pagination",
     defaultMessage: "Collection pages",
@@ -2195,3 +2483,8 @@ export const messages = defineMessages({
 });
 
 export type MessageId = (typeof messages)[keyof typeof messages]["id"];
+
+// Public catalog keys, shared by build-compiled value tables (FFR-955).
+export const catalogMessageIds = Object.values(messages)
+  .map((message) => message.id)
+  .sort();

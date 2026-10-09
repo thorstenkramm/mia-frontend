@@ -26,6 +26,149 @@ export const unitCases = [
 type CaseId = (typeof browserCases)[number] | (typeof unitCases)[number];
 
 export const courseUnitCases = [
+  {
+    title:
+      "material deletion new attempt retires rejection and stopped late success stays unknown",
+    file: "src/app/routes/materialPreparation.test.tsx",
+    points: [
+      "material-delete-prior-rejected",
+      "material-delete-new-chosen",
+      "material-delete-new-stopped",
+      "material-delete-new-late-success",
+    ],
+  },
+  ...[204, 404].map((status) => ({
+    title: `material new deletion retires feedback and fences stopped late status ${status}`,
+    file: "src/features/materials/materialUploadQueue.test.ts",
+    points: [
+      `material-delete-retired-start-${status}`,
+      `material-delete-retired-late-${status}`,
+    ],
+  })),
+  ...["material", "files"].flatMap((path) =>
+    ["http", "transport"].map((outcome) => ({
+      title: `material confirmed deletion retains success after ${path} ${outcome} refresh failure`,
+      file: "src/app/routes/materialPreparation.test.tsx",
+      points: [
+        `material-deleted-read-failed-${path}-${outcome}`,
+        `material-deleted-read-recovered-${path}-${outcome}`,
+      ],
+    })),
+  ),
+  {
+    title:
+      "material CSRF rejection destroys authenticated work and only explicit recovery restores admission",
+    file: "src/platform/session/sessionController.test.ts",
+    points: ["material-csrf-state"],
+  },
+  ...["unknown", "rejected"].flatMap((outcome) => [
+    {
+      title: `material create ${outcome} feedback announces once without contradictory outcome or raw body`,
+      file: "src/app/routes/materialPreparation.test.tsx",
+      points: [
+        `material-create-feedback-${outcome}`,
+        `material-create-retired-${outcome}`,
+      ],
+    },
+    {
+      title: `material deletion ${outcome} feedback announces once and retires on security loss`,
+      file: "src/app/routes/materialPreparation.test.tsx",
+      points: [
+        `material-delete-feedback-${outcome}`,
+        `material-delete-retired-${outcome}`,
+      ],
+    },
+  ]),
+  {
+    title:
+      "material name validation exposes required corrective text focus and correction without dispatch",
+    file: "src/app/routes/materialPreparation.test.tsx",
+    points: ["material-validation-long", "material-validation-corrected"],
+  },
+  {
+    title:
+      "material protocol validates file identity byte metadata status and scoped navigation",
+    file: "src/platform/api/materials.test.ts",
+    points: ["material-protocol"],
+  },
+  {
+    title:
+      "material stopped wait retains a current hidden denial and destroys every queue reference",
+    file: "src/features/materials/materialUploadQueue.test.ts",
+    points: ["material-stopped-denial"],
+  },
+  {
+    title:
+      "material routes gate private dependent files before protected mount",
+    file: "src/app/routes/materialPreparation.test.tsx",
+    points: ["material-admission"],
+  },
+  {
+    title:
+      "material native selection preserves duplicate rows and dirty Stay then discards on departure",
+    file: "src/app/routes/materialPreparation.test.tsx",
+    points: ["material-input", "material-departed"],
+  },
+  {
+    title:
+      "material unconfirmed creation freezes repeat dispatch and permits explicit abandonment",
+    file: "src/app/routes/materialPreparation.test.tsx",
+    points: ["material-create-unknown"],
+  },
+  {
+    title:
+      "material create is one dispatch and relationship admission rejects cross-course data",
+    file: "src/platform/api/materials.test.ts",
+    points: ["material-create"],
+  },
+  {
+    title:
+      "material transfer sends one multipart file with current CSRF and measured progress",
+    file: "src/platform/transfer/materialUpload.test.ts",
+    points: ["material-sent", "material-persisted"],
+  },
+  ...["stop", "network", "malformed", "server", "oversized", "utf8"].map(
+    (mode) => ({
+      title: `material transfer ${mode} settles unknown without replay`,
+      file: "src/platform/transfer/materialUpload.test.ts",
+      points: [`material-transfer-${mode}`],
+    }),
+  ),
+  {
+    title:
+      "material transfer preserves original rejected UTF-8 disclosure and fences security teardown",
+    file: "src/platform/transfer/materialUpload.test.ts",
+    points: ["material-error"],
+  },
+  {
+    title:
+      "material queue serializes duplicate sources and pauses unknown until explicit reconciliation",
+    file: "src/features/materials/materialUploadQueue.test.ts",
+    points: [
+      "material-queued",
+      "material-unconfirmed",
+      "material-reconciled",
+      "material-cleared",
+    ],
+  },
+  {
+    title:
+      "material queue supports 200 keyboard rows and rejects each mixed-format source without losing saved draft",
+    file: "src/features/materials/materialUploadQueue.test.ts",
+    points: ["material-many"],
+  },
+  {
+    title:
+      "material queue requires deliberate duplicate-risk acceptance and freezes authoritative processing",
+    file: "src/features/materials/materialUploadQueue.test.ts",
+    points: ["material-frozen"],
+  },
+  {
+    title:
+      "material file removal keeps persisted rows until exact definitive success and never replays unknown",
+    file: "src/features/materials/materialUploadQueue.test.ts",
+    points: ["material-delete-unknown"],
+  },
   ...["PATCH", "GET"].map((operation) => ({
     title: `preparation stopped ${operation} denial still destroys current protected input`,
     file: "src/app/routes/coursePreparation.test.tsx",

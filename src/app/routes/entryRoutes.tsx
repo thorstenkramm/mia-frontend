@@ -7,6 +7,8 @@ import { mfaPaths } from "../../platform/session/mfaEnrollment";
 import type { MfaRouteProps } from "../../features/profile/MfaRouteProps";
 import type { InvitationRouteProps } from "../../features/invitations/InvitationRouteProps";
 import type { CourseRouteProps } from "../../features/courses/CourseRouteProps";
+import type { MaterialRouteProps } from "../../features/materials/MaterialRouteProps";
+import { toMaterialId, type MaterialId } from "../../platform/api/entry";
 import { toCourseId, type CourseId } from "../../platform/api/entry";
 import type { CourseTeachingField } from "../../platform/api/courses";
 import { courseTeachingFields } from "../../features/courses/courseTeachingFields";
@@ -76,7 +78,31 @@ type EntryRoute =
       readonly resource:
         "list" | "detail" | "create" | "prepare" | "hub" | CourseTeachingField;
       readonly component: LazyExoticComponent<ComponentType<CourseRouteProps>>;
+    })
+  | (EntryRouteBase & {
+      readonly path: (typeof materialRoutePaths)[keyof typeof materialRoutePaths];
+      readonly gate: "Prepare(materials)";
+      readonly resource: "list" | "create" | "detail" | "files";
+      readonly component: LazyExoticComponent<
+        ComponentType<MaterialRouteProps>
+      >;
     });
+
+export const materialRoutePaths = {
+  list: "/prepare/courses/:courseId/materials",
+  create: "/prepare/courses/:courseId/materials/new",
+  detail: "/prepare/courses/:courseId/materials/:materialId",
+  files: "/prepare/courses/:courseId/materials/:materialId/files",
+} as const;
+export function materialPath(
+  course: CourseId,
+  resource: keyof typeof materialRoutePaths = "list",
+  id: MaterialId | null = null,
+): string {
+  return materialRoutePaths[resource]
+    .replace(":courseId", encodeURIComponent(course))
+    .replace(":materialId", id === null ? "" : encodeURIComponent(id));
+}
 
 export const courseRoutePaths = {
   list: "/admin/courses",
@@ -99,6 +125,46 @@ export function prepareCoursePath(
     encodeURIComponent(id),
   );
 }
+const materialRoutes = {
+  materialList: {
+    resource: "list",
+    path: materialRoutePaths.list,
+    parent: { path: courseRoutePaths.hub, label: messages.preparationHub },
+    titleMessage: messages.materialsTitle,
+    headingMessage: messages.materialsHeading,
+    component: lazy(() => import("../../features/materials/MaterialListRoute")),
+  },
+  materialCreate: {
+    resource: "create",
+    path: materialRoutePaths.create,
+    parent: { path: materialRoutePaths.list, label: messages.materialsHeading },
+    titleMessage: messages.materialCreateTitle,
+    headingMessage: messages.materialCreate,
+    component: lazy(
+      () => import("../../features/materials/MaterialCreateRoute"),
+    ),
+  },
+  materialDetail: {
+    resource: "detail",
+    path: materialRoutePaths.detail,
+    parent: { path: materialRoutePaths.list, label: messages.materialsHeading },
+    titleMessage: messages.materialDetailTitle,
+    headingMessage: messages.materialDetail,
+    component: lazy(
+      () => import("../../features/materials/MaterialDetailRoute"),
+    ),
+  },
+  materialFiles: {
+    resource: "files",
+    path: materialRoutePaths.files,
+    parent: { path: materialRoutePaths.detail, label: messages.materialDetail },
+    titleMessage: messages.materialFilesTitle,
+    headingMessage: messages.materialFiles,
+    component: lazy(
+      () => import("../../features/materials/MaterialFilesRoute"),
+    ),
+  },
+} as const;
 const preparationHubRoute = {
   parent: {
     path: courseRoutePaths.prepare,
@@ -152,6 +218,19 @@ export function invitationPath(
 }
 
 export const entryRoutes = {
+  materialList: { ...materialRoutes.materialList, gate: "Prepare(materials)" },
+  materialCreate: {
+    ...materialRoutes.materialCreate,
+    gate: "Prepare(materials)",
+  },
+  materialDetail: {
+    ...materialRoutes.materialDetail,
+    gate: "Prepare(materials)",
+  },
+  materialFiles: {
+    ...materialRoutes.materialFiles,
+    gate: "Prepare(materials)",
+  },
   preparationHub: preparationHubRoute,
   preparationDescription: teachingRoute("description"),
   preparationCurriculum: teachingRoute("curriculum"),
@@ -401,6 +480,10 @@ export type CourseEntryRoute = Extract<
   (typeof entryRoutes)[EntryRouteKey],
   { readonly gate: "Administer(courses)" | "Prepare(courses)" }
 >;
+export type MaterialEntryRoute = Extract<
+  (typeof entryRoutes)[EntryRouteKey],
+  { readonly gate: "Prepare(materials)" }
+>;
 
 const profileMfaRouteKeys = [
   "mfaOverview",
@@ -426,6 +509,7 @@ export type AuthenticatedRoute = {
   readonly path: string;
   readonly invitationId: InvitationId | null;
   readonly courseId?: CourseId;
+  readonly materialId?: MaterialId;
 };
 
 const home: AuthenticatedRoute = {
@@ -449,6 +533,8 @@ export function authenticatedRoute(
   pathname: string,
   access: AuthenticatedRouteAccess,
 ): AuthenticatedRoute {
+  const material = parseMaterialRoute(pathname, access);
+  if (material !== null) return material;
   if (pathname === courseRoutePaths.prepare && access.courseSupervision)
     return {
       key: "prepareCourses",
@@ -535,6 +621,49 @@ export function authenticatedRoute(
   return key === undefined
     ? home
     : { key, path: entryRoutes[key].path, invitationId: null };
+}
+
+function parseMaterialRoute(
+  pathname: string,
+  access: AuthenticatedRouteAccess,
+): AuthenticatedRoute | null {
+  if (!access.courseSupervision) return null;
+  const match =
+    /^\/prepare\/courses\/([^/]+)\/materials(?:\/([^/]+)(?:\/(files))?)?$/u.exec(
+      pathname,
+    );
+  if (match === null || match[1] === undefined) return null;
+  try {
+    const courseId = toCourseId(decodeURIComponent(match[1]));
+    if (!access.supervisedCourseIds?.includes(courseId)) return null;
+    const segment = match[2];
+    if (segment === undefined)
+      return {
+        key: "materialList",
+        courseId,
+        path: materialPath(courseId),
+        invitationId: null,
+      };
+    if (segment === "new" && match[3] === undefined)
+      return {
+        key: "materialCreate",
+        courseId,
+        path: materialPath(courseId, "create"),
+        invitationId: null,
+      };
+    const materialId = toMaterialId(decodeURIComponent(segment));
+    if (materialId === null || materialId === "new") return null;
+    const resource = match[3] === "files" ? "files" : "detail";
+    return {
+      key: resource === "files" ? "materialFiles" : "materialDetail",
+      courseId,
+      materialId,
+      path: materialPath(courseId, resource, materialId),
+      invitationId: null,
+    };
+  } catch {
+    return null;
+  }
 }
 
 const invitationActionKeys = {

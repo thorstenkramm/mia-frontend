@@ -1,4 +1,4 @@
-import { useEffect, useSyncExternalStore } from "react";
+import { lazy, Suspense, useEffect, useSyncExternalStore } from "react";
 import { useIntl } from "react-intl";
 import {
   BrowserRouter,
@@ -59,6 +59,9 @@ type AppProps = {
   invitationLink: InvitationLink;
   queryClient?: Parameters<typeof EntryDataProvider>[0]["queryClient"];
 };
+const PrepareMaterialRoute = lazy(
+  () => import("./routes/PrepareMaterialRoute"),
+);
 
 export function App({
   initialTextSize,
@@ -289,6 +292,41 @@ function CanonicalEntry({
         route={route}
         courseId={authenticated.courseId ?? null}
       />
+    );
+  if (route.gate === "Prepare(materials)")
+    return (
+      <RouteRecoveryBoundary
+        key={`${location.key}:${access?.epoch}`}
+        recovery={
+          <SimpleEntrySurface
+            titleMessage={messages.coursesUnavailableTitle}
+            headingMessage={messages.coursesUnavailableHeading}
+          >
+            <RouteRecoveryPanel
+              heading={intl.formatMessage(messages.routeUnavailable)}
+              actions={
+                <RouteDepartureLink
+                  to="/"
+                  className="inline-flex min-h-6 rounded-md px-3 py-2 text-sm font-semibold text-indigo-700 focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-indigo-600"
+                >
+                  {intl.formatMessage(messages.homeHeading)}
+                </RouteDepartureLink>
+              }
+            >
+              <p>{intl.formatMessage(messages.routeLoadFailed)}</p>
+            </RouteRecoveryPanel>
+          </SimpleEntrySurface>
+        }
+      >
+        <Suspense fallback={<CheckingAccess />}>
+          <PrepareMaterialRoute
+            key={`${location.key}:${access?.epoch}`}
+            route={route}
+            courseId={authenticated.courseId ?? null}
+            materialId={authenticated.materialId ?? null}
+          />
+        </Suspense>
+      </RouteRecoveryBoundary>
     );
   if (route.gate === "Prepare(courses)")
     return (
