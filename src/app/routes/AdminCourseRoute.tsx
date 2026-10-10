@@ -254,6 +254,8 @@ export function CourseResourceHost({
     </RouteDepartureLink>
   );
   const Content = route.component;
+  // Equivalent host JSX is marked in LearnCourseRoute.tsx: separate joined
+  // and staff resources/authorization; shared neutral frame is already reused.
   return (
     <CourseAdmissionSurface state={state} route={route} exit={exit}>
       {state.kind === "Ready" ? (

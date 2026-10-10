@@ -182,16 +182,17 @@ describe("application shell", () => {
     renderAt("/", ...authenticatedHandlers(counts, everyCapability));
     await home();
 
-    // Only landed destinations: 3.1 invitations and 4.1 course administration
-    // and exact-scope Prepare discovery; still no future hub or role switcher.
+    // Only landed destinations, including joined-scope Learn discovery;
+    // no future tutoring destination or role switcher.
     expect(linkNames()).toEqual([
       "Home",
+      "Joined courses",
       "Courses",
       "Invitations",
       "Prepare courses",
       "Multi-factor authentication",
     ]);
-    expect(within(navigation()).getAllByRole("list")).toHaveLength(5);
+    expect(within(navigation()).getAllByRole("list")).toHaveLength(6);
     const administer = within(navigation()).getByRole("list", {
       name: "Administer",
     });
@@ -200,7 +201,7 @@ describe("application shell", () => {
         .getAllByRole("link")
         .map((link) => link.textContent),
     ).toEqual(["Courses", "Invitations"]);
-    for (const absent of [/learn/iu, /mentor/iu, /accounts/iu])
+    for (const absent of [/mentor/iu, /accounts/iu])
       expect(screen.queryByText(absent)).toBeNull();
     expect(screen.queryByRole("combobox")).toBeNull();
     expect(screen.queryByRole("radiogroup")).toBeNull();

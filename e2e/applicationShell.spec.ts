@@ -146,10 +146,12 @@ test("desktop shell keyboard order reaches each destination and Sign out", async
     "aria-current",
     "page",
   );
-  // This all-capabilities fixture includes the landed 4.1 course-records and
-  // supervision destinations, alongside 3.1 invitation management.
+  // This all-capabilities fixture includes the landed 5.2 joined-scope Learn
+  // destination, the 4.1 course-records and supervision destinations, and
+  // 3.1 invitation management.
   await expect(navigation.getByRole("link")).toHaveText([
     "Home",
+    "Joined courses",
     "Courses",
     "Invitations",
     "Prepare courses",
@@ -166,6 +168,10 @@ test("desktop shell keyboard order reaches each destination and Sign out", async
   ).toBeFocused();
   await page.keyboard.press("Tab");
   await expect(navigation.getByRole("link", { name: "Home" })).toBeFocused();
+  await page.keyboard.press("Tab");
+  await expect(
+    navigation.getByRole("link", { name: "Joined courses", exact: true }),
+  ).toBeFocused();
   await page.keyboard.press("Tab");
   await expect(
     navigation.getByRole("link", { name: "Courses", exact: true }),

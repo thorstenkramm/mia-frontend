@@ -1,6 +1,49 @@
 import { defineMessages } from "react-intl";
 
 export const messages = defineMessages({
+  learnGroup: { id: "learn.group", defaultMessage: "Learn" },
+  learnMore: { id: "learn.more", defaultMessage: "Check more joined courses" },
+  learnCoursesTitle: {
+    id: "learn.coursesTitle",
+    defaultMessage: "Courses | MIA",
+  },
+  learnCourses: { id: "learn.courses", defaultMessage: "Joined courses" },
+  learnCourseTitle: { id: "learn.courseTitle", defaultMessage: "Course | MIA" },
+  learnCourse: { id: "learn.course", defaultMessage: "Course" },
+  learnMaterialsTitle: {
+    id: "learn.materialsTitle",
+    defaultMessage: "Course materials | MIA",
+  },
+  learnMaterials: { id: "learn.materials", defaultMessage: "Course materials" },
+  learnAcceptance: {
+    id: "learn.acceptance",
+    defaultMessage: "New tutoring sessions",
+  },
+  learnAccepting: {
+    id: "learn.accepting",
+    defaultMessage: "Accepting new sessions",
+  },
+  learnNotAccepting: {
+    id: "learn.notAccepting",
+    defaultMessage: "Not accepting new sessions",
+  },
+  learnEmpty: {
+    id: "learn.empty",
+    defaultMessage: "No joined active courses were found.",
+  },
+  learnBatchEmpty: {
+    id: "learn.batchEmpty",
+    defaultMessage:
+      "No active courses in the checked batch. More joined courses remain to check.",
+  },
+  learnMaterialsEmpty: {
+    id: "learn.materialsEmpty",
+    defaultMessage: "No approved course material metadata on this page.",
+  },
+  learnCollectionUpdated: {
+    id: "learn.collectionUpdated",
+    defaultMessage: "Collection updated.",
+  },
   studentListTitle: {
     id: "students.listTitle",
     defaultMessage: "Course students | MIA",

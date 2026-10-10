@@ -7,6 +7,7 @@ import { mfaPaths } from "../../platform/session/mfaEnrollment";
 import type { MfaRouteProps } from "../../features/profile/MfaRouteProps";
 import type { InvitationRouteProps } from "../../features/invitations/InvitationRouteProps";
 import type { CourseRouteProps } from "../../features/courses/CourseRouteProps";
+import type { LearnCourseRouteProps } from "../../features/courses/LearnCourseRouteProps";
 import type { MaterialRouteProps } from "../../features/materials/MaterialRouteProps";
 import type { CourseStudentRouteProps } from "../../features/courses/CourseStudentRouteProps";
 import { toAccountId, type AccountId } from "../../platform/api/entry";
@@ -34,6 +35,14 @@ type EntryRouteBase = {
   readonly headingMessage: (typeof messages)[keyof typeof messages];
 };
 type EntryRoute =
+  | (EntryRouteBase & {
+      readonly path: (typeof learnCoursePaths)[keyof typeof learnCoursePaths];
+      readonly gate: "Learn(courses)";
+      readonly resource: "list" | "detail" | "materials";
+      readonly component: LazyExoticComponent<
+        ComponentType<LearnCourseRouteProps>
+      >;
+    })
   | (EntryRouteBase & {
       readonly path:
         | "/"
@@ -104,6 +113,18 @@ type EntryRoute =
         ComponentType<CourseStudentRouteProps>
       >;
     });
+
+export const learnCoursePaths = {
+  list: "/learn/courses",
+  detail: "/learn/courses/:courseId",
+  materials: "/learn/courses/:courseId/materials",
+} as const;
+export function learnCoursePath(id: CourseId, materials = false): string {
+  return learnCoursePaths[materials ? "materials" : "detail"].replace(
+    ":courseId",
+    encodeURIComponent(id),
+  );
+}
 
 export const studentRoutePaths = {
   list: "/prepare/courses/:courseId/students",
@@ -299,6 +320,33 @@ export function invitationPath(
 }
 
 export const entryRoutes = {
+  learnCourses: {
+    path: learnCoursePaths.list,
+    gate: "Learn(courses)",
+    resource: "list",
+    parent: { path: "/", label: messages.invitationsBackToHome },
+    titleMessage: messages.learnCoursesTitle,
+    headingMessage: messages.learnCourses,
+    component: lazy(() => import("../../features/courses/LearnCourseSurface")),
+  },
+  learnCourse: {
+    path: learnCoursePaths.detail,
+    gate: "Learn(courses)",
+    resource: "detail",
+    parent: { path: learnCoursePaths.list, label: messages.learnCourses },
+    titleMessage: messages.learnCourseTitle,
+    headingMessage: messages.learnCourse,
+    component: lazy(() => import("../../features/courses/LearnCourseSurface")),
+  },
+  learnMaterials: {
+    path: learnCoursePaths.materials,
+    gate: "Learn(courses)",
+    resource: "materials",
+    parent: { path: learnCoursePaths.detail, label: messages.learnCourse },
+    titleMessage: messages.learnMaterialsTitle,
+    headingMessage: messages.learnMaterials,
+    component: lazy(() => import("../../features/courses/LearnCourseSurface")),
+  },
   studentList: {
     path: studentRoutePaths.list,
     gate: "Prepare(students)",
@@ -622,6 +670,10 @@ export const entryRoutes = {
 } as const satisfies Record<string, EntryRoute>;
 
 export type EntryRouteKey = keyof typeof entryRoutes;
+export type LearnCourseEntryRoute = Extract<
+  (typeof entryRoutes)[EntryRouteKey],
+  { readonly gate: "Learn(courses)" }
+>;
 export type ProfileMfaEntryRoute = Extract<
   (typeof entryRoutes)[EntryRouteKey],
   { readonly gate: "Profile(own MFA)" }
@@ -660,6 +712,8 @@ export type AuthenticatedRouteAccess = {
   readonly supervisorAssignments: boolean;
   readonly courseSupervision: boolean;
   readonly supervisedCourseIds?: readonly CourseId[];
+  readonly learningParticipation?: boolean;
+  readonly joinedCourseIds?: readonly CourseId[];
 };
 
 export type AuthenticatedRoute = {
@@ -695,6 +749,25 @@ export function authenticatedRoute(
   pathname: string,
   access: AuthenticatedRouteAccess,
 ): AuthenticatedRoute {
+  // Recognize addressed Learn paths even after scope loss: the resource host
+  // renders the same neutral hidden result without a dependent request.
+  if (pathname === learnCoursePaths.list && access.learningParticipation)
+    return { key: "learnCourses", path: pathname, invitationId: null };
+  const learn = /^\/learn\/courses\/([^/]+)(\/materials)?$/u.exec(pathname);
+  if (learn?.[1] !== undefined) {
+    try {
+      const id = toCourseId(decodeURIComponent(learn[1]));
+      if (id !== "" && id !== "new")
+        return {
+          key: learn[2] === undefined ? "learnCourse" : "learnMaterials",
+          path: learnCoursePath(id, learn[2] !== undefined),
+          courseId: id,
+          invitationId: null,
+        };
+    } catch {
+      return home;
+    }
+  }
   const student = parseStudentRoute(pathname, access);
   if (student !== null) return student;
   const material = parseMaterialRoute(pathname, access);

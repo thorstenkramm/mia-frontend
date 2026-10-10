@@ -62,6 +62,7 @@ describe("continuation transport", () => {
                 available: [
                   "courses.create",
                   "courses.supervise",
+                  "learning.participate",
                   "course_records.manage",
                 ].includes(action),
                 scope: {
@@ -70,7 +71,9 @@ describe("continuation transport", () => {
                   course_ids:
                     action === "courses.supervise"
                       ? ["assigned_1"]
-                      : ["not_supervised"],
+                      : action === "learning.participate"
+                        ? ["joined_1", "joined_1"]
+                        : ["not_supervised"],
                   student_ids: [],
                   course_students: [],
                 },
@@ -89,6 +92,10 @@ describe("continuation transport", () => {
         !capability.supervisorAssignments,
     ).toBe(true);
     expect(capability.supervisedCourseIds).toEqual(["assigned_1"]);
+    expect(
+      capability.learningParticipation &&
+        capability.joinedCourseIds.join() === "joined_1",
+    ).toBe(true);
   });
   it.each([
     [

@@ -182,6 +182,8 @@ export type AccountCapabilities = {
   readonly supervisorCandidates: boolean;
   readonly courseSupervision: boolean;
   readonly supervisedCourseIds: readonly CourseId[];
+  readonly learningParticipation: boolean;
+  readonly joinedCourseIds: readonly CourseId[];
 };
 
 export function toAccountId(id: string): AccountId {
@@ -361,6 +363,9 @@ export async function getCurrentAccountCapabilities(
   const supervise = capabilities.find(
     (capability) => capability.action === "courses.supervise",
   );
+  const learn = capabilities.find(
+    (capability) => capability.action === "learning.participate",
+  );
   return {
     accountId: toAccountId(document.data.id),
     ownProfileView:
@@ -375,6 +380,11 @@ export async function getCurrentAccountCapabilities(
     supervisedCourseIds:
       supervise?.available === true
         ? [...new Set(supervise.scope.course_ids)].map(toCourseId)
+        : [],
+    learningParticipation: learn?.available === true,
+    joinedCourseIds:
+      learn?.available === true
+        ? [...new Set(learn.scope.course_ids)].map(toCourseId)
         : [],
   };
 }

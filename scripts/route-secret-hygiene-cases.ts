@@ -1,6 +1,53 @@
 // Actual Story 2.2 browser-test inventory, including cookie-only cases and the
 // R1 repair. IDs/checkpoints are fixed public labels, never fixture-derived.
 export const routeHygieneCases = [
+  {
+    id: "student-entry-learn",
+    title:
+      "student replacement enters Learn and later sign-in rediscovers persisted joined-course metadata",
+    checkpoints: [
+      "student-entry-provision-input",
+      "student-entry-login-input",
+      "student-entry-replacement-input",
+      "learn-metadata",
+      "student-entry-later-login-input",
+      "complete",
+    ],
+  },
+  ...(
+    [
+      [
+        "learn-discovery",
+        "Learn mixed-role discovery shows only joined active courses and metadata without downloads",
+        ["learn-metadata", "complete"],
+      ],
+      [
+        "learn-hidden",
+        "Learn hidden causes retain neutral primary copy focus exits and no stale course identity",
+        ["learn-hidden", "complete"],
+      ],
+      [
+        "learn-lifecycle",
+        "Learn delayed course response is fenced by lifecycle and changed membership is rediscovered on Refresh",
+        ["learn-hidden", "complete"],
+      ],
+      [
+        "learn-pages",
+        "Learn bounded joined batches and filtered-empty material pages require explicit continuation",
+        ["learn-metadata", "learn-error", "complete"],
+      ],
+      [
+        "learn-locales",
+        "Learn surfaces reflow in all seven locales and text modes with metadata kept inert",
+        ["learn-metadata", "complete"],
+      ],
+      [
+        "learn-zoom",
+        "Learn surfaces preserve keyboard structure spacing and actual 200 percent zoom in every text mode",
+        ["complete"],
+      ],
+    ] as const
+  ).map(([id, title, checkpoints]) => ({ id, title, checkpoints })),
   ...["standard", "large", "extra-large"].map((size) => ({
     id: `student-entry-handoff-${size}`,
     title: `provisioned student replacement reaches Home and later password-only sign-in at 320 pixels with ${size} text`,

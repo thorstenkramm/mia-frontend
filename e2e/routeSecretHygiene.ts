@@ -151,7 +151,34 @@ export async function routeHygieneCheckpoint(
   // Confirm exposure with boolean assertions only. No marker enters a matcher,
   // checkpoint, test name, exception or report. Cookie-only tests use public
   // settled-state assertions in their original bodies before `complete`.
-  if (point === "student-entry-provision-input") {
+  if (point === "learn-metadata") {
+    const text = await page.locator("main").textContent();
+    expect(
+      text?.includes(fixture.courseName) === true &&
+        !text.includes(fixture.teachingText) &&
+        !text.includes(fixture.rawError),
+    ).toBe(true);
+  } else if (point === "learn-hidden") {
+    expect(
+      (await page.locator("main").textContent())?.includes(
+        fixture.courseName,
+      ) === false && (await page.locator("main table").count()) === 0,
+    ).toBe(true);
+  } else if (point === "learn-error") {
+    expect(
+      await page
+        .locator("main pre")
+        .evaluateAll(
+          (nodes, marker) =>
+            nodes.some(
+              (node) =>
+                node.getClientRects().length > 0 &&
+                node.textContent?.includes(marker) === true,
+            ),
+          fixture.rawError,
+        ),
+    ).toBe(true);
+  } else if (point === "student-entry-provision-input") {
     for (const selector of ["#new-password", "#password-confirmation"])
       expect(
         (await page.locator(selector).inputValue()).includes(fixture.password),

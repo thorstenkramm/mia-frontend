@@ -68,6 +68,18 @@ function authorizedGroups(
 ): readonly ShellGroup[] {
   const groups: ShellGroup[] = [
     {
+      label: messages.learnGroup,
+      links: access.learningParticipation
+        ? [
+            {
+              to: entryRoutes.learnCourses.path,
+              label: messages.learnCourses,
+              icon: AcademicCapIcon,
+            },
+          ]
+        : [],
+    },
+    {
       label: messages.shellAdministerGroup,
       links: [
         ...(access.courseRecords
@@ -312,6 +324,7 @@ function ShellNavigation({
     courseCreate: access?.courseCreate === true,
     supervisorAssignments: access?.supervisorAssignments === true,
     courseSupervision: access?.courseSupervision === true,
+    learningParticipation: access?.learningParticipation === true,
   });
 
   return (

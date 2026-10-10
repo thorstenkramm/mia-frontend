@@ -1456,6 +1456,13 @@ export class SessionController {
                 capabilities.supervisorCandidates ||
               this.access.courseSupervision !==
                 capabilities.courseSupervision ||
+              this.access.learningParticipation !==
+                capabilities.learningParticipation ||
+              this.access.joinedCourseIds.length !==
+                capabilities.joinedCourseIds.length ||
+              this.access.joinedCourseIds.some(
+                (id) => !capabilities.joinedCourseIds.includes(id),
+              ) ||
               this.access.supervisedCourseIds.length !==
                 capabilities.supervisedCourseIds.length ||
               this.access.supervisedCourseIds.some(
@@ -1473,6 +1480,8 @@ export class SessionController {
             supervisorCandidates: capabilities.supervisorCandidates,
             courseSupervision: capabilities.courseSupervision,
             supervisedCourseIds: capabilities.supervisedCourseIds,
+            learningParticipation: capabilities.learningParticipation,
+            joinedCourseIds: capabilities.joinedCourseIds,
             epoch: this.securityEpoch,
           };
           this.setState({ kind: "Authenticated" });

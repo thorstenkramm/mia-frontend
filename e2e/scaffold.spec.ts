@@ -16,6 +16,7 @@ import { chromium } from "playwright";
 import { expectRetainedSecret } from "./secretAssertions";
 import { invitationBackend } from "./invitationFixtures";
 import { studentBackend, fillStudent } from "./studentFixtures";
+import { learnResources } from "./learnFixtures";
 import { ownProfileCapabilities } from "../test/mfaFixtures";
 import {
   injectRouteEarlyFailure,
@@ -1631,8 +1632,8 @@ async function walkRecoveryAndResetStates(
   mock.reset = "accept";
 }
 
-// Story 5.2 handoff only: the recipient's auth fake depends on the real 5.1
-// provisioning UI/POST. No Learn read, projection, or guessed membership discovery.
+// Story 5.2: the recipient's auth fake depends on the real 5.1 provisioning
+// UI/POST. Learn resources are installed only by the explicitly connected case.
 async function withStudentHandoff(
   page: Page,
   browser: Browser,
@@ -1700,6 +1701,7 @@ async function installStudentHandoff(
     wire: { login: false, replacement: false },
     homeChunks: 0,
     obsoleteRejected: false,
+    allowLearn: false,
   };
   const json = (route: Route, document: unknown, status = 200) =>
     route.fulfill({
@@ -1743,6 +1745,11 @@ async function installStudentHandoff(
     if (path.includes("HomeEntryRoute")) state.homeChunks++;
     if (
       path.startsWith("/api/") &&
+      !(
+        state.allowLearn &&
+        request.method() === "GET" &&
+        /^\/api\/v1\/courses\/course_1(?:\/materials)?$/u.test(path)
+      ) &&
       ![
         "/api/v1/auth/session",
         "/api/v1/auth/login",
@@ -1961,8 +1968,9 @@ async function expectStudentHome(handoff: StudentHandoff) {
     page.locator("#password, #new-password, #password-confirmation, #mfa-code"),
   ).toHaveCount(0);
   await expect(
-    page.locator("a[href^='/prepare'], a[href^='/admin'], a[href^='/learn']"),
+    page.locator("a[href^='/prepare'], a[href^='/admin']"),
   ).toHaveCount(0);
+  await expect(page.locator("a[href='/learn/courses']")).toHaveCount(1);
   expect(
     state.wire.login && state.wire.replacement && state.counts.forbidden === 0,
   ).toBe(true);
@@ -1989,6 +1997,56 @@ async function expectStudentHome(handoff: StudentHandoff) {
 test.describe("student first-sign-in handoff", () => {
   test.beforeEach(() => {
     process.env.PLAYWRIGHT_NO_COPY_PROMPT = "1";
+  });
+  test("student replacement enters Learn and later sign-in rediscovers persisted joined-course metadata", async ({
+    page,
+    browser,
+  }) => {
+    await withStudentHandoff(page, browser, async (handoff) => {
+      await replaceStudentPassword(handoff);
+      await expectStudentHome(handoff);
+      handoff.state.allowLearn = true;
+      const learn = await learnResources(page, "student_1", false);
+      await page.locator("a[href='/learn/courses']").click();
+      await expect(page).toHaveTitle("Courses | MIA");
+      await expect
+        .poll(async () => (await page.locator("main tbody tr").count()) === 1)
+        .toBe(true);
+      await page.locator("main a[href='/learn/courses/course_1']").click();
+      await expect(page).toHaveTitle("Course | MIA");
+      await expect
+        .poll(async () => (await page.locator("main tbody tr").count()) === 2)
+        .toBe(true);
+      expect(
+        learn.forbidden === 0 &&
+          learn.materialReads === 1 &&
+          handoff.provision.posts === 1 &&
+          handoff.state.counts.replacements === 1,
+      ).toBe(true);
+      await routeHygieneCheckpoint(page, "learn-metadata");
+      await page.reload();
+      await expect(page).toHaveTitle("Course | MIA");
+      await expect.poll(() => learn.materialReads).toBe(2);
+      await page.getByRole("button", { name: "Sign out", exact: true }).click();
+      await expect(page).toHaveURL(/\/login$/u);
+      await page.locator("#username").fill(handoff.username);
+      await pasteInto(page, page.locator("#password"), handoff.replacement);
+      await routeHygieneCheckpoint(page, "student-entry-later-login-input");
+      await page.locator("#password").press("Enter");
+      await expectStudentHome(handoff);
+      await page.locator("a[href='/learn/courses']").click();
+      await expect(page).toHaveTitle("Courses | MIA");
+      await expect
+        .poll(async () => (await page.locator("main tbody tr").count()) === 1)
+        .toBe(true);
+      expect(
+        handoff.state.counts.logins === 2 &&
+          handoff.state.counts.replacements === 1 &&
+          handoff.provision.posts === 1 &&
+          learn.courseReads === 4 &&
+          learn.forbidden === 0,
+      ).toBe(true);
+    });
   });
   for (const size of textSizes) {
     test(`provisioned student replacement reaches Home and later password-only sign-in at 320 pixels with ${size} text`, async ({

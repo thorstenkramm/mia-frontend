@@ -193,6 +193,37 @@ type Activity =
   | { readonly kind: "Loading" }
   | { readonly kind: "Failed"; readonly error: EntryApiFailure };
 
+// Reused by staff and Learn collections: presentation only. Callers keep their
+// own scoped loaders and hidden-denial policy; this adds no fetch/authorization.
+// Same recorded secondary-button and technical-disclosure blueprints above.
+export function CourseCollectionFeedback({
+  state,
+  retry,
+}: {
+  readonly state: Activity;
+  readonly retry: () => void;
+}) {
+  const intl = useIntl();
+  if (state.kind === "Loading")
+    return (
+      <p className="mt-3 text-sm text-gray-700">
+        {intl.formatMessage(messages.routeLoading)}
+      </p>
+    );
+  if (state.kind === "Idle") return null;
+  return (
+    <>
+      <p className="mt-3 text-sm text-gray-700">
+        {intl.formatMessage(messages.coursesCheckFailed)}
+      </p>
+      <TechnicalErrorDisclosure error={state.error} />
+      <button type="button" className={courseActionClass} onClick={retry}>
+        {intl.formatMessage(messages.mfaCheckAgain)}
+      </button>
+    </>
+  );
+}
+
 // Same established secondary-action blueprint; explicit foreground refresh only.
 export function CourseRefreshButton({
   refresh,
@@ -287,26 +318,11 @@ function CourseList({
         {intl.formatMessage(messages.coursesListHeading)}
       </h2>
       <CourseCheckedAt time={checkedAt} />
-      {state.kind === "Failed" ? (
-        <>
-          <p className="mt-3 text-sm text-gray-700">
-            {intl.formatMessage(messages.coursesCheckFailed)}
-          </p>
-          <TechnicalErrorDisclosure error={state.error} />
-          <button
-            type="button"
-            className={courseActionClass}
-            onClick={() => void load(page.offset)}
-          >
-            {intl.formatMessage(messages.mfaCheckAgain)}
-          </button>
-        </>
-      ) : null}
-      {state.kind === "Loading" ? (
-        <p className="mt-3 text-sm text-gray-700">
-          {intl.formatMessage(messages.routeLoading)}
-        </p>
-      ) : page.courses.length === 0 ? (
+      <CourseCollectionFeedback
+        state={state}
+        retry={() => void load(page.offset)}
+      />
+      {state.kind === "Loading" ? null : page.courses.length === 0 ? (
         <CourseEmpty text={intl.formatMessage(messages.coursesListEmpty)} />
       ) : (
         <CourseTable courses={page.courses} detail={links.detail} />

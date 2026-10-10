@@ -1,6 +1,54 @@
 # Story 5.2 — Student first sign-in and joined-course entry
 
-## Preparation identity and disposition
+## Current Learn-slice authorization — 2026-10-10
+
+Phase: implement. Baseline: `3737013c4f36fd830fbff45874d0068e5288eb4b`. The handoff slice below is committed at that baseline and stays intact as historical evidence. G1 is no longer blocking this Learn dispatch; the backend RFC remains open. No checkpoint/tracker edits, staging or commit are authorized in this phase.
+
+Verbatim binding checkpoint decision (`owner_decisions.g1_exception.scope`, including warning acknowledgment):
+
+> Owner chose Option 2 (explicit least-data exception) after being warned the material variant lets generated brief content reach the browser unrendered. Learn discovery may use the capability catalog's joined-course IDs + getCourse (declared student-safe) with active-only presentation, and listMaterials with client-side filtering to approved/ready/course-wide rows. Mitigation mandate: brief fields are discarded at the API boundary and never enter state, DOM, accessibility tree, logs, or announcements; only metadata fields are carried. RFC mia/tmp/5-2-student-learn-projection-rfc.md stays open for the real transport; a new BCG entry records the exception and follow-up.
+
+Binding dispatch scope and mitigation (verbatim):
+
+> Course discovery: use the capability catalog's joined-course IDs + getCourse (declared student-safe output) with active-only presentation. Each read independently authorizes. Never present supervised/staff courses in Learn.
+>
+> Material metadata: listMaterials with client-side filtering to approved/ready/course-wide rows for the joined course. MITIGATION MANDATE (owner-approved, mandatory): discard brief and all non-metadata fields at the API boundary immediately upon receipt — they must never enter application state, the DOM, the accessibility tree, logs, announcements, or test artifacts. Carry only the metadata fields the surface renders. This is the only sanctioned relaxation; the network-level overfetch is the accepted exception, in-browser exposure is NOT.
+>
+> A changed/denied membership gets the fixed existence-hiding presentation; returning/reloading rediscovers membership from backend state without implying a second account; course detail exposes only authorized active-course actions and the material metadata.
+>
+> No tutoring session start (6.1), no downloads, no private material handling.
+
+### Settled Learn acceptance and concrete map
+
+- AC3/4/5 discovery is authorized under BCG-020. Three canonical routes: `/learn/courses`, `/learn/courses/:courseId`, `/learn/courses/:courseId/materials`. The detail offers only the implemented metadata destination, Refresh and parent navigation, with authoritative acceptance status; no tutoring action.
+- `src/platform/api/learnCourses.ts` adds a distinct student-safe course projection (empty supervisor arrays valid) and metadata-only material schema. Zod strips all unused fields before return; no broad Material parser or cache. Check course identity, ready/approved/course-wide membership, duplicate IDs, 25-row pages and existing link validator. Only name/kind/format plus opaque row identity leave the material boundary; scope/state/approval/course binding are admission checks, not retained fields.
+- Joined discovery batches at most 25 capability IDs sequentially, active-only; no generic course list, staff-scope union or automatic page exhaustion. Consumption advances by IDs checked, not rows retained, so inactive rows cannot cause repeat reads or false completion.
+- `entry.ts` and `sessionController.ts` propagate and compare learning action/joined IDs, fencing removal; `entryRoutes.tsx`, `App.tsx`, `ApplicationShell.tsx` add only the lazy Learn host and canonical destinations. Addressed Learn routes remain neutral on missing scope rather than rendering a stale course or probing denial. Existing ordered read/security/epoch owner is reused.
+- `LearnCourseRoute.tsx` owns scoped loaders and shared course admission settlement/frame. `features/courses/LearnCourseRouteProps.ts` and `LearnCourseSurface.tsx` own a closed read-only list/detail/materials union and bounded foreground collection reads. Existing CourseEmpty/Pagination/CheckedAt/actions are reused; no auth refactor, dependency, theme/CSP change or generic infrastructure.
+- Exact blueprints remain Tables/Simple and Description Lists/Left-aligned, library `2026-09-13-083323`, light v4. All seven catalogs receive complete Learn labels. Learn local/HTTP hidden causes share neutral heading/title/focus/actions and no cached name. Exact collapsed backend disclosure remains governed by the canonical raw-error exception and neutral-body obligation; never synthesize a local HTTP body.
+- Focused tests: `learnCourses.test.ts`, `learnCourseEntry.test.tsx`, entry/session/shell regressions and `e2e/learnCourses.spec.ts`. Test boundary projection with generated forbidden brief/nonmetadata markers, mixed-role non-fetch, gate order, changed membership, late response/lifecycle shield, reload and metadata pagination with filtered-empty pages. Extend existing actual-case hygiene inventories/config only as required for these cases.
+- Checks run sequentially: static/typecheck/format/i18n, focused Vitest, one build/bundle (fixed 256000 gzip budget), bundled Chromium, existing deliberate-failure route hygiene and zero-threshold duplication/secret scan. Full gate/review/commit are deferred, not passed. Manual supported-browser/AT/backend evidence remains a release lane.
+- Risks: accepted network overfetch remains a backend follow-up, not a claim of least-data transport; multi-role getCourse may contain richer fields, all stripped by distinct learner schema. Capability catalog is unpaginated; course reads are user-bounded. No open product decision for this dispatch. Stop/report on observed provider 429. Preserve all baseline bookkeeping.
+
+The earlier conditional Learn plan below is historical preparation, superseded by this settled operation/map. Its blocked disposition does not apply to this dispatch. Handoff execution records remain unchanged.
+
+### Learn execution progress
+
+- L1 complete: BCG-020 records the dated exception without altering Release Blockers. Distinct minimal learner course/material adapters, joined scope propagation/fencing, three canonical lazy routes, admitted Learn navigation and read-only surfaces are implemented. Detail includes the first metadata page after course admission, plus its canonical metadata destination; both course and metadata remain neutral until the ordered initial reads settle. Batch consumption uses checked IDs, not filtered row counts. All seven catalogs are extended; no dependency/config-budget/theme/CSP changes.
+- L2 in progress: eleven new boundary/route unit cases are installed in the existing deliberate-failure course-unit inventory. Concrete shared protocol documents in `test/learnFixtures.ts` and bounded browser controls in `e2e/learnFixtures.ts` support actual new `e2e/learnCourses.spec.ts` cases and one connected provisioning/replacement/Learn/later-sign-in case in the existing scaffold. Existing Home expectations now allow the landed Learn link (no dependent request). Hygiene inventories/checkers and the existing hygiene config are extended only to cover these actual cases, not a parallel runner. Initial unit runs exposed harness-only provider prop, lazy-content settlement and pagination label assumptions; six route cases now pass, static typing corrections are in progress. No auth production owner was reimplemented.
+- L2 complete: final focused unit run passes 379 tests across nine affected files, including the eleven new API/route cases, joined-scope fencing, shell and staff collection regressions. The first shell regression exposed a missing Learn field in ShellNavigation's minimized projection; it is repaired at that established owner. Thirteen bundled-Chromium cases pass: six Learn cases, one connected provision/replacement/Learn/reload/later-sign-in journey and all six committed handoff cases. Seven locales × three text modes cover all three Learn surfaces at direct 320px; actual 200% zoom, spacing, forced colors/reduced motion and axe cover all three modes. New coarse hidden-result tests compare primary semantics/focus/URL/title/actions, with exact collapsed raw technical disclosure remaining the canonical exception (no fabricated local HTTP body).
+- L3 in progress: static/typecheck coverage/lint/format/i18n pass; build passes at 246175 initial-JS gzip bytes within unchanged 256000. Duplication is zero with balanced markers. The concrete presentation clones were resolved by sharing `CourseCollectionFeedback` in the existing `CourseListRoute.tsx` owner; staff and Learn retain separate loaders/authorization. Only the matching host JSX has a bounded documented marker in `LearnCourseRoute.tsx`, with counterpart note in `AdminCourseRoute.tsx`. Actual-case unit/browser deliberate-failure hygiene and final evidence packaging follow. Full gate/review/commit have not run in this phase.
+
+- L3 complete: final focused unit run is 379/379 (nine files); final Chromium run is 13/13, including all committed handoff cases. Computed root sizes explicitly confirm every tested text mode; all seven locales × three modes pass direct 320px across the three Learn surfaces. Actual-case hygiene passes eleven unit cases/eleven checkpoints and seven browser cases/eighteen checkpoints, both with rejected early-failure canaries and zero marker leaks after scanning full original output/artifacts. Two unit-only hygiene runs initially failed before their checkpoint because isolated lazy-content/focus settlement was not awaited; tests now await actual content and heading focus, and the complete selected unit hygiene passes. These were harness repairs, not waived checks. Secret-only Trivy reports no findings; no audit/vulnerability/full-gate/manual claim is made.
+- Implementation disposition: **implemented Learn slice, not verified/reviewed/committed and not story done**. Spec/BCG-020, code, tests and actual-case hygiene infrastructure are story-owned. Current baseline remains `3737013c4f36fd830fbff45874d0068e5288eb4b`; no tracker/checkpoint/staging/commit or unrelated worktree edits. Model: `openai/gpt-6.1-sol` (runtime variant not exposed), no observed provider 429, tooling install or unavailable component. Final evidence is appended as `learn_slice` in `implement-report.json`, with scoped `manifest.json`, tracked-plus-new `story.diff`, `learn-inputs.json` and content-free `logs/learn-*` under `tmp/agent-execution/5-2-student-first-sign-in-and-joined-course-entry/`. Historical handoff report/evidence remain distinguishable. Next action: independent review of this Learn diff, then separately dispatched authoritative final verification and authorized commit. RFC/manual release lanes remain open; no new owner intervention or duplicate Pushover alert is needed.
+
+Final scoped consistency repair: machine 23's receipt time now belongs to each Learn collection and advances after an explicit successful page/batch read. Course readiness retains its separate entry receipt time; a material page cannot make old course readiness look freshly checked. The existing pagination regression now advances the test clock and asserts the collection receipt changes. This localized source/test repair invalidates the previous packaged fingerprint; affected checks and evidence are regenerated before handoff.
+
+Final repair evidence: static/typecheck/lint/format, 379 focused units, thirteen Chromium cases, eleven unit-hygiene checkpoints and eighteen browser-hygiene checkpoints all pass again on the repaired state. Both early canaries are rejected, no marker leaks or duplication clones are present. Rebuilt initial JavaScript is **246187 gzip bytes**, still within **256000** with seven complete languages. The current report/diff/manifest/input fingerprint supersede the earlier packaging; no source/config/dependency edit follows these checks. This is implementation evidence only, not an authoritative final-gate claim.
+
+- F1 complete (solver-authorized verify repair, 2026-10-10): the failed full-gate e2e expectation `e2e/applicationShell.spec.ts:137` was a stale test list, not a gating defect. The Learn navigation link renders only when the `learning.participate` capability is available (`entry.ts` → `learningParticipation`; `ApplicationShell.tsx` Learn group), and that spec's all-capabilities fixture legitimately carries it with `available: true`; the shell unit contract already expects Joined courses between Home and Courses. The e2e expected list and Tab-order walk now include Joined courses in that position; negatives, unauthorized destinations and restricted-stage isolation are untouched. Targeted shell/Learn Chromium suites pass (9/9 and 6/6) and one fresh full gate passes end to end with exit 0, including the secret-hygiene, duplication, audit, Trivy, catalog and Markdown stages the failed run never reached. Model: `kimi-code/k3` (approved fallback after the OpenAI usage limit). Evidence: `fix-report.json`, refreshed `manifest.json`/`story.diff`, `fix-learn-inputs-after.json` and content-free `logs/fix-*.log` plus `logs/verify-learn-full-gate-rerun.log` under the story tmp directory.
+
+## Historical preparation identity and disposition
 
 - Current phase: **verified — authorized handoff slice only**, solver decision 2026-10-10. The partial slice is verified;
   the whole story remains **blocked on G1** and must not be marked done. No Learn surface is authorized.
@@ -104,8 +152,9 @@ Implemented owners to preserve:
 3. Entering Learn shows only current joined active courses and their authorized learner detail. Course readiness is
    server-authored; active does not imply accepting new sessions. Only implemented active-course read actions appear.
 4. Approved course material metadata is a separately admitted bounded collection: ready, approved, course-wide,
-   file-backed or link-only. No private/draft/unapproved material enters its response/view model. This acceptance is
-   currently blocked by the contract gap below, not fulfilled by an empty placeholder or broad filtered collection.
+    file-backed or link-only. Under BCG-020 the generic network response is the accepted exception; only eligible
+    rendered metadata leaves the API boundary. Brief and all other fields are discarded there immediately, and no
+    private/draft/unapproved row enters the application view model or surface.
 5. Reload, later sign-in and explicit Refresh discover saved membership from backend state. No create/provision/login/
    replacement replay. Changed membership/access clears old identities and uses the fixed safe presentation.
 6. Current security/scope epoch owns all reads. Older responses cannot reveal names or replace newer truth. Lifecycle
@@ -120,7 +169,7 @@ based on presumed absent active work, dependencies/CSP/theme/bundle-budget chang
 No Start/Continue tutoring link to an unimplemented route, disabled aspirational control or fabricated eligibility.
 Normal course detail may state current acceptance status; `active_tutoring_session` never supplies a resumable identity.
 
-## Verified operations and the unresolved projection boundary
+## Verified operations and historical projection prerequisite
 
 These exact operations are present in `mia/api-doc/openapi.yaml` and generated types:
 
@@ -151,7 +200,11 @@ use current readable CSRF cookie only in `X-CSRF-Token`, under existing serializ
 Collections have `meta.has_more`, optional relative navigation links, no total. Current defaults are 25/0, caps 100/10000;
 use page 25 and the established link validator once an operation's actual scoped contract is settled. Do not invent filters.
 
-### G1 — Learn collection/projection prerequisite (blocking)
+### G1 — Original Learn prerequisite, now unblocked by BCG-020
+
+The evidence below explains the missing backend projections, not a current Learn implementation blocker. The explicit
+2026-10-10 exception and mandatory boundary mitigation at the top of this spec supersede the original no-workaround
+disposition. The missing real learner projections remain an open non-blocking backend follow-up.
 
 There is no OpenAPI joined-active-only list or learner representation selector. `listCourses` returns visible union:
 backend `internal/course/course.go:384–403` includes supervised courses and active joined courses, or all for administrators.
@@ -174,26 +227,26 @@ joined-active collection and Learn course/approved material projections (or equi
 with actual selectors/paths/schema/links supplied by backend OpenAPI, not chosen here. No backend implementation.
 The draft is ignored and never staged. Its Markdown is applicable backend tmp documentation; no blanket lint exemption.
 
-**Ready transition:** solver obtains authoritative safe transport or an explicit revised story scope. Then worker amends
-only the affected operation/file map and focused evidence plan. No entire epic reprepare. Leaving material unavailable
-may preserve security but does not satisfy AC4 or close this story. No security waiver is offered.
+**Settled transition:** the owner accepted the specific interim transport and network-level exception on 2026-10-10,
+including the warning and mandatory immediate boundary discard. The settled Learn map above replaces the original
+conditional map; the backend RFC remains open, and no general privacy waiver or broader feature scope follows.
 
 ## BCG reconciliation / settled interim decisions
 
 - BCG-001: reuse approved 1.3/1.5/current lifecycle slices; no new authentication transport. Globally open evidence stays open.
 - BCG-003: `learning.participate` is the exact existing Learn action; only its own complete course scope is navigation
-  guidance. Never union it with supervision/administrator scope. G1 blocks scoped collections/representations; no new
+  guidance. Never union it with supervision/administrator scope. BCG-020 governs the interim learner projection; no new
   capability family or assumed role is introduced. Current unpaginated scope bounds remain a release obligation.
-- BCG-011: course readiness transport exists. This story may consume only read-only learner status after G1 resolution;
-  current approved canonical slices are supervisor-only. Solver must record the bounded student-read reconciliation
-  before implementation. No Start action/BCG-002 expansion or global BCG-011 closure; 503 is unavailable truth, not accepting.
+- BCG-011: course readiness transport exists. The bounded read-only learner acceptance-status consumption is now recorded
+  in BCG-020 alongside the owner exception. No Start action/BCG-002 expansion or global BCG-011 closure; 503 remains
+  unavailable truth, not accepting.
 - BCG-005/007: current API success contracts carry no-store; existing exact collapsed escaped error disclosure is reused.
   Neutral body safety is a backend obligation; client redaction/synthesis is forbidden. Proxy/cache/release work stays open.
 - BCG-002/012 (active tutoring/work), 004 (summary), 008/010 (account/support), material mutations and BCG-014 are excluded.
-- No new BCG number or canonical companion edit in prepare. G1 is an evidence-backed story prerequisite under BCG-003's
-  representation/least-data boundary, not a claim that generic operations are absent. RFC is a request, not a contract.
+- Preparation created no new BCG number. This Learn dispatch records BCG-020 as the non-blocking exception/follow-up,
+  without altering the Release Blockers total. RFC is a request, not a replacement transport contract.
 
-## Routes, gates and new infrastructure after G1 resolution
+## Historical conditional route/infrastructure map — superseded by settled Learn map
 
 Add only `/learn/courses` (parent Home), `/learn/courses/:courseId` (parent joined courses), and
 `/learn/courses/:courseId/materials` (parent course). Canonical title/H1 purposes and fallbacks stay in ROUTE-INVENTORY.
@@ -245,7 +298,7 @@ Exercise 320px all text modes, actual 200% browser zoom, spacing/forced-colors/r
 direction and axe stable states. 1280px/400% and supported Chrome/Edge/Safari/AT/password-manager manual evidence remain
 explicit release lanes, not automatic Pass. No new CSS/animation/color/runtime dependency.
 
-## Explicit proposed implementation manifest (not authorized until G1 settles)
+## Historical proposed implementation manifest — superseded by settled Learn manifest
 
 This is the retained blocked Learn-slice map, superseded for the current dispatch by the handoff manifest above.
 

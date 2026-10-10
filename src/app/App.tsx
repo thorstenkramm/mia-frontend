@@ -88,6 +88,7 @@ const PrepareCourseRoute = lazy(() =>
     default: module.PrepareCourseRoute,
   })),
 );
+const LearnCourseRoute = lazy(() => import("./routes/LearnCourseRoute"));
 
 export function App({
   initialTextSize,
@@ -236,6 +237,8 @@ function CanonicalEntry({
     supervisorAssignments: access?.supervisorAssignments === true,
     courseSupervision: access?.courseSupervision === true,
     supervisedCourseIds: access?.supervisedCourseIds ?? [],
+    learningParticipation: access?.learningParticipation === true,
+    joinedCourseIds: access?.joinedCourseIds ?? [],
   };
   const authenticated = authenticatedRoute(location.pathname, routeAccess);
   const key = routeKey(
@@ -307,6 +310,7 @@ function CanonicalEntry({
       </Suspense>
     );
   if (
+    route.gate === "Learn(courses)" ||
     route.gate === "Prepare(materials)" ||
     route.gate === "Prepare(students)" ||
     route.gate === "Prepare(courses)" ||
@@ -351,6 +355,12 @@ function CanonicalEntry({
               key={location.key}
               route={route}
               invitationId={authenticated.invitationId}
+            />
+          ) : route.gate === "Learn(courses)" ? (
+            <LearnCourseRoute
+              key={`${location.key}:${access?.epoch}`}
+              route={route}
+              courseId={authenticated.courseId ?? null}
             />
           ) : route.gate === "Prepare(students)" ? (
             <PrepareStudentRoute

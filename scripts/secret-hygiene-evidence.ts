@@ -32,6 +32,66 @@ export const unitCases = [
 type CaseId = (typeof browserCases)[number] | (typeof unitCases)[number];
 
 export const courseUnitCases = [
+  ...(
+    [
+      [
+        "Learn ordered admission withholds resource and metadata until capability and course settle",
+        "learn-admitted",
+      ],
+      [
+        "Learn joined discovery never unions staff scope and empty success is not a failed read",
+        "learn-list",
+      ],
+      [
+        "Learn revoked scope and inactive or hidden courses use one neutral primary presentation",
+        "learn-hidden",
+      ],
+      [
+        "Learn metadata pagination is explicit and dependent denial clears course and entire shell",
+        "learn-page-denial",
+      ],
+      [
+        "Learn lifecycle fences delayed course truth and return issues no read until explicit Refresh",
+        "learn-lifecycle",
+      ],
+      [
+        "Learn fresh revalidation rediscovers membership and never interprets read failure as empty",
+        "learn-revalidation",
+      ],
+    ] as const
+  ).map(([title, point]) => ({
+    title,
+    file: "src/app/routes/learnCourseEntry.test.tsx",
+    points: [point],
+  })),
+  ...(
+    [
+      [
+        "Learn boundary discards brief and every non-rendered material field before state",
+        "learn-boundary",
+      ],
+      [
+        "Learn course projection accepts student-safe empty supervisors and rejects wrong identity",
+        "learn-course",
+      ],
+      [
+        "Learn joined batches advance by checked identities even when all first-page courses are inactive",
+        "learn-batch",
+      ],
+      [
+        "Learn material pages retain navigation on filtered-empty pages and reject unsafe links",
+        "learn-navigation",
+      ],
+      [
+        "Learn material boundary rejects cross-course duplicate and oversized documents without protected errors",
+        "learn-invalid",
+      ],
+    ] as const
+  ).map(([title, point]) => ({
+    title,
+    file: "src/platform/api/learnCourses.test.ts",
+    points: [point],
+  })),
   ...["profiles", "language", "username-profiles", "all-fields"].map(
     (scenario) => ({
       title: `student local ${scenario} corrections link every invalid field in DOM order and focus precisely`,

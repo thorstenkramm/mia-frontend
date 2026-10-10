@@ -1673,6 +1673,55 @@ a course-wide-only transport response. Do not remove the owner exception or trea
 - Milestone regression evidence: scope labels on all returned rows, no private-material actions,
   no client-side unauthorized-data hiding, and no claim that the generic list is server-filtered.
 
+### BCG-020: Learner joined-course and approved-material metadata projections
+
+Status: **NON-BLOCKING FOLLOW-UP — explicit interim Learn discovery exception accepted by owner decision,
+2026-10-10. Not counted under Release Blockers.**
+
+#### BCG-020 accepted milestone capability and owner exception
+
+Story 5.2 may discover joined courses using only the current capability catalog's `learning.participate` course IDs
+and independently authorized `getCourse` reads, presenting active courses only. Never union supervised/staff scope into
+Learn. Material discovery may use `listMaterials` with client-side filtering to approved, ready, course-wide rows for
+that joined course. This accepts network-level overfetch only, not in-browser exposure or new authorization.
+
+Verbatim warning acknowledgment and mitigation from the 2026-10-10 execution checkpoint:
+
+> Owner chose Option 2 (explicit least-data exception) after being warned the material variant lets generated brief content reach the browser unrendered. Learn discovery may use the capability catalog's joined-course IDs + getCourse (declared student-safe) with active-only presentation, and listMaterials with client-side filtering to approved/ready/course-wide rows. Mitigation mandate: brief fields are discarded at the API boundary and never enter state, DOM, accessibility tree, logs, or announcements; only metadata fields are carried. RFC mia/tmp/5-2-student-learn-projection-rfc.md stays open for the real transport; a new BCG entry records the exception and follow-up.
+
+Mandatory mitigation: immediately discard brief and every non-metadata field at the API boundary upon receipt. Carry
+only the metadata the surface renders; no broad Material object in application state, DOM, accessibility tree, logs,
+announcements or test artifacts. Changed/denied membership uses the fixed existence-hiding presentation; reload/later
+sign-in rediscovers backend membership without implying a second account. Course detail exposes only authorized
+active-course read actions and metadata. Tutoring start (6.1), downloads and private-material handling remain excluded.
+BCG-003 navigation guidance and BCG-011 authoritative read-only readiness remain in force; neither is globally closed.
+
+#### BCG-020 authoritative product and current transport context
+
+`getCurrentAccountCapabilities` supplies complete joined scope but not active-only presentation. `listCourses` is a
+visible permission-union collection. `getCourse` declares student-safe course/readiness output. `listMaterials` supplies
+all caller-visible materials and full Material resources (including briefs), not a learner approved-metadata projection.
+See `mia/api-doc/paths/{users,courses,materials}.yaml` and its resource schemas. Privacy contracts remain binding outside
+this dated exception. The RFC `mia/tmp/5-2-student-learn-projection-rfc.md` remains open for backend follow-up.
+
+#### BCG-020 requested backend follow-up contract
+
+Provide server-owned joined-active discovery and learner course/approved-course-wide metadata projections, including
+documented paths/selectors, pagination, authorization, identities, media, stable hidden errors and no-store policy.
+Backend owns composition; frontend must not invent parameters or infer authorization from absence or role.
+
+#### BCG-020 forbidden frontend workaround
+
+No unsupported filters, generic course-union enumeration, supervisor-scope inclusion, brief retention/rendering, private
+controls, speculative fetch, tutoring start or downloads. Do not describe the interim generic material response as a
+server-filtered metadata response. Never expand this exception to other surfaces or remove its mitigation mandate.
+
+#### BCG-020 follow-up evidence requested
+
+- Product/OpenAPI agreement and backend tests for joined-active discovery and minimized learner representations.
+- Mixed-role, revoked membership, inactive course, cross-course and material scope/approval/technical-state regressions.
+- Frontend boundary-discard, state/DOM/accessibility/log/artifact non-exposure, ordered admission and fixed hidden-result evidence.
+
 ## Release Gate
 
 Frontend implementation dependent on a blocker remains blocked until its observable contract is authoritative in
