@@ -108,7 +108,7 @@ export async function checkRouteSecretHygiene() {
       "test",
       "e2e/scaffold.spec.ts",
       "--grep",
-      "supervisor onboarding handoff",
+      "supervisor onboarding handoff|student first-sign-in handoff",
       "--list",
       "--reporter=json",
     ],
@@ -136,35 +136,44 @@ export async function checkRouteSecretHygiene() {
     scope !== "preparation" &&
     scope !== "materials" &&
     scope !== "activation" &&
+    scope !== "student-entry" &&
     scope !== "students"
   )
     throw new Error("Unknown route-hygiene scope.");
   const selected =
-    scope === "students"
-      ? routeHygieneCases.filter((item) => item.id.startsWith("student-"))
-      : scope === "activation"
-        ? routeHygieneCases.filter((item) =>
-            item.id.startsWith("preparation-activation-"),
+    scope === "student-entry"
+      ? routeHygieneCases.filter((item) => item.id.startsWith("student-entry-"))
+      : scope === "students"
+        ? routeHygieneCases.filter(
+            (item) =>
+              item.id.startsWith("student-") &&
+              !item.id.startsWith("student-entry-"),
           )
-        : scope === "materials"
-          ? routeHygieneCases.filter((item) => item.id.startsWith("material-"))
-          : scope === "preparation"
+        : scope === "activation"
+          ? routeHygieneCases.filter((item) =>
+              item.id.startsWith("preparation-activation-"),
+            )
+          : scope === "materials"
             ? routeHygieneCases.filter((item) =>
-                item.id.startsWith("preparation-"),
+                item.id.startsWith("material-"),
               )
-            : scope === "invitations"
+            : scope === "preparation"
               ? routeHygieneCases.filter((item) =>
-                  item.id.startsWith("invitation-"),
+                  item.id.startsWith("preparation-"),
                 )
-              : scope === "supervisor-onboarding"
+              : scope === "invitations"
                 ? routeHygieneCases.filter((item) =>
-                    item.id.startsWith("supervisor-"),
+                    item.id.startsWith("invitation-"),
                   )
-                : scope === "courses"
+                : scope === "supervisor-onboarding"
                   ? routeHygieneCases.filter((item) =>
-                      item.id.startsWith("course-"),
+                      item.id.startsWith("supervisor-"),
                     )
-                  : routeHygieneCases;
+                  : scope === "courses"
+                    ? routeHygieneCases.filter((item) =>
+                        item.id.startsWith("course-"),
+                      )
+                    : routeHygieneCases;
   const root = await mkdtemp(join(tmpdir(), "mia-route-hygiene-"));
   const evidence = [];
   try {
@@ -190,7 +199,7 @@ export async function checkRouteSecretHygiene() {
         // specs. New student cases use the existing public config with exact
         // case selection and the same no-capture settings in the actual spec;
         // this keeps one runner without changing test configuration.
-        item.id.startsWith("student-")
+        item.id.startsWith("student-") && !item.id.startsWith("student-entry-")
           ? [
               "test",
               "e2e/studentProvisioning.spec.ts",

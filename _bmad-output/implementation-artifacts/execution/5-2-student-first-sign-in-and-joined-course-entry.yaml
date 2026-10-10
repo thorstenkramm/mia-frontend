@@ -1,0 +1,49 @@
+story: 5-2-student-first-sign-in-and-joined-course-entry
+phase: commit-pending
+spec: _bmad-output/implementation-artifacts/spec-5-2-student-first-sign-in-and-joined-course-entry.md
+baseline_commit: 1d6354f70ac96fb4569cb47f20c14fe528e26685
+pre_existing_changes:
+  - ".opencode/ agent and protocol edits (owner workflow updates, uncommitted)"
+  - "execution checkpoints for stories 2-1, 2-2, 3-1, 3-2, 4-1 (bookkeeping, uncommitted)"
+  - "sprint-status.yaml unstaged hunk (Epic 2 retrospective closure + done/next_story bookkeeping around committed hunks)"
+  - "_bmad-output/implementation-artifacts/epic-2-retro-2026-10-07.md (untracked)"
+files: []
+worker_session: ses_edb11062affePrZaoY3GAeafko
+reviewer_session: null
+models:
+  prepare: openai/gpt-6.1-sol#high
+completed_blocks:
+  - "Story 5.1 closed: commit 1d6354f70ac96fb4569cb47f20c14fe528e26685 at HEAD on 2026-10-10 (provisioning + roster; shared password controls relocated to platform/ui)."
+  - "Owner scope 2026-10-10: Epic 5 (5-1, 5-2) unattended with Epic-4 batch rules: per-story reviewed+verified commits, no push, interim-workaround pattern with mia/tmp backend requests, never weaken security/privacy invariants, rate-limit rotation openai -> kimi-code/k3 -> anthropic. Stop after 5-2; no automatic retrospective."
+  - "Approved interim precedents: hardcoded documented-contract limits; generic authorized list with scope labels; bounded bundle mitigation within 256000 gzip bytes keeping seven languages; approval-observation ledger interim."
+repair_queue:
+  - id: R1
+    severity: low
+    finding: "Nonblocking: zoom-case text-spacing overrides applied before a later page.goto discard the overridden document (e2e/scaffold.spec.ts:2088-2091 vs 1870)."
+    disposition: "Accepted for immediate trivial fix in verify phase (apply spacing after navigation/surface mount, assert overrides active); review verdict was pass — inherited replacement tests independently cover spacing, this keeps the zoom-case evidence honest."
+repair_batch: 0
+last_verification:
+  status: passed
+  command: ./run-all-tests.sh
+  exit_code: 0
+  stages_completed: 17
+  skipped: []
+  unit_tests: 841
+  browser_tests: 285
+  build_count: 1
+  bundle_gzip_bytes: 244881
+  bundle_budget_bytes: 256000
+  fingerprint_stability: "inputs unchanged"
+  report: tmp/agent-execution/5-2-student-first-sign-in-and-joined-course-entry/verify-report.json
+  history: "Single uninterrupted gate run after the R1 test-ordering fix; exit 0. Scope: handoff slice only."
+resume_attempts: 0
+commit:
+  intended_message: "test: verify provisioned student sign-in and password replacement handoff"
+  sha: null
+next_action: "Worker applies the R1 test-ordering fix, persists review-report.json, runs the authoritative full gate; on pass, commit the SLICE (story stays in-progress, blocked on G1 for Learn)."
+blocked_on: "G1 (partial): no contracted joined-active learner collection/projection or approved-course-wide material metadata-only collection; RFC at mia/tmp/5-2-student-learn-projection-rfc.md. Blocks the Learn discovery slice ONLY; the sign-in/replacement handoff slice proceeds."
+owner_decisions:
+  g1_partial_scope:
+    date: 2026-10-10
+    status: solver-applied batch rule
+    scope: "Unattended batch rule applied: no safe workaround satisfies the Learn discovery slice without violating the least-data/privacy contract (client filtering, union renaming and ID scans all excluded). Handoff slice (provisioned first sign-in, restricted password replacement, no MFA, authorized shell landing) proceeds as a partial story slice; Learn surface awaits backend transport. Story will NOT be marked done while G1 blocks Learn."

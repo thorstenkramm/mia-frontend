@@ -1,6 +1,51 @@
 // Actual Story 2.2 browser-test inventory, including cookie-only cases and the
 // R1 repair. IDs/checkpoints are fixed public labels, never fixture-derived.
 export const routeHygieneCases = [
+  ...["standard", "large", "extra-large"].map((size) => ({
+    id: `student-entry-handoff-${size}`,
+    title: `provisioned student replacement reaches Home and later password-only sign-in at 320 pixels with ${size} text`,
+    checkpoints: [
+      "student-entry-provision-input",
+      "student-entry-login-input",
+      "student-entry-replacement-input",
+      "student-entry-later-login-input",
+      "complete",
+    ],
+  })),
+  {
+    id: "student-entry-gate-recovery",
+    title:
+      "student failed shell admission recovers by read without replacement replay",
+    checkpoints: [
+      "student-entry-provision-input",
+      "student-entry-login-input",
+      "student-entry-replacement-input",
+      "student-entry-gate-error",
+      "complete",
+    ],
+  },
+  {
+    id: "student-entry-gate-hidden",
+    title:
+      "student hidden pending admission fences late Home until explicit Refresh",
+    checkpoints: [
+      "student-entry-provision-input",
+      "student-entry-login-input",
+      "student-entry-replacement-input",
+      "complete",
+    ],
+  },
+  {
+    id: "student-entry-zoom",
+    title:
+      "student connected replacement stays operable at actual 200 percent zoom in all text modes",
+    checkpoints: [
+      "student-entry-provision-input",
+      "student-entry-login-input",
+      "student-entry-replacement-input",
+      "complete",
+    ],
+  },
   {
     id: "student-boundary",
     title:

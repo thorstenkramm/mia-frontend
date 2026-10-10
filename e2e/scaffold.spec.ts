@@ -15,6 +15,7 @@ import AxeBuilder from "@axe-core/playwright";
 import { chromium } from "playwright";
 import { expectRetainedSecret } from "./secretAssertions";
 import { invitationBackend } from "./invitationFixtures";
+import { studentBackend, fillStudent } from "./studentFixtures";
 import { ownProfileCapabilities } from "../test/mfaFixtures";
 import {
   injectRouteEarlyFailure,
@@ -1630,6 +1631,525 @@ async function walkRecoveryAndResetStates(
   mock.reset = "accept";
 }
 
+// Story 5.2 handoff only: the recipient's auth fake depends on the real 5.1
+// provisioning UI/POST. No Learn read, projection, or guessed membership discovery.
+async function withStudentHandoff(
+  page: Page,
+  browser: Browser,
+  body: (handoff: StudentHandoff) => Promise<void>,
+  locale: (typeof locales)[number] = "en-US",
+  size: (typeof textSizes)[number] = "standard",
+) {
+  injectRouteEarlyFailure();
+  const supervisorContext = await browser.newContext({ baseURL: appUrl });
+  const supervisor = await supervisorContext.newPage();
+  try {
+    const provision = await studentBackend(supervisor);
+    await supervisor.goto("/prepare/courses/course_1/students/new");
+    await expect(supervisor.locator("main h1")).toBeFocused();
+    await fillStudent(supervisor);
+    await routeHygieneCheckpoint(supervisor, "student-entry-provision-input");
+    await supervisor
+      .getByRole("button", { name: "Create student", exact: true })
+      .click();
+    await expect(supervisor.locator("#new-password")).toHaveCount(0);
+    expect(
+      provision.posts === 1 && provision.valid && provision.persisted,
+    ).toBe(true);
+    const handoff = await installStudentHandoff(
+      page,
+      supervisor,
+      provision,
+      locale,
+      size,
+    );
+    await body(handoff);
+    await routeHygieneCheckpoint(page, "complete");
+  } finally {
+    await supervisorContext.close();
+    releaseRouteFixture(supervisor);
+    await page.close();
+    releaseRouteFixture(page);
+  }
+}
+
+async function installStudentHandoff(
+  page: Page,
+  supervisor: Page,
+  provision: Awaited<ReturnType<typeof studentBackend>>,
+  locale: (typeof locales)[number],
+  size: (typeof textSizes)[number],
+) {
+  const fixture = routeSecretFixture(page);
+  const provisioned = routeSecretFixture(supervisor);
+  const temporary = ` ${provisioned.password} 密 `;
+  const replacement = ` ${fixture.password} replaced é `;
+  const rotatedCsrf = `${fixture.csrf}-rotated`;
+  const state = {
+    stage: "anonymous" as "anonymous" | "password-change" | "authenticated",
+    replaced: false,
+    failCapabilities: false,
+    releaseCapabilities: null as Promise<void> | null,
+    counts: {
+      logins: 0,
+      replacements: 0,
+      capabilities: 0,
+      forbidden: 0,
+      logouts: 0,
+    },
+    wire: { login: false, replacement: false },
+    homeChunks: 0,
+    obsoleteRejected: false,
+  };
+  const json = (route: Route, document: unknown, status = 200) =>
+    route.fulfill({
+      status,
+      contentType: mediaType,
+      headers: { "Cache-Control": "no-store" },
+      body: JSON.stringify(document),
+    });
+  const rejected = (route: Route, status: number, code: string) =>
+    json(
+      route,
+      { errors: [{ status: String(status), code, detail: fixture.rawError }] },
+      status,
+    );
+  const sessionDocument = () =>
+    state.stage === "anonymous"
+      ? { data: null, meta: { stage: "anonymous" } }
+      : {
+          data: {
+            type: "auth-sessions",
+            id: "student_1",
+            attributes: {
+              stage: state.stage,
+              idle_expires_at: "2026-09-27T10:30:00.000000Z",
+              absolute_expires_at:
+                state.stage === "password-change"
+                  ? "2026-09-27T10:30:00.000000Z"
+                  : "2026-09-27T22:00:00.000000Z",
+            },
+          },
+        };
+  const validRequest = (route: Route, document: unknown, csrf: string) =>
+    route.request().method() === "POST" &&
+    route.request().headers()["content-type"] === mediaType &&
+    route.request().headers()["accept"] === mediaType &&
+    route.request().headers()["x-csrf-token"] === csrf &&
+    fingerprint(route.request().postData() ?? "") ===
+      fingerprint(JSON.stringify(document));
+  page.on("request", (request) => {
+    const path = new URL(request.url()).pathname;
+    if (path.includes("HomeEntryRoute")) state.homeChunks++;
+    if (
+      path.startsWith("/api/") &&
+      ![
+        "/api/v1/auth/session",
+        "/api/v1/auth/login",
+        "/api/v1/auth/password-changes",
+        "/api/v1/auth/logout",
+        "/api/v1/users/me/capabilities",
+      ].includes(path)
+    )
+      state.counts.forbidden++;
+  });
+  await page.route("**/api/**", (route) => rejected(route, 404, "not_found"));
+  await mockSession(page);
+  await page.context().grantPermissions(["clipboard-read", "clipboard-write"], {
+    origin: appUrl,
+  });
+  await page
+    .context()
+    .addCookies([{ name: "mia_csrf", value: fixture.csrf, url: appUrl }]);
+  await page.addInitScript(
+    ([nextLocale, nextSize]) => {
+      localStorage.setItem("mia.interface.locale", nextLocale);
+      localStorage.setItem("mia.interface.text-size", nextSize);
+    },
+    [locale, size] as const,
+  );
+  await page.route("**/api/v1/auth/session", (route) =>
+    json(route, sessionDocument()),
+  );
+  await mockCapabilities(page, 0, {
+    accountId: "student_1",
+    joinedCourseId: "course_1",
+  });
+  await page.route("**/api/v1/users/me/capabilities", async (route) => {
+    state.counts.capabilities++;
+    if (state.releaseCapabilities) await state.releaseCapabilities;
+    if (state.stage !== "authenticated")
+      return rejected(route, 403, "auth_password_change_required");
+    if (state.failCapabilities) return rejected(route, 503, "unavailable");
+    await route.fallback();
+  });
+  await page.route("**/api/v1/auth/login", async (route) => {
+    state.counts.logins++;
+    state.wire.login = validRequest(
+      route,
+      {
+        data: {
+          type: "login-attempts",
+          attributes: {
+            username: provisioned.supervisorUsername,
+            password: state.replaced ? replacement : temporary,
+          },
+        },
+      },
+      fixture.csrf,
+    );
+    if (!provision.persisted || !provision.valid || !state.wire.login) {
+      state.obsoleteRejected =
+        state.replaced &&
+        validRequest(
+          route,
+          {
+            data: {
+              type: "login-attempts",
+              attributes: {
+                username: provisioned.supervisorUsername,
+                password: temporary,
+              },
+            },
+          },
+          fixture.csrf,
+        );
+      return rejected(route, 401, "auth_invalid_credentials");
+    }
+    state.stage = state.replaced ? "authenticated" : "password-change";
+    await page
+      .context()
+      .addCookies([{ name: "mia_csrf", value: rotatedCsrf, url: appUrl }]);
+    return json(route, sessionDocument());
+  });
+  await page.route("**/api/v1/auth/password-changes", (route) => {
+    state.counts.replacements++;
+    state.wire.replacement =
+      state.stage === "password-change" &&
+      validRequest(
+        route,
+        {
+          data: {
+            type: "password-changes",
+            attributes: {
+              password: replacement,
+              password_confirmation: replacement,
+            },
+          },
+        },
+        rotatedCsrf,
+      );
+    if (!state.wire.replacement)
+      return rejected(route, 422, "auth_invalid_password");
+    state.replaced = true;
+    state.stage = "authenticated";
+    return json(route, sessionDocument());
+  });
+  await page.route("**/api/v1/auth/logout", async (route) => {
+    state.counts.logouts++;
+    state.stage = "anonymous";
+    await page
+      .context()
+      .addCookies([{ name: "mia_csrf", value: fixture.csrf, url: appUrl }]);
+    return route.fulfill({ status: 204 });
+  });
+  return {
+    page,
+    fixture,
+    temporary,
+    replacement,
+    username: provisioned.supervisorUsername,
+    state,
+    provision,
+  };
+}
+type StudentHandoff = Awaited<ReturnType<typeof installStudentHandoff>>;
+
+async function replaceStudentPassword(
+  handoff: StudentHandoff,
+  textSpacing = false,
+) {
+  const { page, state } = handoff;
+  await page.goto("/login");
+  await expect(page.locator("#password")).toBeVisible();
+  if (textSpacing) {
+    // Keep CSP intact and cover controls remounted by password reveal.
+    const spacingUrl = `${appUrl}/test-wcag-text-spacing.css`;
+    await page.route(spacingUrl, (route) =>
+      route.fulfill({
+        contentType: "text/css",
+        body: "* { line-height: 1.5 !important; letter-spacing: 0.12em !important; word-spacing: 0.16em !important; } p { margin-block-end: 2em !important; }",
+      }),
+    );
+    await page.addStyleTag({
+      url: spacingUrl,
+    });
+    await applyWcagTextSpacing(page);
+  }
+  await page.locator("#username").fill(handoff.username);
+  await pasteInto(page, page.locator("#password"), handoff.temporary);
+  if (textSpacing) await expectStudentTextSpacingActive(page);
+  await routeHygieneCheckpoint(page, "student-entry-login-input");
+  await page.locator("#password").press("Enter");
+  await expect(page).toHaveURL(/\/auth\/password-change$/u);
+  await expect(page.locator("main h1")).toBeFocused();
+  await expect(page).toHaveTitle("Choose a new password | MIA");
+  if (textSpacing) await applyWcagTextSpacing(page);
+  await expectNoApplicationNavigation(page);
+  await expect(
+    page.getByRole("button", { name: "Sign out", exact: true }),
+  ).toBeVisible();
+  expect(
+    state.counts.capabilities === 0 &&
+      state.counts.forbidden === 0 &&
+      state.homeChunks === 0,
+  ).toBe(true);
+  const loginControlCount = await page.locator("#password").count();
+  expect(loginControlCount).toBe(0);
+  for (const id of ["new-password", "password-confirmation"]) {
+    await expect(page.locator(`#${id}`)).toHaveAttribute(
+      "autocomplete",
+      "new-password",
+    );
+    await pasteInto(page, page.locator(`#${id}`), handoff.replacement);
+  }
+  await page.locator("#new-password").focus();
+  await page.keyboard.press("Tab");
+  await expect(
+    page.getByRole("button", { name: "Show new password" }),
+  ).toBeFocused();
+  await page.keyboard.press("Enter");
+  await expect(page.locator("#new-password")).toHaveAttribute("type", "text");
+  if (textSpacing) await expectStudentTextSpacingActive(page);
+  await routeHygieneCheckpoint(page, "student-entry-replacement-input");
+  await expectNoPageOverflow(page);
+  await page.locator("#password-confirmation").press("Enter");
+}
+
+async function expectStudentTextSpacingActive(page: Page) {
+  expect(
+    await page.locator("main").evaluate((main) => {
+      const elements = main.querySelectorAll("h1, label, input, button, p, a");
+      return (
+        elements.length > 0 &&
+        Array.from(elements).every((element) => {
+          const style = getComputedStyle(element);
+          const fontSize = Number.parseFloat(style.fontSize);
+          const matches = (value: string, ratio: number) =>
+            Math.abs(Number.parseFloat(value) / fontSize - ratio) < 0.01;
+          return (
+            matches(style.lineHeight, 1.5) &&
+            matches(style.letterSpacing, 0.12) &&
+            matches(style.wordSpacing, 0.16) &&
+            (!(element instanceof HTMLParagraphElement) ||
+              matches(style.marginBlockEnd, 2))
+          );
+        })
+      );
+    }),
+  ).toBe(true);
+}
+
+async function expectStudentHome(handoff: StudentHandoff) {
+  const { page, state } = handoff;
+  await expect(page).toHaveURL(/\/$/u);
+  await expect(page.locator("main h1")).toBeFocused();
+  await expect(page).toHaveTitle("Home | MIA");
+  await expect(page.locator("main")).toHaveCount(1);
+  await expect(page.locator("h1")).toHaveCount(1);
+  await expect(
+    page.locator("#password, #new-password, #password-confirmation, #mfa-code"),
+  ).toHaveCount(0);
+  await expect(
+    page.locator("a[href^='/prepare'], a[href^='/admin'], a[href^='/learn']"),
+  ).toHaveCount(0);
+  expect(
+    state.wire.login && state.wire.replacement && state.counts.forbidden === 0,
+  ).toBe(true);
+  expect(
+    await page.evaluate(
+      async (markers) => {
+        const outside = JSON.stringify({
+          url: location.href,
+          history: history.state,
+          title: document.title,
+          local: Object.entries(localStorage),
+          session: Object.entries(sessionStorage),
+          body: document.body.innerHTML,
+          caches: "caches" in window ? await caches.keys() : [],
+        });
+        return markers.every((marker) => !outside.includes(marker));
+      },
+      [handoff.temporary, handoff.replacement, handoff.username],
+    ),
+  ).toBe(true);
+  await expectNoPageOverflow(page);
+}
+
+test.describe("student first-sign-in handoff", () => {
+  test.beforeEach(() => {
+    process.env.PLAYWRIGHT_NO_COPY_PROMPT = "1";
+  });
+  for (const size of textSizes) {
+    test(`provisioned student replacement reaches Home and later password-only sign-in at 320 pixels with ${size} text`, async ({
+      page,
+      browser,
+    }) => {
+      await page.setViewportSize({ width: 320, height: 900 });
+      await withStudentHandoff(
+        page,
+        browser,
+        async (handoff) => {
+          let release = () => {};
+          handoff.state.releaseCapabilities = new Promise<void>((resolve) => {
+            release = resolve;
+          });
+          try {
+            await replaceStudentPassword(handoff);
+            await expect.poll(() => handoff.state.counts.capabilities).toBe(1);
+            await expectNoApplicationNavigation(page);
+            await expect(page).toHaveTitle("MIA");
+            await expect(page.locator("#new-password")).toHaveCount(0);
+            expect(handoff.state.homeChunks).toBe(0);
+          } finally {
+            release();
+          }
+          await expectStudentHome(handoff);
+          if (size === "standard") await expectNoWcagViolations(page);
+          await page.reload();
+          await expectStudentHome(handoff);
+          await page
+            .getByRole("button", { name: "Sign out", exact: true })
+            .click();
+          await expect(page).toHaveURL(/\/login$/u);
+          await page.locator("#username").fill(handoff.username);
+          await pasteInto(page, page.locator("#password"), handoff.temporary);
+          await page.locator("#password").press("Enter");
+          await expect(page.locator("main [role='alert']")).not.toBeEmpty();
+          expect(
+            handoff.state.obsoleteRejected &&
+              handoff.state.stage === "anonymous",
+          ).toBe(true);
+          await page.locator("#password").fill("");
+          await pasteInto(page, page.locator("#password"), handoff.replacement);
+          await routeHygieneCheckpoint(page, "student-entry-later-login-input");
+          await page.locator("#password").press("Enter");
+          await expectStudentHome(handoff);
+          expect(handoff.state.counts).toEqual({
+            logins: 3,
+            replacements: 1,
+            capabilities: 3,
+            forbidden: 0,
+            logouts: 1,
+          });
+          expect(handoff.provision.posts).toBe(1);
+        },
+        "en-US",
+        size,
+      );
+    });
+  }
+  test("student failed shell admission recovers by read without replacement replay", async ({
+    page,
+    browser,
+  }) => {
+    await withStudentHandoff(page, browser, async (handoff) => {
+      handoff.state.failCapabilities = true;
+      await replaceStudentPassword(handoff);
+      await expect(
+        page.getByRole("button", { name: "Check again", exact: true }),
+      ).toBeVisible();
+      await expectNoApplicationNavigation(page);
+      expect(handoff.state.homeChunks).toBe(0);
+      await routeHygieneCheckpoint(page, "student-entry-gate-error");
+      handoff.state.failCapabilities = false;
+      await page
+        .getByRole("button", { name: "Check again", exact: true })
+        .click();
+      await expectStudentHome(handoff);
+      expect(handoff.state.counts).toMatchObject({
+        logins: 1,
+        replacements: 1,
+        capabilities: 2,
+        forbidden: 0,
+      });
+    });
+  });
+  test("student hidden pending admission fences late Home until explicit Refresh", async ({
+    page,
+    browser,
+  }) => {
+    await withStudentHandoff(page, browser, async (handoff) => {
+      let release = () => {};
+      handoff.state.releaseCapabilities = new Promise<void>((resolve) => {
+        release = resolve;
+      });
+      try {
+        await replaceStudentPassword(handoff);
+        await expect.poll(() => handoff.state.counts.capabilities).toBe(1);
+        await page.evaluate(() =>
+          window.dispatchEvent(
+            new PageTransitionEvent("pagehide", { persisted: true }),
+          ),
+        );
+      } finally {
+        release();
+      }
+      await page.evaluate(() =>
+        window.dispatchEvent(
+          new PageTransitionEvent("pageshow", { persisted: true }),
+        ),
+      );
+      await expect(
+        page.getByRole("button", { name: "Refresh", exact: true }),
+      ).toBeVisible();
+      await expectNoApplicationNavigation(page);
+      expect(
+        handoff.state.counts.capabilities === 1 &&
+          handoff.state.homeChunks === 0,
+      ).toBe(true);
+      await page.getByRole("button", { name: "Refresh", exact: true }).click();
+      await expectStudentHome(handoff);
+      expect(handoff.state.counts).toMatchObject({
+        logins: 1,
+        replacements: 1,
+        capabilities: 2,
+        forbidden: 0,
+      });
+    });
+  });
+  test("student connected replacement stays operable at actual 200 percent zoom in all text modes", async ({
+    browser,
+  }) => {
+    test.setTimeout(120_000);
+    for (const size of textSizes) {
+      const { context, userDataDirectory } = await launchBrowserZoomContext();
+      try {
+        const page = await context.newPage();
+        await withStudentHandoff(
+          page,
+          browser,
+          async (handoff) => {
+            await page.goto("/login");
+            await setActualBrowserZoom(page, 2);
+            await replaceStudentPassword(handoff, true);
+            await expect(page).toHaveTitle("Home | MIA");
+            await applyWcagTextSpacing(page);
+            await expectStudentHome(handoff);
+            await expectStudentTextSpacingActive(page);
+            expect(handoff.state.counts.replacements).toBe(1);
+          },
+          "en-US",
+          size,
+        );
+      } finally {
+        await context.close();
+        await rm(userDataDirectory, { force: true, recursive: true });
+      }
+    }
+  });
+});
+
 async function mockSession(
   page: Page,
   stage:
@@ -1662,7 +2182,11 @@ async function mockSession(
   });
 }
 
-async function mockCapabilities(page: Page, delayMs = 0): Promise<void> {
+async function mockCapabilities(
+  page: Page,
+  delayMs = 0,
+  student?: { accountId: string; joinedCourseId: string },
+): Promise<void> {
   const actions = [
     "profile.view",
     "profile.edit",
@@ -1686,17 +2210,23 @@ async function mockCapabilities(page: Page, delayMs = 0): Promise<void> {
       body: JSON.stringify({
         data: {
           type: "account-capabilities",
-          id: "account-id",
+          id: student?.accountId ?? "account-id",
           attributes: {
             capabilities: actions.map((action) => ({
               action,
-              available: false,
+              available:
+                student !== undefined &&
+                ["profile.view", "learning.participate"].includes(action),
               scope: {
                 global: false,
-                course_ids: [],
+                course_ids:
+                  student && action === "learning.participate"
+                    ? [student.joinedCourseId]
+                    : [],
                 student_ids: [],
                 course_students: [],
-                own_resource: false,
+                own_resource:
+                  student !== undefined && action === "profile.view",
               },
             })),
           },
