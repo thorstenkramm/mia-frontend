@@ -36,7 +36,10 @@ import {
   waitText,
   WarningResult,
 } from "./LinkFlowParts";
-import { NewPasswordForm, useNewPasswordCheck } from "./NewPasswordFields";
+import {
+  NewPasswordForm,
+  useNewPasswordCheck,
+} from "../../platform/ui/NewPasswordFields";
 
 type MessageDescriptor = (typeof messages)[keyof typeof messages];
 

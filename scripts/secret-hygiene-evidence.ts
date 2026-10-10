@@ -32,6 +32,118 @@ export const unitCases = [
 type CaseId = (typeof browserCases)[number] | (typeof unitCases)[number];
 
 export const courseUnitCases = [
+  ...["profiles", "language", "username-profiles", "all-fields"].map(
+    (scenario) => ({
+      title: `student local ${scenario} corrections link every invalid field in DOM order and focus precisely`,
+      file: "src/app/routes/studentProvisioning.test.tsx",
+      points: ["student-field-errors", "student-field-corrected"],
+    }),
+  ),
+  {
+    title:
+      "student StrictMode replay permits one definitive dispatch and credential teardown",
+    file: "src/app/routes/studentProvisioning.test.tsx",
+    points: ["student-strict-success"],
+  },
+  ...["preflight", "post"].map((phase) => ({
+    title: `student StrictMode retired ${phase} callbacks cannot dispatch or navigate after teardown`,
+    file: "src/app/routes/studentProvisioning.test.tsx",
+    points: ["student-strict-retired", "student-strict-late"],
+  })),
+  {
+    title: "student stopped response still handles applicable hidden denial",
+    file: "src/app/routes/studentProvisioning.test.tsx",
+    points: ["student-stopped-denial"],
+  },
+  ...(
+    [
+      [
+        "student transport sends one exact provision branch and retains only relationship truth",
+        "student-wire",
+      ],
+      [
+        "student transport rejects ambiguous successes without unsafe replay",
+        "student-malformed",
+      ],
+      [
+        "student roster bounds pages and rejects unsafe navigation and duplicate identities",
+        "student-page",
+      ],
+      [
+        "student membership uses the users relationship and rejects mismatched pair data",
+        "student-pair",
+      ],
+      [
+        "student empty and previous roster pages preserve absence without fabricated totals",
+        "student-empty",
+      ],
+    ] as const
+  ).map(([title, point]) => ({
+    title,
+    file: "src/platform/api/courseStudents.test.ts",
+    points: [point],
+  })),
+  ...["", "/new", "/student_1"].map((route) => ({
+    title: `student admission ${route || "roster"} requires exact course scope before dependent reads`,
+    file: "src/app/routes/studentProvisioning.test.tsx",
+    points: ["student-gate"],
+  })),
+  {
+    title:
+      "student authority never substitutes administrator student or mentor capabilities",
+    file: "src/app/routes/studentProvisioning.test.tsx",
+    points: ["student-authority"],
+  },
+  {
+    title:
+      "student definitive creation clears credentials and navigates by student relationship",
+    file: "src/app/routes/studentProvisioning.test.tsx",
+    points: ["student-input", "student-success"],
+  },
+  ...["conflict", "invalid", "bad", "large", "media"].map((outcome) => ({
+    title: `student definitive ${outcome} keeps only same mounted native correction`,
+    file: "src/app/routes/studentProvisioning.test.tsx",
+    points: ["student-rejected"],
+  })),
+  ...["lose", "malformed", "server"].map((outcome) => ({
+    title: `student ambiguous ${outcome} destroys credentials and bounded review never attributes success`,
+    file: "src/app/routes/studentProvisioning.test.tsx",
+    points: ["student-unknown", "student-reconciled"],
+  })),
+  ...["csrf", "expired", "restricted", "denied"].map((loss) => ({
+    title: `student ${loss} overrides native input without replay`,
+    file: "src/app/routes/studentProvisioning.test.tsx",
+    points: ["student-security"],
+  })),
+  {
+    title:
+      "student stopped post fences late success and duplicate native submits dispatch once",
+    file: "src/app/routes/studentProvisioning.test.tsx",
+    points: ["student-stopped", "student-late"],
+  },
+  {
+    title: "student inactive preflight and cancelled pending read send no POST",
+    file: "src/app/routes/studentProvisioning.test.tsx",
+    points: ["student-preflight"],
+  },
+  {
+    title:
+      "student lifecycle destroys controls synchronously and return makes no authenticated request",
+    file: "src/app/routes/studentProvisioning.test.tsx",
+    points: ["student-lifecycle"],
+  },
+  {
+    title:
+      "student dirty Stay retains focus but Discard destroys both credential controls",
+    file: "src/app/routes/studentProvisioning.test.tsx",
+    points: ["student-stay", "student-discard"],
+  },
+  {
+    title:
+      "student local mismatch and missing profile prevent any unsafe dispatch",
+    file: "src/app/routes/studentProvisioning.test.tsx",
+    points: ["student-validation"],
+  },
   {
     title:
       "activation sends a single bodyless contract request and validates active persisted truth",

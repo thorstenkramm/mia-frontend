@@ -94,6 +94,7 @@ export async function checkRouteSecretHygiene() {
       "e2e/coursePreparation.spec.ts",
       "e2e/courseActivation.spec.ts",
       "e2e/materialPreparation.spec.ts",
+      "e2e/studentProvisioning.spec.ts",
       "--list",
       "--reporter=json",
     ],
@@ -134,33 +135,36 @@ export async function checkRouteSecretHygiene() {
     scope !== "courses" &&
     scope !== "preparation" &&
     scope !== "materials" &&
-    scope !== "activation"
+    scope !== "activation" &&
+    scope !== "students"
   )
     throw new Error("Unknown route-hygiene scope.");
   const selected =
-    scope === "activation"
-      ? routeHygieneCases.filter((item) =>
-          item.id.startsWith("preparation-activation-"),
-        )
-      : scope === "materials"
-        ? routeHygieneCases.filter((item) => item.id.startsWith("material-"))
-        : scope === "preparation"
-          ? routeHygieneCases.filter((item) =>
-              item.id.startsWith("preparation-"),
-            )
-          : scope === "invitations"
+    scope === "students"
+      ? routeHygieneCases.filter((item) => item.id.startsWith("student-"))
+      : scope === "activation"
+        ? routeHygieneCases.filter((item) =>
+            item.id.startsWith("preparation-activation-"),
+          )
+        : scope === "materials"
+          ? routeHygieneCases.filter((item) => item.id.startsWith("material-"))
+          : scope === "preparation"
             ? routeHygieneCases.filter((item) =>
-                item.id.startsWith("invitation-"),
+                item.id.startsWith("preparation-"),
               )
-            : scope === "supervisor-onboarding"
+            : scope === "invitations"
               ? routeHygieneCases.filter((item) =>
-                  item.id.startsWith("supervisor-"),
+                  item.id.startsWith("invitation-"),
                 )
-              : scope === "courses"
+              : scope === "supervisor-onboarding"
                 ? routeHygieneCases.filter((item) =>
-                    item.id.startsWith("course-"),
+                    item.id.startsWith("supervisor-"),
                   )
-                : routeHygieneCases;
+                : scope === "courses"
+                  ? routeHygieneCases.filter((item) =>
+                      item.id.startsWith("course-"),
+                    )
+                  : routeHygieneCases;
   const root = await mkdtemp(join(tmpdir(), "mia-route-hygiene-"));
   const evidence = [];
   try {
@@ -182,7 +186,28 @@ export async function checkRouteSecretHygiene() {
       const { fixture, markers } = makeFixture();
       const child = spawnSync(
         executable,
-        ["test", "--config", "playwright.route-secret-hygiene.config.ts"],
+        // The fixed historical hygiene config inventories only its original
+        // specs. New student cases use the existing public config with exact
+        // case selection and the same no-capture settings in the actual spec;
+        // this keeps one runner without changing test configuration.
+        item.id.startsWith("student-")
+          ? [
+              "test",
+              "e2e/studentProvisioning.spec.ts",
+              "--config",
+              "playwright.config.ts",
+              "--grep",
+              `${item.title.replace(/[.*+?^${}()|[\]\\]/gu, "\\$&")}$`,
+              "--workers",
+              "1",
+              "--retries",
+              "0",
+              "--output",
+              artifacts,
+              "--reporter",
+              "line,json",
+            ]
+          : ["test", "--config", "playwright.route-secret-hygiene.config.ts"],
         {
           encoding: "buffer",
           timeout: 120_000,
@@ -198,6 +223,7 @@ export async function checkRouteSecretHygiene() {
             MIA_ROUTE_HYGIENE_FIXTURE: JSON.stringify(fixture),
             MIA_ROUTE_HYGIENE_OUTPUT: artifacts,
             MIA_ROUTE_HYGIENE_EVIDENCE: checkpoints,
+            PLAYWRIGHT_JSON_OUTPUT_FILE: join(artifacts, "report.json"),
           },
         },
       );

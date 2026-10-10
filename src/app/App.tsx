@@ -31,7 +31,6 @@ import {
   type PasswordResetLink,
   type PasswordResetSurface,
 } from "../platform/session/passwordResetLink";
-import { ApplicationShell } from "./ApplicationShell";
 import { CheckingAccess } from "./routes/CheckingAccess";
 import {
   authenticatedRoute,
@@ -40,7 +39,6 @@ import {
   type AuthenticatedRouteAccess,
   type EntryRouteKey,
 } from "./routes/entryRoutes";
-import { ProfileMfaRoute } from "./routes/ProfileMfaRoute";
 import { SimpleEntrySurface } from "./routes/SimpleEntrySurface";
 import { SessionPrivacyShield, SessionWarning } from "./SessionLifecycle";
 import { RouteSequenceProvider } from "./routes/routeFrame";
@@ -58,6 +56,19 @@ type AppProps = {
 };
 const PrepareMaterialRoute = lazy(
   () => import("./routes/PrepareMaterialRoute"),
+);
+const PrepareStudentRoute = lazy(() => import("./routes/PrepareStudentRoute"));
+// Story 5.1 bounded FFR-955 mitigation: defer the already-existing protected
+// shell/host modules until admission. No MFA behavior or catalog change.
+const ApplicationShell = lazy(() =>
+  import("./ApplicationShell").then((module) => ({
+    default: module.ApplicationShell,
+  })),
+);
+const ProfileMfaRoute = lazy(() =>
+  import("./routes/ProfileMfaRoute").then((module) => ({
+    default: module.ProfileMfaRoute,
+  })),
 );
 const AdminInvitationRoute = lazy(() =>
   import("./routes/AdminInvitationRoute").then((module) => ({
@@ -290,9 +301,14 @@ function CanonicalEntry({
   }
 
   if (route.gate === "Profile(own MFA)")
-    return <ProfileMfaRoute key={location.key} route={route} />;
+    return (
+      <Suspense fallback={<CheckingAccess />}>
+        <ProfileMfaRoute key={location.key} route={route} />
+      </Suspense>
+    );
   if (
     route.gate === "Prepare(materials)" ||
+    route.gate === "Prepare(students)" ||
     route.gate === "Prepare(courses)" ||
     route.gate === "Administer(courses)" ||
     route.gate === "Administer(invitations)"
@@ -335,6 +351,13 @@ function CanonicalEntry({
               key={location.key}
               route={route}
               invitationId={authenticated.invitationId}
+            />
+          ) : route.gate === "Prepare(students)" ? (
+            <PrepareStudentRoute
+              key={`${location.key}:${access?.epoch}`}
+              route={route}
+              courseId={authenticated.courseId ?? null}
+              studentId={authenticated.studentId ?? null}
             />
           ) : route.gate === "Prepare(materials)" ? (
             <PrepareMaterialRoute
@@ -430,13 +453,15 @@ function CanonicalEntry({
   // application shell (and its navigation) mount.
   if (route.gate === "Authenticated")
     return (
-      <ApplicationShell
-        titleMessage={route.titleMessage}
-        headingMessage={route.headingMessage}
-      >
-        <SessionWarning />
-        {content}
-      </ApplicationShell>
+      <Suspense fallback={<CheckingAccess />}>
+        <ApplicationShell
+          titleMessage={route.titleMessage}
+          headingMessage={route.headingMessage}
+        >
+          <SessionWarning />
+          {content}
+        </ApplicationShell>
+      </Suspense>
     );
 
   const mfaExpired =

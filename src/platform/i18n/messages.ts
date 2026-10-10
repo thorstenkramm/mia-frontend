@@ -1,6 +1,138 @@
 import { defineMessages } from "react-intl";
 
 export const messages = defineMessages({
+  studentListTitle: {
+    id: "students.listTitle",
+    defaultMessage: "Course students | MIA",
+  },
+  studentList: { id: "students.list", defaultMessage: "Course students" },
+  studentCreateTitle: {
+    id: "students.createTitle",
+    defaultMessage: "Create student | MIA",
+  },
+  studentCreate: { id: "students.create", defaultMessage: "Create student" },
+  studentMembershipTitle: {
+    id: "students.membershipTitle",
+    defaultMessage: "Student membership | MIA",
+  },
+  studentMembership: {
+    id: "students.membership",
+    defaultMessage: "Student membership",
+  },
+  studentJoined: { id: "students.joined", defaultMessage: "Joined" },
+  studentEmpty: {
+    id: "students.empty",
+    defaultMessage: "No student memberships on this page.",
+  },
+  studentChoose: {
+    id: "students.choose",
+    defaultMessage: "Choose for the student",
+  },
+  studentTemporaryPassword: {
+    id: "students.password",
+    defaultMessage: "Temporary password",
+  },
+  studentPasswordConfirmation: {
+    id: "students.confirmation",
+    defaultMessage: "Confirm temporary password",
+  },
+  studentPasswordReveal: {
+    id: "students.reveal",
+    defaultMessage: "Show temporary password",
+  },
+  studentPasswordHide: {
+    id: "students.hide",
+    defaultMessage: "Hide temporary password",
+  },
+  studentConfirmationReveal: {
+    id: "students.confirmationReveal",
+    defaultMessage: "Show temporary password confirmation",
+  },
+  studentConfirmationHide: {
+    id: "students.confirmationHide",
+    defaultMessage: "Hide temporary password confirmation",
+  },
+  studentHandoff: {
+    id: "students.handoff",
+    defaultMessage:
+      "Communicate the chosen username and temporary password to the student outside MIA. MIA will not return them or provide a copy action. The student must replace the temporary password at first sign-in before other authenticated use.",
+  },
+  studentChecking: {
+    id: "students.checking",
+    defaultMessage: "Checking current course before creation…",
+  },
+  studentSubmitting: {
+    id: "students.submitting",
+    defaultMessage: "Creating student…",
+  },
+  studentCreated: {
+    id: "students.created",
+    defaultMessage: "Student created and added to the course.",
+  },
+  studentInvalid: {
+    id: "students.invalid",
+    defaultMessage:
+      "Check the username, password and all required student choices before submitting.",
+  },
+  studentUsernameInvalid: {
+    id: "students.username.invalid",
+    defaultMessage:
+      "Choose a username with 3 to 32 letters A–Z, digits, periods, underscores, or hyphens. Start and end with a letter or digit.",
+  },
+  studentLanguageMissing: {
+    id: "students.language.missing",
+    defaultMessage: "Choose the student's language.",
+  },
+  studentCountryMissing: {
+    id: "students.country.missing",
+    defaultMessage: "Choose the student's country.",
+  },
+  studentTimeZoneMissing: {
+    id: "students.timeZone.missing",
+    defaultMessage: "Choose the student's time zone.",
+  },
+  studentNotSent: {
+    id: "students.notSent",
+    defaultMessage:
+      "Creation was not sent. Review the form before a new submission.",
+  },
+  studentInactive: {
+    id: "students.inactive",
+    defaultMessage:
+      "The course is inactive. Student creation is unavailable. Check current course state before continuing.",
+  },
+  studentCheckRequired: {
+    id: "students.checkRequired",
+    defaultMessage:
+      "Check current course state before continuing with a blank form.",
+  },
+  studentUnknown: {
+    id: "students.unknown",
+    defaultMessage: "Student creation is unconfirmed",
+  },
+  studentUnknownHelp: {
+    id: "students.unknownHelp",
+    defaultMessage:
+      "An account and membership may have been created. The chosen credentials have been discarded. Refresh to review one current roster page; it cannot confirm this attempt or prove absence.",
+  },
+  studentUnconfirmed: {
+    id: "students.unconfirmed",
+    defaultMessage:
+      "This attempt remains unconfirmed. Starting a new blank form may create another account; the earlier creation may already have occurred.",
+  },
+  studentAbandon: {
+    id: "students.abandon",
+    defaultMessage: "Abandon unconfirmed attempt and start a new blank form",
+  },
+  studentUnsaved: {
+    id: "students.unsaved",
+    defaultMessage: "Discard student credentials?",
+  },
+  studentDiscardHelp: {
+    id: "students.discardHelp",
+    defaultMessage:
+      "Leaving discards all chosen student fields and credentials. Nothing will be restored when you return.",
+  },
   courseReadinessTitle: {
     id: "activation.readinessTitle",
     defaultMessage: "Course readiness | MIA",

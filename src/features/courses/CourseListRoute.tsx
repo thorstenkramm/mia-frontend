@@ -193,6 +193,20 @@ type Activity =
   | { readonly kind: "Loading" }
   | { readonly kind: "Failed"; readonly error: EntryApiFailure };
 
+// Same established secondary-action blueprint; explicit foreground refresh only.
+export function CourseRefreshButton({
+  refresh,
+}: {
+  readonly refresh: () => void;
+}) {
+  const intl = useIntl();
+  return (
+    <button type="button" className={courseActionClass} onClick={refresh}>
+      {intl.formatMessage(messages.invitationsRefresh)}
+    </button>
+  );
+}
+
 export default function CourseListRoute({
   resource,
   links,
@@ -263,13 +277,7 @@ function CourseList({
             {intl.formatMessage(messages.coursesCreateHeading)}
           </RouteDepartureLink>
         ) : null}
-        <button
-          type="button"
-          className={courseActionClass}
-          onClick={() => void checkRouteAdmission()}
-        >
-          {intl.formatMessage(messages.invitationsRefresh)}
-        </button>
+        <CourseRefreshButton refresh={() => void checkRouteAdmission()} />
       </div>
       <h2
         ref={heading}

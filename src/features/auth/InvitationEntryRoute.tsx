@@ -48,7 +48,10 @@ import {
   type InvitationView,
 } from "../../platform/session/invitationLink";
 import { AuthSubmitButton } from "../../platform/ui/AuthSubmitButton";
-import { countryCodes } from "./countryCodes";
+import {
+  countryOptions,
+  timeZoneOptions,
+} from "../../platform/ui/accountProfileOptions";
 import {
   primaryAction,
   secondaryAction,
@@ -59,7 +62,10 @@ import {
   waitText,
   WarningResult,
 } from "./LinkFlowParts";
-import { NewPasswordForm, useNewPasswordCheck } from "./NewPasswordFields";
+import {
+  NewPasswordForm,
+  useNewPasswordCheck,
+} from "../../platform/ui/NewPasswordFields";
 
 type MessageDescriptor = (typeof messages)[keyof typeof messages];
 
@@ -644,31 +650,6 @@ function NativeSelect({
       )}
     </div>
   );
-}
-
-function countryOptions(
-  locale: string,
-): readonly { readonly code: string; readonly name: string }[] {
-  const names = new Intl.DisplayNames([locale], { type: "region" });
-  const collator = new Intl.Collator(locale);
-  return countryCodes
-    .map((code) => ({ code, name: names.of(code) ?? code }))
-    .sort((left, right) => collator.compare(left.name, right.name));
-}
-
-// The browser's IANA zones plus UTC and the browser's own zone, prefilled with
-// the browser's zone.
-function timeZoneOptions(): {
-  readonly zones: readonly string[];
-  readonly browser: string;
-} {
-  const browser = Intl.DateTimeFormat().resolvedOptions().timeZone;
-  const zones = new Set([
-    ...Intl.supportedValuesOf("timeZone"),
-    "UTC",
-    browser,
-  ]);
-  return { zones: [...zones].sort(), browser };
 }
 
 function previewRetryMessage(

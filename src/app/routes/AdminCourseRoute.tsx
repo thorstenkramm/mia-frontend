@@ -1,4 +1,10 @@
-import { useEffectEvent, useLayoutEffect, useRef, useState } from "react";
+import {
+  useEffectEvent,
+  useLayoutEffect,
+  useRef,
+  useState,
+  type ReactNode,
+} from "react";
 import { useIntl } from "react-intl";
 import { listSupervisorCandidates } from "../../platform/api/administrationAccounts";
 import {
@@ -25,20 +31,152 @@ import {
   invitationRoutePaths,
   prepareCoursePath,
   materialPath,
+  studentPath,
   type CourseEntryRoute,
 } from "./entryRoutes";
 import { SimpleEntrySurface } from "./SimpleEntrySurface";
 import { RouteRecoveryBoundary } from "./RouteRecoveryBoundary";
 
-type HostState =
+type HostState<T> =
   | { readonly kind: "Checking" }
   | {
       readonly kind: "Check failed" | "Unavailable";
-      readonly error: EntryApiFailure;
+      readonly error: EntryApiFailure | null;
     }
-  | { readonly kind: "Ready"; readonly resource: CourseRouteResource };
+  | { readonly kind: "Ready"; readonly resource: T };
 const actionClass =
   "rounded-md px-3 py-2 text-sm font-semibold text-indigo-600 hover:text-indigo-500 focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-indigo-600";
+
+// Shared admission settlement, not shared authorization: each host owns its
+// ordered loader and hidden-failure classification. A generation fences both
+// departure and StrictMode's abandoned first load.
+export function useCourseResourceAdmission<T>(
+  load: (signal: AbortSignal) => Promise<T | null>,
+  hidden: (failure: EntryApiFailure) => boolean,
+) {
+  const { readAuthenticated } = useSessionActions();
+  const [state, setState] = useState<HostState<T>>({ kind: "Checking" });
+  const sequence = useRef(0);
+  const start = useEffectEvent((current: () => boolean) => {
+    void readAuthenticated(load).then((result) => {
+      if (!current()) return;
+      if (result.kind === "completed")
+        setState(
+          result.value === null
+            ? { kind: "Unavailable", error: null }
+            : { kind: "Ready", resource: result.value },
+        );
+      else if (result.kind === "failed")
+        setState({
+          kind: hidden(result.failure) ? "Unavailable" : "Check failed",
+          error: result.failure,
+        });
+    });
+  });
+  useLayoutEffect(() => {
+    let active = true;
+    const attempt = ++sequence.current;
+    start(() => active && sequence.current === attempt);
+    return () => {
+      active = false;
+    };
+  }, []);
+  return {
+    state,
+    unavailable: (error: EntryApiFailure | null) => {
+      sequence.current++;
+      setState({ kind: "Unavailable", error });
+    },
+  };
+}
+
+// Established exact shell/recovery blueprints. Hosts supply only admitted
+// children; this frame owns the identical neutral checking/failure presentation.
+export function CourseAdmissionSurface<T>({
+  state,
+  route,
+  exit,
+  children,
+}: {
+  readonly state: HostState<T>;
+  readonly route: Pick<CourseEntryRoute, "titleMessage" | "headingMessage">;
+  readonly exit: ReactNode;
+  readonly children: ReactNode;
+}) {
+  const intl = useIntl();
+  const { beginAuthenticatedLogout, checkRouteAdmission } = useSessionActions();
+  const signOut = (
+    <button
+      type="button"
+      className={actionClass}
+      onClick={beginAuthenticatedLogout}
+    >
+      {intl.formatMessage(messages.logoutButton)}
+    </button>
+  );
+  if (state.kind === "Checking")
+    return (
+      <CheckingAccess>
+        <SessionWarning />
+      </CheckingAccess>
+    );
+  if (state.kind !== "Ready")
+    return (
+      <SimpleEntrySurface
+        titleMessage={messages.coursesUnavailableTitle}
+        headingMessage={messages.coursesUnavailableHeading}
+      >
+        <SessionWarning />
+        <RouteRecoveryPanel
+          heading={intl.formatMessage(messages.coursesUnavailableHeading)}
+          actions={
+            <>
+              {state.kind === "Check failed" ? (
+                <button
+                  type="button"
+                  className={actionClass}
+                  onClick={() => void checkRouteAdmission()}
+                >
+                  {intl.formatMessage(messages.mfaCheckAgain)}
+                </button>
+              ) : null}
+              {exit}
+              {signOut}
+            </>
+          }
+        >
+          <p>
+            {intl.formatMessage(
+              state.kind === "Unavailable"
+                ? messages.coursesUnavailable
+                : messages.coursesCheckFailed,
+            )}
+          </p>
+          {state.error === null ? null : (
+            <TechnicalErrorDisclosure error={state.error} />
+          )}
+        </RouteRecoveryPanel>
+      </SimpleEntrySurface>
+    );
+  return (
+    <ApplicationShell
+      titleMessage={route.titleMessage}
+      headingMessage={route.headingMessage}
+    >
+      <SessionWarning />
+      <RouteRecoveryBoundary
+        actions={
+          <>
+            {exit}
+            {signOut}
+          </>
+        }
+      >
+        {children}
+      </RouteRecoveryBoundary>
+    </ApplicationShell>
+  );
+}
 
 export function AdminCourseRoute({
   route,
@@ -99,32 +237,10 @@ export function CourseResourceHost({
 }) {
   const intl = useIntl();
   const access = useAuthenticatedAccess();
-  const { readAuthenticated, beginAuthenticatedLogout, checkRouteAdmission } =
-    useSessionActions();
-  const [state, setState] = useState<HostState>({ kind: "Checking" });
-  const sequence = useRef(0);
-  const start = useEffectEvent((current: () => boolean) => {
-    void readAuthenticated(load).then((result) => {
-      if (!current()) return;
-      if (result.kind === "completed")
-        setState({ kind: "Ready", resource: result.value });
-      else if (result.kind === "failed")
-        setState({
-          kind: isHiddenCourseFailure(result.failure)
-            ? "Unavailable"
-            : "Check failed",
-          error: result.failure,
-        });
-    });
-  });
-  useLayoutEffect(() => {
-    let active = true;
-    const attempt = ++sequence.current;
-    start(() => active && sequence.current === attempt);
-    return () => {
-      active = false;
-    };
-  }, []);
+  const { state, unavailable } = useCourseResourceAdmission(
+    load,
+    isHiddenCourseFailure,
+  );
   const parent = {
     ...route.parent,
     path:
@@ -137,74 +253,10 @@ export function CourseResourceHost({
       {intl.formatMessage(parent.label)}
     </RouteDepartureLink>
   );
-  const signOut = (
-    <button
-      type="button"
-      className={actionClass}
-      onClick={beginAuthenticatedLogout}
-    >
-      {intl.formatMessage(messages.logoutButton)}
-    </button>
-  );
-  if (state.kind === "Checking")
-    return (
-      <CheckingAccess>
-        <SessionWarning />
-      </CheckingAccess>
-    );
-  if (state.kind === "Check failed" || state.kind === "Unavailable")
-    return (
-      // Same fixed unavailable JSX: minimal duplication marker lives in PrepareMaterialRoute.
-      <SimpleEntrySurface
-        titleMessage={messages.coursesUnavailableTitle}
-        headingMessage={messages.coursesUnavailableHeading}
-      >
-        <SessionWarning />
-        <RouteRecoveryPanel
-          heading={intl.formatMessage(messages.coursesUnavailableHeading)}
-          actions={
-            <>
-              {state.kind === "Check failed" ? (
-                <button
-                  type="button"
-                  className={actionClass}
-                  onClick={() => void checkRouteAdmission()}
-                >
-                  {intl.formatMessage(messages.mfaCheckAgain)}
-                </button>
-              ) : null}
-              {exit}
-              {signOut}
-            </>
-          }
-        >
-          <p>
-            {intl.formatMessage(
-              state.kind === "Unavailable"
-                ? messages.coursesUnavailable
-                : messages.coursesCheckFailed,
-            )}
-          </p>
-          <TechnicalErrorDisclosure error={state.error} />
-        </RouteRecoveryPanel>
-      </SimpleEntrySurface>
-    );
-  if (state.kind !== "Ready") throw new Error("Unresolved course host state.");
   const Content = route.component;
   return (
-    <ApplicationShell
-      titleMessage={route.titleMessage}
-      headingMessage={route.headingMessage}
-    >
-      <SessionWarning />
-      <RouteRecoveryBoundary
-        actions={
-          <>
-            {exit}
-            {signOut}
-          </>
-        }
-      >
+    <CourseAdmissionSurface state={state} route={route} exit={exit}>
+      {state.kind === "Ready" ? (
         <Content
           resource={state.resource}
           links={{
@@ -214,6 +266,8 @@ export function CourseResourceHost({
             detail: courseDetailPath,
             preparation: prepareCoursePath,
             materials: materialPath,
+            students: (id) => studentPath(id),
+            studentCreate: (id) => studentPath(id, "create"),
             readiness: (id) => prepareCoursePath(id, "readiness"),
             activation: (id) => prepareCoursePath(id, "activation"),
             invitation: access?.invitationAdministration
@@ -225,12 +279,9 @@ export function CourseResourceHost({
             access.supervisorAssignments &&
             access.supervisorCandidates
           }
-          unavailable={(error) => {
-            sequence.current++;
-            setState({ kind: "Unavailable", error });
-          }}
+          unavailable={unavailable}
         />
-      </RouteRecoveryBoundary>
-    </ApplicationShell>
+      ) : null}
+    </CourseAdmissionSurface>
   );
 }

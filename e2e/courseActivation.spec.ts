@@ -208,10 +208,15 @@ test(
         control.collectionReads === 0 &&
         control.candidateReads === 0 &&
         (await page
-          .locator(
-            'main a[href*="roster"], main a[href*="deactivate"], main a[href*="delete"]',
-          )
+          .locator('main a[href*="deactivate"], main a[href*="delete"]')
           .count()) === 0,
+    ).toBe(true);
+    expect(
+      (await page
+        .locator(
+          `main a[href="${hub}/students"], main a[href="${hub}/students/new"]`,
+        )
+        .count()) === 2,
     ).toBe(true);
     await scan(page);
     await routeHygieneCheckpoint(page, "activation-hub");

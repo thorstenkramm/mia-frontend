@@ -44,6 +44,20 @@ export default function CoursePreparationRoute({
         className="mt-6 flex flex-wrap gap-3"
       >
         <RouteDepartureLink
+          to={links.students(preparation.course.id)}
+          className={courseActionClass}
+        >
+          {intl.formatMessage(messages.studentList)}
+        </RouteDepartureLink>
+        {preparation.course.state === "active" ? (
+          <RouteDepartureLink
+            to={links.studentCreate(preparation.course.id)}
+            className={courseActionClass}
+          >
+            {intl.formatMessage(messages.studentCreate)}
+          </RouteDepartureLink>
+        ) : null}
+        <RouteDepartureLink
           to={links.readiness(preparation.course.id)}
           className={courseActionClass}
         >

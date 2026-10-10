@@ -2,6 +2,103 @@
 // R1 repair. IDs/checkpoints are fixed public labels, never fixture-derived.
 export const routeHygieneCases = [
   {
+    id: "student-boundary",
+    title:
+      "student temporary password enabled unfocused boundaries meet contrast in normal and invalid states",
+    checkpoints: [
+      "student-boundary-normal",
+      "student-boundary-invalid",
+      "complete",
+    ],
+  },
+  ...["profiles", "language", "username-profiles", "all-fields"].map(
+    (scenario) => ({
+      id: `student-field-errors-${scenario}`,
+      title: `student local ${scenario} errors have linked DOM order and precise corrective focus`,
+      checkpoints: ["student-field-errors", "complete"],
+    }),
+  ),
+  {
+    id: "student-paste",
+    title:
+      "student password paste preserves exact Unicode spaces and clipboard has no automatic handoff",
+    checkpoints: ["student-pasted", "complete"],
+  },
+  ...["csrf", "expired", "restricted", "denied"].map((loss) => ({
+    id: `student-security-${loss}`,
+    title: `student ${loss} clears credential surface and never retries unsafe creation`,
+    checkpoints: ["student-security", "complete"],
+  })),
+  {
+    id: "student-gates",
+    title:
+      "student stage and independent capability gates never discover course or roster",
+    checkpoints: ["complete"],
+  },
+  {
+    id: "student-inactive",
+    title:
+      "student preflight deactivation sends nothing and inactive POST destroys credentials",
+    checkpoints: ["student-inactive", "complete"],
+  },
+  {
+    id: "student-connected",
+    title:
+      "student connected active nonaccepting hub creates once and reads minimal membership and roster",
+    checkpoints: ["student-input", "student-success", "complete"],
+  },
+  ...["conflict", "invalid"].map((outcome) => ({
+    id: `student-${outcome}`,
+    title: `student ${outcome} preserves native correction and raw disclosure remains inert`,
+    checkpoints: ["student-rejected", "complete"],
+  })),
+  ...["lose", "malformed", "server"].map((outcome) => ({
+    id: `student-${outcome}`,
+    title: `student ${outcome} drops credentials and explicit bounded reconciliation never confirms attempt`,
+    checkpoints: ["student-unknown", "student-reconciled", "complete"],
+  })),
+  {
+    id: "student-stopped",
+    title:
+      "student stopped dispatch destroys native controls and fences late definitive response",
+    checkpoints: ["student-stopped", "student-late", "complete"],
+  },
+  {
+    id: "student-lifecycle",
+    title:
+      "student lifecycle and scope loss destroy credentials without automatic discovery",
+    checkpoints: ["student-cleared", "complete"],
+  },
+  {
+    id: "student-dirty",
+    title:
+      "student dirty keyboard departure keeps safe focus then discards credential controls",
+    checkpoints: ["student-stay", "student-discard", "complete"],
+  },
+  {
+    id: "student-roster",
+    title:
+      "student inactive roster pages remain authorized while creation and unsupported actions stay absent",
+    checkpoints: ["complete"],
+  },
+  {
+    id: "student-denied",
+    title:
+      "student denied membership clears identity with a fixed neutral presentation",
+    checkpoints: ["complete"],
+  },
+  {
+    id: "student-locales",
+    title:
+      "student all seven locales and text modes preserve form roster membership reflow and semantics",
+    checkpoints: ["complete"],
+  },
+  ...["standard", "large", "extra-large"].map((mode) => ({
+    id: `student-zoom-${mode}`,
+    title: `student complete process at real 200 percent browser zoom ${mode}`,
+    checkpoints: ["student-input", "complete"],
+  })),
+  {
     id: "preparation-activation-not-accepting",
     title:
       "activation definitive response announces once and newer nonaccepting hub truth remains authoritative",

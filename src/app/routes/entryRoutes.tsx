@@ -8,6 +8,8 @@ import type { MfaRouteProps } from "../../features/profile/MfaRouteProps";
 import type { InvitationRouteProps } from "../../features/invitations/InvitationRouteProps";
 import type { CourseRouteProps } from "../../features/courses/CourseRouteProps";
 import type { MaterialRouteProps } from "../../features/materials/MaterialRouteProps";
+import type { CourseStudentRouteProps } from "../../features/courses/CourseStudentRouteProps";
+import { toAccountId, type AccountId } from "../../platform/api/entry";
 import { toMaterialId, type MaterialId } from "../../platform/api/entry";
 import { toCourseId, type CourseId } from "../../platform/api/entry";
 import type { CourseTeachingField } from "../../platform/api/courses";
@@ -93,7 +95,30 @@ type EntryRoute =
       readonly component: LazyExoticComponent<
         ComponentType<MaterialRouteProps>
       >;
+    })
+  | (EntryRouteBase & {
+      readonly path: (typeof studentRoutePaths)[keyof typeof studentRoutePaths];
+      readonly gate: "Prepare(students)";
+      readonly resource: "list" | "create" | "membership";
+      readonly component: LazyExoticComponent<
+        ComponentType<CourseStudentRouteProps>
+      >;
     });
+
+export const studentRoutePaths = {
+  list: "/prepare/courses/:courseId/students",
+  create: "/prepare/courses/:courseId/students/new",
+  membership: "/prepare/courses/:courseId/students/:studentId",
+} as const;
+export function studentPath(
+  course: CourseId,
+  resource: keyof typeof studentRoutePaths = "list",
+  student: AccountId | null = null,
+): string {
+  return studentRoutePaths[resource]
+    .replace(":courseId", encodeURIComponent(course))
+    .replace(":studentId", student === null ? "" : encodeURIComponent(student));
+}
 
 export const materialRoutePaths = {
   list: "/prepare/courses/:courseId/materials",
@@ -274,6 +299,39 @@ export function invitationPath(
 }
 
 export const entryRoutes = {
+  studentList: {
+    path: studentRoutePaths.list,
+    gate: "Prepare(students)",
+    resource: "list",
+    parent: { path: courseRoutePaths.hub, label: messages.preparationHub },
+    titleMessage: messages.studentListTitle,
+    headingMessage: messages.studentList,
+    component: lazy(
+      () => import("../../features/courses/CourseStudentListRoute"),
+    ),
+  },
+  studentCreate: {
+    path: studentRoutePaths.create,
+    gate: "Prepare(students)",
+    resource: "create",
+    parent: { path: studentRoutePaths.list, label: messages.studentList },
+    titleMessage: messages.studentCreateTitle,
+    headingMessage: messages.studentCreate,
+    component: lazy(
+      () => import("../../features/courses/CourseStudentCreateRoute"),
+    ),
+  },
+  studentMembership: {
+    path: studentRoutePaths.membership,
+    gate: "Prepare(students)",
+    resource: "membership",
+    parent: { path: studentRoutePaths.list, label: messages.studentList },
+    titleMessage: messages.studentMembershipTitle,
+    headingMessage: messages.studentMembership,
+    component: lazy(
+      () => import("../../features/courses/CourseStudentMembershipRoute"),
+    ),
+  },
   materialProcessing: {
     ...materialRoutes.materialProcessing,
     gate: "Prepare(materials)",
@@ -581,6 +639,10 @@ export type MaterialEntryRoute = Extract<
   (typeof entryRoutes)[EntryRouteKey],
   { readonly gate: "Prepare(materials)" }
 >;
+export type StudentEntryRoute = Extract<
+  (typeof entryRoutes)[EntryRouteKey],
+  { readonly gate: "Prepare(students)" }
+>;
 
 const profileMfaRouteKeys = [
   "mfaOverview",
@@ -607,6 +669,7 @@ export type AuthenticatedRoute = {
   readonly invitationId: InvitationId | null;
   readonly courseId?: CourseId;
   readonly materialId?: MaterialId;
+  readonly studentId?: AccountId;
 };
 
 const home: AuthenticatedRoute = {
@@ -632,6 +695,8 @@ export function authenticatedRoute(
   pathname: string,
   access: AuthenticatedRouteAccess,
 ): AuthenticatedRoute {
+  const student = parseStudentRoute(pathname, access);
+  if (student !== null) return student;
   const material = parseMaterialRoute(pathname, access);
   if (material !== null) return material;
   if (pathname === courseRoutePaths.prepare && access.courseSupervision)
@@ -774,6 +839,53 @@ function parseMaterialRoute(
       courseId,
       materialId,
       path: materialPath(courseId, resource, materialId),
+      invitationId: null,
+    };
+  } catch {
+    return null;
+  }
+}
+
+function parseStudentRoute(
+  pathname: string,
+  access: AuthenticatedRouteAccess,
+): AuthenticatedRoute | null {
+  const match = /^\/prepare\/courses\/([^/]+)\/students(?:\/([^/]+))?$/u.exec(
+    pathname,
+  );
+  if (!access.courseSupervision || match?.[1] === undefined) return null;
+  try {
+    const courseId = toCourseId(decodeURIComponent(match[1]));
+    if (!access.supervisedCourseIds?.includes(courseId)) return null;
+    const segment =
+      match[2] === undefined ? null : decodeURIComponent(match[2]);
+    const key =
+      segment === null
+        ? "studentList"
+        : segment === "new"
+          ? "studentCreate"
+          : "studentMembership";
+    if (
+      segment !== null &&
+      [
+        "add",
+        "remove",
+        "profile",
+        "security",
+        "materials",
+        "sessions",
+      ].includes(segment)
+    )
+      return null;
+    const studentId =
+      key === "studentMembership" && segment !== null
+        ? toAccountId(segment)
+        : null;
+    return {
+      key,
+      courseId,
+      ...(studentId === null ? {} : { studentId }),
+      path: studentPath(courseId, entryRoutes[key].resource, studentId),
       invitationId: null,
     };
   } catch {

@@ -33,6 +33,8 @@ export type CourseRouteProps = {
     readonly create: string;
     readonly invitation: string | null;
     readonly materials: (id: CourseId) => string;
+    readonly students: (id: CourseId) => string;
+    readonly studentCreate: (id: CourseId) => string;
     readonly readiness: (id: CourseId) => string;
     readonly activation: (id: CourseId) => string;
     readonly detail: (id: CourseId) => string;

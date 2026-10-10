@@ -16,8 +16,8 @@ import {
   type RefObject,
 } from "react";
 import { useIntl } from "react-intl";
-import { useAnnouncer } from "../../platform/announcer/AnnouncementRegion";
-import { messages } from "../../platform/i18n/messages";
+import { useAnnouncer } from "../announcer/AnnouncementRegion";
+import { messages } from "../i18n/messages";
 import {
   checkReplacementPassword,
   type ReplacementPasswordProblems,
@@ -32,12 +32,19 @@ const passwordProblemMessages = {
 // A form-specific local check beyond the password rules. `problem` reads the
 // native values and returns the localized correction, or null when it passes;
 // `focus` moves to the failed field when no password problem takes focus first.
-export type ExtraLocalCheck = {
-  readonly problem: (data: FormData) => string | null;
-  readonly focus: () => void;
+export type LocalFieldProblem = {
+  readonly target: string;
+  readonly label: string;
 };
+export type ExtraLocalCheck =
+  | {
+      readonly problem: (data: FormData) => string | null;
+      readonly focus: () => void;
+    }
+  | { readonly fields: (data: FormData) => readonly LocalFieldProblem[] };
 
 export type NewPasswordCheck = {
+  readonly fieldProblems: readonly LocalFieldProblem[];
   readonly problems: ReplacementPasswordProblems | null;
   readonly passwordRef: RefObject<HTMLInputElement | null>;
   readonly confirmationRef: RefObject<HTMLInputElement | null>;
@@ -56,18 +63,32 @@ export function useNewPasswordCheck(): NewPasswordCheck {
   const passwordRef = useRef<HTMLInputElement>(null);
   const confirmationRef = useRef<HTMLInputElement>(null);
   const summaryRef = useRef<HTMLDivElement>(null);
+  const checkedForm = useRef<HTMLFormElement | null>(null);
+  const [fieldProblems, setFieldProblems] = useState<
+    readonly LocalFieldProblem[]
+  >([]);
   // Each failed local check is a new object, so repeated failures refocus.
   const [problems, setProblems] = useState<ReplacementPasswordProblems | null>(
     null,
   );
 
   useLayoutEffect(() => {
+    if (fieldProblems.length > 0) {
+      if (fieldProblems.length > 1) summaryRef.current?.focus();
+      else {
+        const target = fieldProblems[0]?.target;
+        for (const control of Array.from(checkedForm.current?.elements ?? []))
+          if (control instanceof HTMLElement && control.id === target)
+            control.focus();
+      }
+      return;
+    }
     if (problems === null) return;
     if (problems.password !== null && problems.confirmation !== null)
       summaryRef.current?.focus();
     else if (problems.password !== null) passwordRef.current?.focus();
     else confirmationRef.current?.focus();
-  }, [problems]);
+  }, [problems, fieldProblems]);
 
   function checkSubmission(
     event: FormEvent<HTMLFormElement>,
@@ -81,20 +102,48 @@ export function useNewPasswordCheck(): NewPasswordCheck {
       typeof password === "string" && typeof confirmation === "string"
         ? checkReplacementPassword(password, confirmation)
         : { password: "too-short" as const, confirmation: null };
-    const extraProblem = extra?.problem(data) ?? null;
+    const extraProblem =
+      extra !== undefined && "problem" in extra ? extra.problem(data) : null;
+    const fields =
+      extra !== undefined && "fields" in extra ? extra.fields(data) : [];
+    const allFields = [
+      ...fields,
+      ...(found?.password
+        ? [
+            {
+              target: "new-password",
+              label: intl.formatMessage(
+                passwordProblemMessages[found.password],
+              ),
+            },
+          ]
+        : []),
+      ...(found?.confirmation
+        ? [
+            {
+              target: "password-confirmation",
+              label: intl.formatMessage(messages.passwordChangeMismatch),
+            },
+          ]
+        : []),
+    ];
+    // The native form owns reading order; retain corrections/identities only, never values.
+    const controls = Array.from(event.currentTarget.elements);
+    allFields.sort(
+      (left, right) =>
+        controls.findIndex((node) => node.id === left.target) -
+        controls.findIndex((node) => node.id === right.target),
+    );
+    checkedForm.current = event.currentTarget;
+    setFieldProblems(allFields);
     setProblems(found);
-    if (found === null && extraProblem === null) return true;
+    if (found === null && extraProblem === null && fields.length === 0)
+      return true;
     event.preventDefault();
-    if (found === null) extra?.focus();
+    if (found === null && extra !== undefined && "focus" in extra)
+      extra.focus();
     // Form submit to invalid: one assertive corrective summary per attempt.
-    const corrections = [
-      found === null || found.password === null
-        ? null
-        : intl.formatMessage(passwordProblemMessages[found.password]),
-      found === null || found.confirmation === null
-        ? null
-        : intl.formatMessage(messages.passwordChangeMismatch),
-    ].filter((text) => text !== null);
+    const corrections = allFields.map((field) => field.label);
     announce(
       (corrections.length > 1
         ? [intl.formatMessage(messages.passwordChangeErrorSummary)]
@@ -108,6 +157,7 @@ export function useNewPasswordCheck(): NewPasswordCheck {
   }
 
   return {
+    fieldProblems,
     problems,
     passwordRef,
     confirmationRef,
@@ -164,69 +214,40 @@ export function NewPasswordForm({
   );
 }
 
-function NewPasswordFields({
+export function NewPasswordFields({
   check,
   enabled,
   rejectedBy,
+  temporary = false,
+  summary = true,
 }: {
   readonly check: NewPasswordCheck;
   readonly enabled: boolean;
   // The visible status element describing a definitive server rejection, if any.
   readonly rejectedBy: string | null;
+  readonly temporary?: boolean;
+  readonly summary?: boolean;
 }) {
   const intl = useIntl();
   const [passwordRevealed, setPasswordRevealed] = useState(false);
   const [confirmationRevealed, setConfirmationRevealed] = useState(false);
-  const { problems, passwordRef, confirmationRef, summaryRef } = check;
+  const { problems, passwordRef, confirmationRef } = check;
   const passwordProblem = problems?.password ?? null;
   const confirmationProblem = problems?.confirmation ?? null;
   const serverRejection = problems === null ? rejectedBy : null;
 
   return (
     <>
-      {passwordProblem !== null && confirmationProblem !== null ? (
-        <div
-          ref={summaryRef}
-          tabIndex={-1}
-          aria-labelledby="password-change-summary-heading"
-          className="rounded-md bg-red-50 p-4 focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-indigo-600"
-        >
-          <div className="flex">
-            <div className="shrink-0">
-              <XCircleIcon aria-hidden="true" className="size-5 text-red-400" />
-            </div>
-            <div className="ml-3 min-w-0">
-              <h2
-                id="password-change-summary-heading"
-                className="text-sm font-medium text-red-800"
-              >
-                {intl.formatMessage(messages.passwordChangeErrorSummary)}
-              </h2>
-              <div className="mt-2 text-sm text-red-700">
-                <ul role="list" className="list-disc space-y-1 pl-5">
-                  <SummaryEntry
-                    targetRef={passwordRef}
-                    target="new-password"
-                    label={intl.formatMessage(
-                      passwordProblemMessages[passwordProblem],
-                    )}
-                  />
-                  <SummaryEntry
-                    targetRef={confirmationRef}
-                    target="password-confirmation"
-                    label={intl.formatMessage(messages.passwordChangeMismatch)}
-                  />
-                </ul>
-              </div>
-            </div>
-          </div>
-        </div>
-      ) : null}
+      {summary ? <NewPasswordSummary check={check} /> : null}
       <PasswordField
         id="new-password"
         name="password"
         inputRef={passwordRef}
-        label={intl.formatMessage(messages.passwordChangeNewLabel)}
+        label={intl.formatMessage(
+          temporary
+            ? messages.studentTemporaryPassword
+            : messages.passwordChangeNewLabel,
+        )}
         help={intl.formatMessage(messages.passwordChangeRules)}
         problem={
           passwordProblem === null
@@ -240,15 +261,23 @@ function NewPasswordFields({
         onRevealedChange={setPasswordRevealed}
         revealLabel={intl.formatMessage(
           passwordRevealed
-            ? messages.passwordChangeHide
-            : messages.passwordChangeReveal,
+            ? temporary
+              ? messages.studentPasswordHide
+              : messages.passwordChangeHide
+            : temporary
+              ? messages.studentPasswordReveal
+              : messages.passwordChangeReveal,
         )}
       />
       <PasswordField
         id="password-confirmation"
         name="password_confirmation"
         inputRef={confirmationRef}
-        label={intl.formatMessage(messages.passwordChangeConfirmationLabel)}
+        label={intl.formatMessage(
+          temporary
+            ? messages.studentPasswordConfirmation
+            : messages.passwordChangeConfirmationLabel,
+        )}
         help={intl.formatMessage(messages.passwordChangeConfirmationHelp)}
         problem={
           confirmationProblem === null
@@ -262,20 +291,62 @@ function NewPasswordFields({
         onRevealedChange={setConfirmationRevealed}
         revealLabel={intl.formatMessage(
           confirmationRevealed
-            ? messages.passwordChangeConfirmationHide
-            : messages.passwordChangeConfirmationReveal,
+            ? temporary
+              ? messages.studentConfirmationHide
+              : messages.passwordChangeConfirmationHide
+            : temporary
+              ? messages.studentConfirmationReveal
+              : messages.passwordChangeConfirmationReveal,
         )}
       />
     </>
   );
 }
 
+// Same licensed With list alert, lifted to the start of the owning form when
+// leading/trailing fields participate in the shared local validation attempt.
+export function NewPasswordSummary({
+  check,
+}: {
+  readonly check: NewPasswordCheck;
+}) {
+  const intl = useIntl();
+  const { fieldProblems, summaryRef } = check;
+  return fieldProblems.length > 1 ? (
+    <div
+      ref={summaryRef}
+      tabIndex={-1}
+      aria-labelledby="password-change-summary-heading"
+      className="rounded-md bg-red-50 p-4 focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-indigo-600"
+    >
+      <div className="flex">
+        <div className="shrink-0">
+          <XCircleIcon aria-hidden="true" className="size-5 text-red-400" />
+        </div>
+        <div className="ml-3 min-w-0">
+          <h2
+            id="password-change-summary-heading"
+            className="text-sm font-medium text-red-800"
+          >
+            {intl.formatMessage(messages.passwordChangeErrorSummary)}
+          </h2>
+          <div className="mt-2 text-sm text-red-700">
+            <ul role="list" className="list-disc space-y-1 pl-5">
+              {fieldProblems.map(({ target, label }) => (
+                <SummaryEntry key={target} target={target} label={label} />
+              ))}
+            </ul>
+          </div>
+        </div>
+      </div>
+    </div>
+  ) : null;
+}
+
 function SummaryEntry({
-  targetRef,
   target,
   label,
 }: {
-  readonly targetRef: RefObject<HTMLInputElement | null>;
   readonly target: string;
   readonly label: string;
 }) {
@@ -286,9 +357,9 @@ function SummaryEntry({
         onClick={(event) => {
           // Move focus without adding a fragment history entry.
           event.preventDefault();
-          targetRef.current?.focus();
+          document.getElementById(target)?.focus();
         }}
-        className="underline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-indigo-600"
+        className="inline-block min-h-6 underline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-indigo-600"
       >
         {label}
       </a>
@@ -353,8 +424,8 @@ function PasswordField({
           className={clsx(
             "col-start-1 row-start-1 block w-full rounded-md bg-white py-1.5 pl-3 text-base outline-1 -outline-offset-1 focus:outline-2 focus:-outline-offset-2 sm:text-sm/6",
             invalid
-              ? "pr-10 text-red-900 outline-red-300 focus:outline-red-600 sm:pr-9"
-              : "pr-3 text-gray-900 outline-gray-300 focus:outline-indigo-600",
+              ? "pr-10 text-red-900 outline-red-600 focus:outline-red-600 sm:pr-9"
+              : "pr-3 text-gray-900 outline-gray-500 focus:outline-indigo-600",
           )}
         />
         {invalid ? (

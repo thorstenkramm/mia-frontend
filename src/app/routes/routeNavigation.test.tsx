@@ -27,10 +27,60 @@ import {
   materialPath,
   prepareCoursePath,
   entryRoutes,
+  studentPath,
 } from "./entryRoutes";
-import { toCourseId, toMaterialId } from "../../platform/api/entry";
+import {
+  toCourseId,
+  toMaterialId,
+  toAccountId,
+} from "../../platform/api/entry";
 
 const path = "/profile/security/mfa";
+it("student routes preserve opaque relationship identity parents and reserved action exclusions", () => {
+  const course = toCourseId("opaque/course");
+  const student = toAccountId("opaque/student");
+  const access = {
+    ownProfileView: false,
+    invitationAdministration: false,
+    courseRecords: false,
+    courseCreate: false,
+    supervisorAssignments: false,
+    courseSupervision: true,
+    supervisedCourseIds: [course],
+  };
+  for (const destination of [
+    studentPath(course),
+    studentPath(course, "create"),
+    studentPath(course, "membership", student),
+  ]) {
+    expect(
+      authenticatedRoute(destination, access).path === destination &&
+        authenticatedRoute(destination, { ...access, supervisedCourseIds: [] })
+          .key === "home" &&
+        authenticatedRoute(`${destination}/`, access).key === "home",
+    ).toBe(true);
+  }
+  for (const segment of [
+    "add",
+    "remove",
+    "profile",
+    "security",
+    "materials",
+    "sessions",
+    "%",
+    "student/profile",
+  ])
+    expect(
+      authenticatedRoute(`${studentPath(course)}/${segment}`, access).key ===
+        "home",
+    ).toBe(true);
+  expect(
+    entryRoutes.studentCreate.parent.path === entryRoutes.studentList.path &&
+      entryRoutes.studentMembership.parent.path ===
+        entryRoutes.studentList.path &&
+      entryRoutes.studentList.parent.path === "/prepare/courses/:courseId",
+  ).toBe(true);
+});
 it("readiness and activation preserve canonical opaque scope and explicit parents", () => {
   const course = toCourseId("opaque/course");
   const access = {

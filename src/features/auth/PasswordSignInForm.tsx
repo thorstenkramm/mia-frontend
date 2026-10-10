@@ -19,7 +19,7 @@ import {
 import { TechnicalErrorDisclosure } from "../../platform/api/TechnicalErrorDisclosure";
 import { messages } from "../../platform/i18n/messages";
 import { AuthSubmitButton } from "../../platform/ui/AuthSubmitButton";
-import { PasswordRevealButton } from "./PasswordRevealButton";
+import { PasswordRevealButton } from "../../platform/ui/PasswordRevealButton";
 
 const outcomeMessages = {
   rejected: messages.loginRejected,

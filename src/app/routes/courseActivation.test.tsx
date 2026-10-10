@@ -282,7 +282,15 @@ for (const acceptance of ["active_accepting", "active_not_accepting"])
               ? "Active — accepting new tutoring sessions"
               : "Active — not accepting new tutoring sessions",
           ) &&
-          !document.querySelector('main a[href*="roster"]'),
+          document.querySelector(
+            'main a[href="/prepare/courses/course_1/students"]',
+          ) !== null &&
+          document.querySelector(
+            'main a[href="/prepare/courses/course_1/students/new"]',
+          ) !== null &&
+          !document.querySelector(
+            'main a[href*="deactivate"], main a[href*="delete"]',
+          ),
       ).toBe(true),
     );
     courseUnitCheckpoint("activation-success");
