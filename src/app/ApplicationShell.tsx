@@ -6,6 +6,7 @@ import {
 } from "@headlessui/react";
 import {
   Bars3Icon,
+  ChatBubbleLeftRightIcon,
   EnvelopeIcon,
   AcademicCapIcon,
   HomeIcon,
@@ -75,6 +76,16 @@ function authorizedGroups(
               to: entryRoutes.learnCourses.path,
               label: messages.learnCourses,
               icon: AcademicCapIcon,
+            },
+            {
+              to: entryRoutes.learnStart.path,
+              label: messages.tutoringStartLink,
+              icon: ChatBubbleLeftRightIcon,
+            },
+            {
+              to: entryRoutes.learnSessionRecovery.path,
+              label: messages.tutoringResumeLink,
+              icon: ChatBubbleLeftRightIcon,
             },
           ]
         : [],

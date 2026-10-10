@@ -89,6 +89,7 @@ const PrepareCourseRoute = lazy(() =>
   })),
 );
 const LearnCourseRoute = lazy(() => import("./routes/LearnCourseRoute"));
+const LearnSessionRoute = lazy(() => import("./routes/LearnSessionRoute"));
 
 export function App({
   initialTextSize,
@@ -311,12 +312,17 @@ function CanonicalEntry({
     );
   if (
     route.gate === "Learn(courses)" ||
+    route.gate === "Learn(start session)" ||
+    route.gate === "Learn(tutoring session)" ||
     route.gate === "Prepare(materials)" ||
     route.gate === "Prepare(students)" ||
     route.gate === "Prepare(courses)" ||
     route.gate === "Administer(courses)" ||
     route.gate === "Administer(invitations)"
-  )
+  ) {
+    const tutoringGate =
+      route.gate === "Learn(start session)" ||
+      route.gate === "Learn(tutoring session)";
     return (
       <RouteRecoveryBoundary
         key={`${location.key}:${access?.epoch}`}
@@ -325,12 +331,16 @@ function CanonicalEntry({
             titleMessage={
               route.gate === "Administer(invitations)"
                 ? messages.invitationsUnavailablePageTitle
-                : messages.coursesUnavailableTitle
+                : tutoringGate
+                  ? messages.tutoringUnavailableTitle
+                  : messages.coursesUnavailableTitle
             }
             headingMessage={
               route.gate === "Administer(invitations)"
                 ? messages.invitationsUnavailableHeading
-                : messages.coursesUnavailableHeading
+                : tutoringGate
+                  ? messages.tutoringUnavailableHeading
+                  : messages.coursesUnavailableHeading
             }
           >
             <RouteRecoveryPanel
@@ -362,6 +372,13 @@ function CanonicalEntry({
               route={route}
               courseId={authenticated.courseId ?? null}
             />
+          ) : tutoringGate ? (
+            <LearnSessionRoute
+              key={`${location.key}:${access?.epoch}`}
+              route={route}
+              courseId={authenticated.courseId ?? null}
+              sessionId={authenticated.sessionId ?? null}
+            />
           ) : route.gate === "Prepare(students)" ? (
             <PrepareStudentRoute
               key={`${location.key}:${access?.epoch}`}
@@ -392,6 +409,7 @@ function CanonicalEntry({
         </Suspense>
       </RouteRecoveryBoundary>
     );
+  }
   const RouteContent = route.component;
   const parent =
     invitation?.view.kind === "interstitial"

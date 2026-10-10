@@ -1065,6 +1065,16 @@ review, material/approval and activation process evidence and manual supported-b
 | `CP-05/STA` | `LP-STA` + `PS-05` | `CV-C` | Planned: `EP-STA` | `BCG-002`, `012` | Blocked |
 | `CP-05/AUT` | `LP-AUT` + `PS-05` | `CV-C` | Planned: `EP-AUT` | `BCG-003`, `005` | Blocked |
 | `CP-05/EXT` | `LP-EXT` + `PS-05` | `CV-C` | Planned: `EP-EXT` | `BCG-012` | Blocked |
+
+Story 6.1 slice disposition, 2026-10-10: the batch-authorized student-start slice reconciliation in
+`BACKEND-CONTRACT-GAPS.md` (BCG-002 active-session slice, BCG-011 student-start slice) resumes the bounded
+start/recovery/workspace subset of CP-05 for the admitted student. Focused unit and bundled-Chromium evidence covers
+session start with zero, one or several approved materials, active-session conflict recovery, existence-hidden
+failures, the fixed completed-session notice, seven locales at 320px and 200%/400% zoom with
+spacing/forced-colors/reduced-motion checks. Actual check results/counts and content-free logs are recorded in the
+Story 6.1 implementation spec/report; this note does not mark CP-05 or its rows Pass. Message send/queue, stop,
+retry, finish, the wider stream/queue process states, supported Chrome/Edge/Safari and assistive-technology manual
+evidence remain outstanding, so every CP-05 row stays Blocked/Not run.
 | `CP-06/CHK` | `LP-CHK` + `PS-06` | `CV-S` | Planned: `EP-CHK` | `BCG-001`, `003`, `004` | Blocked |
 | `CP-06/EMP` | `LP-EMP` + `PS-06` | `CV-S` | Planned: `EP-EMP` | None | Not run |
 | `CP-06/SUC` | `LP-SUC` + `PS-06` | `CV-S` | Planned: `EP-SUC` | `BCG-004`, `005` | Blocked |
@@ -1183,6 +1193,12 @@ manual evidence, full concurrency and wider action/process obligations remain ou
 | `CP-05/A03` | Stop response | `PS-05` + `LP-STA`; `EP-STA` | `BCG-012` | Blocked |
 | `CP-05/A04` | Retry exact attempt | `PS-05` + `LP-UNK`; `EP-UNK` | `BCG-012` | Blocked |
 | `CP-05/A05` | Finish tutoring session | `PS-05` + `LP-SUC`; `EP-SUC` | `BCG-012` | Blocked |
+
+Story 6.1 slice disposition, 2026-10-10: CP-05/A01 gains partial automated evidence only for the bounded
+start/recovery/workspace slice (see the CP-05 row note above): unit and bundled-Chromium checks for start, conflict
+recovery, hidden failure and the completed-session notice, in seven locales at 320px and real zoom. The row remains
+Blocked; its manual supported-browser/assistive-technology matrix and the complete start-to-first-turn process stay
+outstanding, and CP-05/A02 through A05 are untouched by this story.
 | `CP-06/A01` | Review completed transcript | `PS-06` + `LP-SUC`; `EP-SUC` | None | Not run |
 | `CP-06/A02` | Correct or regenerate summary | `PS-06` + `LP-STA`; `EP-STA` | `BCG-004` | Blocked |
 | `CP-07/A01` | Student creates mentoring request | `PS-07` + `LP-SUC`; `EP-SUC` | `BCG-013` | Blocked |

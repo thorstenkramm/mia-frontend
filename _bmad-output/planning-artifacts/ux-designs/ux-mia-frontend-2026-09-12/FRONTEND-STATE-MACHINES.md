@@ -178,6 +178,12 @@ not correlate an old attempt, replay it, or claim whether it was saved. This is 
 Cross-course session recovery remains `BLOCKED` on
 `BCG-002: Cross-course active tutoring-session discovery`.
 
+Story 6.1 slice, 2026-10-10 (`BACKEND-CONTRACT-GAPS.md` §BCG-002 Story 6.1 active-session slice reconciliation):
+`GET /api/v1/users/me/active-tutoring-session` is now the authoritative cross-course discovery read, so a
+session-creation attempt in this machine uses it as the reconciliation path after an ambiguous create response or
+`409 tutoring_active_session`, for `/learn/session` recovery, and as the `/learn/start` pre-check. The `BLOCKED`
+line above no longer applies to this slice; Home continuation and broader BCG-002 release evidence remain blocked.
+
 ## 3. SSE Connection Epoch and Terminal Reconciliation
 
 | State | Trigger | UI | Permitted action | Authoritative recovery |
@@ -441,7 +447,14 @@ original validated 200 active CourseDocument confirms this attempt; a later acti
 Stop waiting fences ordinary late results but not applicable hidden denial. Existing security/scope owners govern
 teardown. No Start, reactivation, deactivation, deletion or roster action is added; no full-machine/release Pass.
 
-Outside those slices these states are `BLOCKED` on `BCG-011: Course readiness and session-start eligibility`. Do not count material rows,
+Story 6.1 batch decision, 2026-10-10 (`BACKEND-CONTRACT-GAPS.md` §Story 6.1 student-start slice reconciliation):
+the student new-session slice of `Active accepting` joins the approved slices. The `/learn/start` course choice
+consumes only server-authored `new_session` eligibility: eligible rows offer the material-choice route, blocked rows
+show fixed not-accepting copy without supervisor-only detail, and `active_tutoring_session` links to the
+discovery-owned recovery route. The Start mutation itself is a machine-2 request-ID attempt, not a readiness state.
+No activation, readiness-review, or supervisor action is added; no full-machine or release Pass is implied.
+
+Outside the approved slices above these states are `BLOCKED` on `BCG-011: Course readiness and session-start eligibility`. Do not count material rows,
 inspect nullable fields, or probe activation or session creation to discover readiness.
 
 ## 13. Tutor Attempt Lineage and Stable DOM

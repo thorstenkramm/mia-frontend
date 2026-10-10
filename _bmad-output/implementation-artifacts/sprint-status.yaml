@@ -79,7 +79,7 @@ development_status:
   epic-5-retrospective: optional
 
   epic-6: backlog
-  6-1-start-or-resume-the-students-tutoring-session: backlog
+  6-1-start-or-resume-the-students-tutoring-session: done
   6-2-send-messages-and-show-the-single-queued-message: backlog
   6-3-stream-answers-without-disrupting-reading: backlog
   6-4-recover-stop-and-deliberately-retry-tutoring-work: backlog

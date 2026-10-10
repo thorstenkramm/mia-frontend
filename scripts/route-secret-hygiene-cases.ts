@@ -495,6 +495,55 @@ export const routeHygieneCases = [
     title: "course connected process remains operable at real 200 percent zoom",
     checkpoints: ["course-input", "course-persisted", "complete"],
   },
+  // Story 6.1 tutoring session start/resume (e2e/tutoringSessions.spec.ts).
+  {
+    id: "tutoring-start",
+    title:
+      "tutoring start chooses course and material once and reload resumes through recovery",
+    checkpoints: ["tutoring-content", "complete"],
+  },
+  {
+    id: "tutoring-conflict",
+    title:
+      "tutoring active-session conflict discovers once and never dispatches a second start",
+    checkpoints: ["tutoring-course", "complete"],
+  },
+  {
+    id: "tutoring-unknown",
+    title:
+      "tutoring lost start response reconciles through discovery and a fresh sign-in rediscovers the session",
+    checkpoints: ["tutoring-course", "complete"],
+  },
+  {
+    id: "tutoring-retry",
+    title:
+      "tutoring reconciled unknown retries only the exact retained request identity",
+    checkpoints: ["tutoring-content", "complete"],
+  },
+  {
+    id: "tutoring-hidden",
+    title:
+      "tutoring hidden causes share the fixed neutral presentation without start affordances",
+    checkpoints: ["learn-hidden", "complete"],
+  },
+  {
+    id: "tutoring-finished",
+    title:
+      "tutoring completed session shows the fixed finished notice without transcript reads",
+    checkpoints: ["complete"],
+  },
+  {
+    id: "tutoring-locales",
+    title:
+      "tutoring start recovery and workspace reflow in all seven locales and text modes at 320 pixels",
+    checkpoints: ["tutoring-content", "complete"],
+  },
+  {
+    id: "tutoring-zoom",
+    title:
+      "tutoring surfaces preserve keyboard structure and pass axe at actual 200 percent zoom in every text mode",
+    checkpoints: ["complete"],
+  },
   // Story 3.2 executes the actual joined cases in scaffold's bounded describe.
   ...["standard", "large", "extra-large"].map((size) => ({
     id: `supervisor-handoff-${size}`,

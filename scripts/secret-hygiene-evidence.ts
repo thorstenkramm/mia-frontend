@@ -32,6 +32,137 @@ export const unitCases = [
 type CaseId = (typeof browserCases)[number] | (typeof unitCases)[number];
 
 export const courseUnitCases = [
+  // Story 6.1 tutoring session start/resume: every connected case installs
+  // secret-bearing fixtures, including denied gates and each outcome.
+  ...(
+    [
+      [
+        "Tutoring discovery returns explicit none and strips every non-projection field",
+        "tutoring-discovery",
+      ],
+      [
+        "Tutoring discovery rejects malformed documents instead of guessing none",
+        "tutoring-discovery-malformed",
+      ],
+      [
+        "Tutoring creation binds the request ID and optional material in one exact payload",
+        "tutoring-create",
+      ],
+      [
+        "Tutoring creation accepts only 200 or 201 and rejects cross-course or ambiguous success",
+        "tutoring-create-status",
+      ],
+      [
+        "Tutoring session read requires the addressed identity and strips summary fields",
+        "tutoring-session",
+      ],
+      [
+        "Tutoring turn pages reject duplicate wrong-identity and cross-session rows",
+        "tutoring-turns",
+      ],
+      [
+        "Tutoring turn pages keep bounded escaped text and reject unsafe navigation",
+        "tutoring-turn-pages",
+      ],
+      [
+        "Tutoring hidden failures cover exactly denial unknown and throttled statuses",
+        "tutoring-hidden",
+      ],
+    ] as const
+  ).map(([title, point]) => ({
+    title,
+    file: "src/platform/api/tutoringSessions.test.ts",
+    points: [point],
+  })),
+  {
+    title:
+      "Tutoring workspace withholds session and transcript reads until learning participation settles",
+    file: "src/app/routes/learnSessionEntry.test.tsx",
+    points: ["tutoring-admitted"],
+  },
+  {
+    title:
+      "Tutoring start runs discovery before any start affordance and resumes the found session",
+    file: "src/app/routes/learnSessionEntry.test.tsx",
+    points: ["tutoring-resume"],
+  },
+  {
+    title:
+      "Tutoring course choice lists joined courses with server eligibility and no local computation",
+    file: "src/app/routes/learnSessionEntry.test.tsx",
+    points: ["tutoring-choice"],
+  },
+  {
+    title:
+      "Tutoring material start dispatches one request-ID-bound creation and navigates to the workspace",
+    file: "src/app/routes/learnSessionEntry.test.tsx",
+    points: ["tutoring-created"],
+  },
+  {
+    title:
+      "Tutoring start replay 200 without material is the same definitive navigation",
+    file: "src/app/routes/learnSessionEntry.test.tsx",
+    points: ["tutoring-replay"],
+  },
+  {
+    title:
+      "Tutoring active-session and request conflicts reconcile through one discovery read without a second start",
+    file: "src/app/routes/learnSessionEntry.test.tsx",
+    points: ["tutoring-conflict"],
+  },
+  ...["invalid-state", "invalid", "not-found"].map((outcome) => ({
+    title: `Tutoring ${outcome} ends the attempt definitively without replay`,
+    file: "src/app/routes/learnSessionEntry.test.tsx",
+    points: ["tutoring-rejected"],
+  })),
+  {
+    title:
+      "Tutoring lost start response stays unknown and explicit reconcile resumes the discovered session",
+    file: "src/app/routes/learnSessionEntry.test.tsx",
+    points: ["tutoring-unknown", "tutoring-reconciled"],
+  },
+  {
+    title:
+      "Tutoring reconciled unknown retries the exact retained attempt only explicitly",
+    file: "src/app/routes/learnSessionEntry.test.tsx",
+    points: ["tutoring-retry"],
+  },
+  {
+    title:
+      "Tutoring abandon destroys the retained attempt locally and a later start is a fresh attempt",
+    file: "src/app/routes/learnSessionEntry.test.tsx",
+    points: ["tutoring-abandon"],
+  },
+  {
+    title:
+      "Tutoring Stop waiting after dispatch keeps the outcome unknown and never claims the late success",
+    file: "src/app/routes/learnSessionEntry.test.tsx",
+    points: ["tutoring-stopped"],
+  },
+  {
+    title:
+      "Tutoring hidden causes share one neutral presentation on the material and workspace routes",
+    file: "src/app/routes/learnSessionEntry.test.tsx",
+    points: ["tutoring-route-hidden"],
+  },
+  {
+    title:
+      "Tutoring recovery replaces a found session with the workspace and offers fixed exits when none",
+    file: "src/app/routes/learnSessionEntry.test.tsx",
+    points: ["tutoring-recovery"],
+  },
+  {
+    title:
+      "Tutoring completed session renders the fixed finished notice without a transcript read",
+    file: "src/app/routes/learnSessionEntry.test.tsx",
+    points: ["tutoring-finished"],
+  },
+  {
+    title:
+      "Tutoring workspace renders persisted turns as escaped text with neutral response labels",
+    file: "src/app/routes/learnSessionEntry.test.tsx",
+    points: ["tutoring-transcript"],
+  },
   ...(
     [
       [

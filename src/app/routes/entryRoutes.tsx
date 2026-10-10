@@ -15,6 +15,11 @@ import { toMaterialId, type MaterialId } from "../../platform/api/entry";
 import { toCourseId, type CourseId } from "../../platform/api/entry";
 import type { CourseTeachingField } from "../../platform/api/courses";
 import { courseTeachingFields } from "../../features/courses/courseTeachingFields";
+import type { TutoringRouteProps } from "../../features/tutoring/TutoringRouteProps";
+import {
+  toTutoringSessionId,
+  type TutoringSessionId,
+} from "../../platform/api/tutoringSessions";
 import {
   toInvitationId,
   type InvitationId,
@@ -41,6 +46,24 @@ type EntryRoute =
       readonly resource: "list" | "detail" | "materials";
       readonly component: LazyExoticComponent<
         ComponentType<LearnCourseRouteProps>
+      >;
+    })
+  // Story 6.1: tutoring start carries its own ordered gate (discovery before
+  // any start affordance; course re-read before material choice).
+  | (EntryRouteBase & {
+      readonly path: (typeof learnStartPaths)[keyof typeof learnStartPaths];
+      readonly gate: "Learn(start session)";
+      readonly resource: "start-choice" | "material-choice";
+      readonly component: LazyExoticComponent<
+        ComponentType<TutoringRouteProps>
+      >;
+    })
+  | (EntryRouteBase & {
+      readonly path: (typeof learnSessionPaths)[keyof typeof learnSessionPaths];
+      readonly gate: "Learn(tutoring session)";
+      readonly resource: "recovery" | "workspace";
+      readonly component: LazyExoticComponent<
+        ComponentType<TutoringRouteProps>
       >;
     })
   | (EntryRouteBase & {
@@ -122,6 +145,31 @@ export const learnCoursePaths = {
 export function learnCoursePath(id: CourseId, materials = false): string {
   return learnCoursePaths[materials ? "materials" : "detail"].replace(
     ":courseId",
+    encodeURIComponent(id),
+  );
+}
+
+// ROUTE-INVENTORY.md §Session Start. Story 6.1 registers course choice and the
+// optional material choice only; the intent/starter routes remain 6.2.
+export const learnStartPaths = {
+  choice: "/learn/start",
+  material: "/learn/start/:courseId/material",
+} as const;
+export function learnStartPath(course: CourseId | null = null): string {
+  return course === null
+    ? learnStartPaths.choice
+    : learnStartPaths.material.replace(":courseId", encodeURIComponent(course));
+}
+
+// ROUTE-INVENTORY.md §Session Recovery and §Tutoring Workspace. Session
+// identity is an opaque backend ID; nothing else enters the path.
+export const learnSessionPaths = {
+  recovery: "/learn/session",
+  workspace: "/learn/sessions/:sessionId",
+} as const;
+export function learnSessionPath(id: TutoringSessionId): string {
+  return learnSessionPaths.workspace.replace(
+    ":sessionId",
     encodeURIComponent(id),
   );
 }
@@ -346,6 +394,53 @@ export const entryRoutes = {
     titleMessage: messages.learnMaterialsTitle,
     headingMessage: messages.learnMaterials,
     component: lazy(() => import("../../features/courses/LearnCourseSurface")),
+  },
+  learnStart: {
+    path: learnStartPaths.choice,
+    gate: "Learn(start session)",
+    resource: "start-choice",
+    parent: { path: learnCoursePaths.list, label: messages.learnCourses },
+    titleMessage: messages.tutoringStartTitle,
+    headingMessage: messages.tutoringStartHeading,
+    component: lazy(
+      () => import("../../features/tutoring/SessionStartCourseChoiceRoute"),
+    ),
+  },
+  learnStartMaterial: {
+    path: learnStartPaths.material,
+    gate: "Learn(start session)",
+    resource: "material-choice",
+    parent: {
+      path: learnStartPaths.choice,
+      label: messages.tutoringStartHeading,
+    },
+    titleMessage: messages.tutoringMaterialTitle,
+    headingMessage: messages.tutoringMaterialHeading,
+    component: lazy(
+      () => import("../../features/tutoring/SessionStartMaterialRoute"),
+    ),
+  },
+  learnSessionRecovery: {
+    path: learnSessionPaths.recovery,
+    gate: "Learn(tutoring session)",
+    resource: "recovery",
+    parent: { path: "/", label: messages.invitationsBackToHome },
+    titleMessage: messages.tutoringRecoveryTitle,
+    headingMessage: messages.tutoringRecoveryHeading,
+    component: lazy(
+      () => import("../../features/tutoring/SessionRecoveryRoute"),
+    ),
+  },
+  learnSessionWorkspace: {
+    path: learnSessionPaths.workspace,
+    gate: "Learn(tutoring session)",
+    resource: "workspace",
+    parent: { path: learnCoursePaths.list, label: messages.learnCourses },
+    titleMessage: messages.tutoringWorkspaceTitle,
+    headingMessage: messages.tutoringWorkspaceHeading,
+    component: lazy(
+      () => import("../../features/tutoring/TutoringWorkspaceRoute"),
+    ),
   },
   studentList: {
     path: studentRoutePaths.list,
@@ -674,6 +769,10 @@ export type LearnCourseEntryRoute = Extract<
   (typeof entryRoutes)[EntryRouteKey],
   { readonly gate: "Learn(courses)" }
 >;
+export type LearnSessionEntryRoute = Extract<
+  (typeof entryRoutes)[EntryRouteKey],
+  { readonly gate: "Learn(start session)" | "Learn(tutoring session)" }
+>;
 export type ProfileMfaEntryRoute = Extract<
   (typeof entryRoutes)[EntryRouteKey],
   { readonly gate: "Profile(own MFA)" }
@@ -724,6 +823,7 @@ export type AuthenticatedRoute = {
   readonly courseId?: CourseId;
   readonly materialId?: MaterialId;
   readonly studentId?: AccountId;
+  readonly sessionId?: TutoringSessionId;
 };
 
 const home: AuthenticatedRoute = {
@@ -767,6 +867,44 @@ export function authenticatedRoute(
     } catch {
       return home;
     }
+  }
+  // Session start needs learning participation up front; the addressed
+  // material, recovery and workspace paths stay recognized after scope loss
+  // so the host can render its neutral hidden result without dependent reads.
+  if (pathname === learnStartPaths.choice && access.learningParticipation)
+    return { key: "learnStart", path: pathname, invitationId: null };
+  const startMaterial = /^\/learn\/start\/([^/]+)\/material$/u.exec(pathname);
+  if (startMaterial?.[1] !== undefined) {
+    try {
+      const id = toCourseId(decodeURIComponent(startMaterial[1]));
+      if (id !== "" && id !== "new")
+        return {
+          key: "learnStartMaterial",
+          path: learnStartPath(id),
+          courseId: id,
+          invitationId: null,
+        };
+    } catch {
+      return home;
+    }
+  }
+  if (pathname === learnSessionPaths.recovery)
+    return { key: "learnSessionRecovery", path: pathname, invitationId: null };
+  const session = /^\/learn\/sessions\/([^/]+)$/u.exec(pathname);
+  if (session?.[1] !== undefined) {
+    let sessionId: TutoringSessionId | null = null;
+    try {
+      sessionId = toTutoringSessionId(decodeURIComponent(session[1]));
+    } catch {
+      return home;
+    }
+    if (sessionId !== null)
+      return {
+        key: "learnSessionWorkspace",
+        path: learnSessionPath(sessionId),
+        sessionId,
+        invitationId: null,
+      };
   }
   const student = parseStudentRoute(pathname, access);
   if (student !== null) return student;

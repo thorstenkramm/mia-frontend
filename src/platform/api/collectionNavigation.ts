@@ -1,8 +1,26 @@
+import { z } from "zod";
 import { ApiProtocolError } from "./client";
 
 export const collectionPageLimit = 25;
 const maximumOffset = 10_000;
 const pageLinks = ["prev", "next"] as const;
+
+// The one bounded collection envelope: fixed page limit, the has_more flag
+// and optional server-supplied navigation links. Each caller supplies its row
+// schema; unknown fields stay stripped by the row schema itself.
+export function collectionDocument<Row extends z.ZodType>(row: Row) {
+  return z.object({
+    errors: z.never().optional(),
+    data: z.array(row).max(collectionPageLimit),
+    meta: z.object({ has_more: z.boolean() }),
+    links: z
+      .object({
+        next: z.string().exactOptional(),
+        prev: z.string().exactOptional(),
+      })
+      .exactOptional(),
+  });
+}
 
 // Navigation is supplied by the server, never synthesized from page size.
 // Each collection supplies its own exact path and fixed filter contract.

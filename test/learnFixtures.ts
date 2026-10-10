@@ -55,6 +55,7 @@ export function learnCourseDocument(
   id = "course_1",
   state = "active",
   accepting = true,
+  newSessionBlockers: string[] = [],
 ) {
   return {
     data: {
@@ -79,7 +80,7 @@ export function learnCourseDocument(
           },
           new_session: {
             eligible: accepting,
-            blockers: [],
+            blockers: newSessionBlockers,
             consequences: ["start_tutoring_session"],
           },
           blockers: [],

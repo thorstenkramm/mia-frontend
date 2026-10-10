@@ -1,0 +1,52 @@
+story: 6-1-start-or-resume-the-students-tutoring-session
+phase: commit-pending
+spec: _bmad-output/implementation-artifacts/spec-6-1-start-or-resume-the-students-tutoring-session.md
+baseline_commit: 94174e27ad0d6682f09591d5eee127895800f3e1
+pre_existing_changes:
+  - ".opencode/ agent and protocol edits (owner workflow updates, uncommitted)"
+  - "execution checkpoints for stories 2-1, 2-2, 3-1, 3-2, 4-1 (bookkeeping, uncommitted)"
+  - "sprint-status.yaml unstaged hunk (Epic 2 retrospective closure + done/next_story bookkeeping around committed hunks)"
+  - "_bmad-output/implementation-artifacts/epic-2-retro-2026-10-07.md (untracked)"
+files: []
+worker_session: ses_ed9b156c3ffe5b7VJpHwlmmc1g
+reviewer_session: null
+models:
+  prepare: kimi-code/k3
+  implement: kimi-code/k3
+completed_blocks:
+  - "Epic 5 complete: 5-1 (1d6354f) and 5-2 (3737013 + 94174e2) committed; HEAD 94174e27ad0d6682f09591d5eee127895800f3e1 on 2026-10-10."
+  - "Owner scope 2026-10-10: proceed to 6-1 with the same batch rules: unattended within the story, per-story reviewed+verified commit, no push, interim-workaround pattern with mia/tmp RFCs, never weaken security/privacy invariants, rate-limit rotation openai -> kimi-code/k3 -> anthropic (OpenAI hit its usage limit during 5-2; workers currently on kimi-code/k3)."
+  - "Approved interim precedents: hardcoded documented-contract limits; generic authorized list with scope labels; bounded bundle mitigation within 256000 gzip bytes keeping seven languages; approval-observation ledger interim; G1 least-data exception with mandatory API-boundary discard (BCG-020)."
+  - "Prepare complete 2026-10-10 (kimi-code/k3): spec ready; createTutoringSession (client_request_id, 201/200 replay, 409 conflicts, 404 hidden), getCurrentActiveTutoringSession, getTutoringSession, listTutoringSessionMessages, readiness.new_session all verified in current transport; BCG-002 and BCG-011 student-start slices delivered (dated slice notes, not global closure); no RFC needed; interim decisions D1-D7 recorded in spec."
+  - "Review passed 2026-10-10 (kimi-code/k3): zero blocking findings; request-ID lifecycle, 409-to-discovery, outcome-unknown, ordered gates, existence-hiding fingerprinting, CSRF/epoch fencing, hygiene and duplication all traced clean; CP-05 notes and BCG slice notes verified honest. Nonblocking note: stale pre-repair route-hygiene-report.json must be regenerated or deleted at verify."
+repair_queue:
+  - id: N1
+    severity: low
+    finding: "Nonblocking evidence hygiene: logs/route-hygiene-report.json is the stale pre-repair deliberate-failure artifact (wrong-failure for the since-repaired async race)."
+    disposition: "Accepted for verify-phase cleanup: regenerate or delete so retained evidence is internally consistent."
+repair_batch: 0
+last_verification:
+  status: passed
+  command: ./run-all-tests.sh
+  exit_code: 0
+  stages_completed: 16
+  skipped: []
+  unit_tests: 879
+  browser_tests: 300
+  build_count: 1
+  bundle_gzip_bytes: 252043
+  bundle_budget_bytes: 256000
+  fingerprint_stability: "before == after (0665882c...b2ca8d); delta vs failed run is exactly e2e/applicationShell.spec.ts"
+  report: tmp/agent-execution/6-1-start-or-resume-the-students-tutoring-session/verify-report.json
+  history: "First gate exited 1 on stale applicationShell e2e link-list expectation (V1); gating verified correct, test-only fix; fresh gate passed uninterrupted. Advisories: 4 low KaTeX npm-audit findings, 1 Trivy LOW KaTeX, 1 Trivy MEDIUM SendGrid-shaped false positive (country-code string)."
+resume_attempts: 0
+commit:
+  intended_message: "feat: add tutoring session start and resume"
+  sha: null
+next_action: Independent review of the 6.1 diff and evidence, then final gate.
+review_evidence:
+  implement_report: tmp/agent-execution/6-1-start-or-resume-the-students-tutoring-session/implement-report.json
+  diff: tmp/agent-execution/6-1-start-or-resume-the-students-tutoring-session/story.diff
+  manifest: tmp/agent-execution/6-1-start-or-resume-the-students-tutoring-session/manifest.json
+  summary: "44 diff sections; focused 258 unit + 8 Chromium passed; hygiene zero leaks (25 unit/26 + 8 route/14 checkpoints); duplication 0 clones with a comment-marked tutoring/activation overlap; bundle 252043/256000; 7 languages. One comment-only extra touch (useCourseActivation.ts)."
+blocked_on: null

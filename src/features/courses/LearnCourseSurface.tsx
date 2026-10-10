@@ -305,6 +305,10 @@ function LearnCollection({
     </>
   );
 }
+// Equivalent kind/format label maps are jscpd-marked in
+// features/tutoring/SessionStartMaterialRoute.tsx: the architecture rule bars
+// the cross-feature import and both surfaces own the same server-parsed
+// metadata labels.
 const kindMessages = {
   "text-book": messages.materialTextBook,
   exam: messages.materialExam,

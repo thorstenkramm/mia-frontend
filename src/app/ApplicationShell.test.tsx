@@ -182,11 +182,13 @@ describe("application shell", () => {
     renderAt("/", ...authenticatedHandlers(counts, everyCapability));
     await home();
 
-    // Only landed destinations, including joined-scope Learn discovery;
-    // no future tutoring destination or role switcher.
+    // Only landed destinations, including joined-scope Learn discovery and the
+    // tutoring start/resume entries; no role switcher.
     expect(linkNames()).toEqual([
       "Home",
       "Joined courses",
+      "Start a tutoring session",
+      "Resume tutoring",
       "Courses",
       "Invitations",
       "Prepare courses",

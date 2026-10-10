@@ -465,7 +465,7 @@ session-creation response or `tutoring_active_session` conflict are blocked.
   device change (`mia/docs/product-requirements.md:1114-1116`).
 - Cross-device continuation is an explicit acceptance scenario (`mia/docs/product-requirements.md:1717-1720`).
 
-#### BCG-002 current docs/OpenAPI mismatch
+#### BCG-002 historical docs/OpenAPI mismatch (superseded by the Story 6.1 slice below)
 
 - OpenAPI exposes only course-scoped collection access and ID-addressed session access
   (`mia/api-doc/openapi.yaml:138-155`).
@@ -503,6 +503,24 @@ discovery returns none.
 - Integration tests for login on a new device, reload, lost creation response, and active-session conflict. Each must
   resume the same retained session without duplicate creation.
 - Existence-hiding tests for unknown, deleted, and out-of-scope state.
+
+#### Story 6.1 active-session slice reconciliation — 2026-10-10
+
+The historical mismatch above no longer describes current transport. OpenAPI now provides
+`GET /api/v1/users/me/active-tutoring-session` (`getCurrentActiveTutoringSession`,
+`mia/api-doc/paths/tutoring.yaml`): one non-refreshing, `no-store` cross-course discovery read returning
+`ActiveTutoringSessionDocument` with `data: null` as the explicit no-active-session result or a minimal projection
+(session ID, course ID and name, active state, started/last-activity instants). It is atomic with respect to the
+one-active-session invariant and is the documented reconciliation path after ambiguous creation and
+`409 tutoring_active_session`. Inspected backend coverage (not a new run):
+`TestDiscoverActiveSessionLifecycleAndScope`, `TestConcurrentCompletionAndDiscoveryReturnCommittedState`,
+`TestConcurrentDeletionAndDiscoveryHideRemovedSession`, and
+`TestActiveSessionDiscoveryDependencyFailureReturnsInternalError`.
+
+The frontend consumes this operation for the `/learn/session` recovery route, the `/learn/start` pre-check, and
+post-conflict or outcome-unknown reconciliation after session creation. Story 6.1 implements only that slice; Home
+continuation surfaces, broader concurrency and browser evidence, and full release acceptance remain outstanding.
+BCG-002 is **not** globally closed.
 
 ### BCG-003: Server-authored current-account capabilities and scope
 
@@ -1067,6 +1085,19 @@ confirmed success, automatically retry an ambiguous reset, or reveal why an out-
   security generation, required password replacement, audit redaction, and ambiguous response reconciliation.
 
 ### BCG-011: Course readiness and session-start eligibility
+
+#### Story 6.1 student-start slice reconciliation — 2026-10-10
+
+The authorized unattended batch resumes the student new-session slice only: the `/learn/start` course choice, the
+optional material choice, and the Start mutation. `CourseReadiness.new_session` on the existing learner course read
+supplies server-authored new-session eligibility (`eligible` plus student-safe blockers with
+`consequences: [start_tutoring_session]`), recomputed atomically; the frontend never counts material rows or infers
+eligibility from course state. The backend returns only generic blockers to non-supervisors
+(`mia/internal/course/readiness.go`). Ineligible courses render fixed not-accepting copy with no Start affordance;
+an `active_tutoring_session` blocker links to the discovery-owned recovery route, and cross-course discovery itself
+is the BCG-002 Story 6.1 slice. The Story 4.2 and Story 4.5 slice decisions remain intact. BCG-011 is **not**
+globally closed: activation evidence, deactivation/relationship, comprehensive concurrency, and manual/release
+obligations remain outstanding.
 
 #### Story 4.5 first-activation slice reconciliation — 2026-10-09
 

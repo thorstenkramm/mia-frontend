@@ -96,6 +96,7 @@ export async function checkRouteSecretHygiene() {
       "e2e/materialPreparation.spec.ts",
       "e2e/studentProvisioning.spec.ts",
       "e2e/learnCourses.spec.ts",
+      "e2e/tutoringSessions.spec.ts",
       "--list",
       "--reporter=json",
     ],
@@ -139,50 +140,53 @@ export async function checkRouteSecretHygiene() {
     scope !== "activation" &&
     scope !== "student-entry" &&
     scope !== "learn" &&
+    scope !== "tutoring" &&
     scope !== "students"
   )
     throw new Error("Unknown route-hygiene scope.");
   const selected =
-    scope === "learn"
-      ? routeHygieneCases.filter(
-          (item) =>
-            item.id.startsWith("learn-") || item.id === "student-entry-learn",
-        )
-      : scope === "student-entry"
-        ? routeHygieneCases.filter((item) =>
-            item.id.startsWith("student-entry-"),
+    scope === "tutoring"
+      ? routeHygieneCases.filter((item) => item.id.startsWith("tutoring-"))
+      : scope === "learn"
+        ? routeHygieneCases.filter(
+            (item) =>
+              item.id.startsWith("learn-") || item.id === "student-entry-learn",
           )
-        : scope === "students"
-          ? routeHygieneCases.filter(
-              (item) =>
-                item.id.startsWith("student-") &&
-                !item.id.startsWith("student-entry-"),
+        : scope === "student-entry"
+          ? routeHygieneCases.filter((item) =>
+              item.id.startsWith("student-entry-"),
             )
-          : scope === "activation"
-            ? routeHygieneCases.filter((item) =>
-                item.id.startsWith("preparation-activation-"),
+          : scope === "students"
+            ? routeHygieneCases.filter(
+                (item) =>
+                  item.id.startsWith("student-") &&
+                  !item.id.startsWith("student-entry-"),
               )
-            : scope === "materials"
+            : scope === "activation"
               ? routeHygieneCases.filter((item) =>
-                  item.id.startsWith("material-"),
+                  item.id.startsWith("preparation-activation-"),
                 )
-              : scope === "preparation"
+              : scope === "materials"
                 ? routeHygieneCases.filter((item) =>
-                    item.id.startsWith("preparation-"),
+                    item.id.startsWith("material-"),
                   )
-                : scope === "invitations"
+                : scope === "preparation"
                   ? routeHygieneCases.filter((item) =>
-                      item.id.startsWith("invitation-"),
+                      item.id.startsWith("preparation-"),
                     )
-                  : scope === "supervisor-onboarding"
+                  : scope === "invitations"
                     ? routeHygieneCases.filter((item) =>
-                        item.id.startsWith("supervisor-"),
+                        item.id.startsWith("invitation-"),
                       )
-                    : scope === "courses"
+                    : scope === "supervisor-onboarding"
                       ? routeHygieneCases.filter((item) =>
-                          item.id.startsWith("course-"),
+                          item.id.startsWith("supervisor-"),
                         )
-                      : routeHygieneCases;
+                      : scope === "courses"
+                        ? routeHygieneCases.filter((item) =>
+                            item.id.startsWith("course-"),
+                          )
+                        : routeHygieneCases;
   const root = await mkdtemp(join(tmpdir(), "mia-route-hygiene-"));
   const evidence = [];
   try {
@@ -202,16 +206,22 @@ export async function checkRouteSecretHygiene() {
       await mkdir(artifacts, { recursive: true });
       await mkdir(checkpoints);
       const { fixture, markers } = makeFixture();
+      // The fixed historical hygiene config inventories only its original
+      // specs. New student and tutoring cases use the existing public config
+      // with exact case selection and the same no-capture settings in the
+      // actual spec; this keeps one runner without changing test configuration.
+      const publicSpec =
+        item.id.startsWith("student-") && !item.id.startsWith("student-entry-")
+          ? "e2e/studentProvisioning.spec.ts"
+          : item.id.startsWith("tutoring-")
+            ? "e2e/tutoringSessions.spec.ts"
+            : null;
       const child = spawnSync(
         executable,
-        // The fixed historical hygiene config inventories only its original
-        // specs. New student cases use the existing public config with exact
-        // case selection and the same no-capture settings in the actual spec;
-        // this keeps one runner without changing test configuration.
-        item.id.startsWith("student-") && !item.id.startsWith("student-entry-")
+        publicSpec !== null
           ? [
               "test",
-              "e2e/studentProvisioning.spec.ts",
+              publicSpec,
               "--config",
               "playwright.config.ts",
               "--grep",

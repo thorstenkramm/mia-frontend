@@ -125,10 +125,37 @@ it("Learn course projection accepts student-safe empty supervisors and rejects w
     course !== null &&
       course.name === seed.name &&
       !course.accepting &&
-      Object.keys(course).sort().join() === "accepting,id,name" &&
+      Object.keys(course).sort().join() === "accepting,id,name,newSession" &&
+      Object.keys(course.newSession).sort().join() === "blockers,eligible" &&
+      course.newSession.eligible === false &&
       !JSON.stringify(course).includes(seed.teachingText),
   ).toBe(true);
   wrong = true;
+  expect(await protocolRejected(getLearnCourse(id, signal()))).toBe(true);
+  wrong = false;
+  // A malformed or contradictory new-session eligibility is a protocol failure,
+  // never a local eligibility reconstruction.
+  server.use(
+    http.get("/api/v1/courses/course_1", () => {
+      const document = JSON.parse(
+        JSON.stringify(
+          learnCourseDocument(
+            seed.name,
+            seed.teachingText,
+            "course_1",
+            "active",
+            false,
+          ),
+        ),
+      ) as { data: { attributes: { readiness: { new_session: unknown } } } };
+      document.data.attributes.readiness.new_session = {
+        eligible: true,
+        blockers: ["active_tutoring_session"],
+        consequences: ["start_tutoring_session"],
+      };
+      return json(document);
+    }),
+  );
   expect(await protocolRejected(getLearnCourse(id, signal()))).toBe(true);
   courseUnitCheckpoint("learn-course");
 });

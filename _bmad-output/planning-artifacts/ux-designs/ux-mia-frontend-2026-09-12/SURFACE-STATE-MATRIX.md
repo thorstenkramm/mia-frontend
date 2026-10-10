@@ -236,8 +236,13 @@ only after explicit activation and fresh authorization; object URLs are revoked 
 | Static starters | `G,D` | five localized starters; inserted, never submitted | intent | `TUTOR,ACCESS` |
 | Free-form intent | `G,F` | empty; valid; bounded; submission outcome unknown | workspace | `TUTOR,INPUT` |
 
-Current active-session detection, creation-conflict recovery, and cross-device continuation remain blocked by
-`BCG-002`. Session-start readiness remains blocked by `BCG-011`.
+Story 6.1 slice, 2026-10-10 (`BACKEND-CONTRACT-GAPS.md` §BCG-002 and §BCG-011 Story 6.1 reconciliations): the
+Course choice row consumes server-authored `new_session` eligibility, the Optional material choice row lists the
+existing approved-material metadata with one optional selection, and the Start action is a machine-2 request-ID
+attempt. The Session recovery row in Tutoring workspace below runs the authoritative cross-course discovery read
+(`checking; found; none; sign-in expired; unavailable`). Static starters and the free-form intent route are not
+registered by this slice. Home continuation, broader concurrency evidence, and the release obligations of `BCG-002`
+and `BCG-011` remain open; the blocked markers above stay for everything outside this slice.
 
 ### Tutoring workspace
 

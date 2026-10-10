@@ -56,6 +56,9 @@ function reviewedFacts(value: CoursePreparation): string {
 
 // Machine 12's route-local operation owner. Session owns security/scope epochs,
 // fresh CSRF, the single unsafe dispatch and settlement even after Stop waiting.
+// The rhyming machine-2 session-start hook carries the jscpd marker for this
+// pair: see useTutoringSessionStart.ts (separate state-machine ownership; the
+// architecture rule bars cross-feature imports).
 export function useCourseActivation(
   initial: CoursePreparation,
   hub: string,

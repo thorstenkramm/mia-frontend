@@ -47,6 +47,22 @@ type HostState<T> =
 const actionClass =
   "rounded-md px-3 py-2 text-sm font-semibold text-indigo-600 hover:text-indigo-500 focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-indigo-600";
 
+// Neutral failure copy for one admission surface. Story 6.1 parameterizes the
+// copy so the tutoring host keeps its own fixed text instead of duplicating
+// the frame; the courses default keeps every existing caller unchanged.
+type AdmissionCopy = {
+  readonly unavailableTitle: (typeof messages)[keyof typeof messages];
+  readonly unavailableHeading: (typeof messages)[keyof typeof messages];
+  readonly unavailableBody: (typeof messages)[keyof typeof messages];
+  readonly checkFailedBody: (typeof messages)[keyof typeof messages];
+};
+const courseAdmissionCopy: AdmissionCopy = {
+  unavailableTitle: messages.coursesUnavailableTitle,
+  unavailableHeading: messages.coursesUnavailableHeading,
+  unavailableBody: messages.coursesUnavailable,
+  checkFailedBody: messages.coursesCheckFailed,
+};
+
 // Shared admission settlement, not shared authorization: each host owns its
 // ordered loader and hidden-failure classification. A generation fences both
 // departure and StrictMode's abandoned first load.
@@ -96,11 +112,13 @@ export function CourseAdmissionSurface<T>({
   state,
   route,
   exit,
+  copy = courseAdmissionCopy,
   children,
 }: {
   readonly state: HostState<T>;
   readonly route: Pick<CourseEntryRoute, "titleMessage" | "headingMessage">;
   readonly exit: ReactNode;
+  readonly copy?: AdmissionCopy;
   readonly children: ReactNode;
 }) {
   const intl = useIntl();
@@ -123,12 +141,12 @@ export function CourseAdmissionSurface<T>({
   if (state.kind !== "Ready")
     return (
       <SimpleEntrySurface
-        titleMessage={messages.coursesUnavailableTitle}
-        headingMessage={messages.coursesUnavailableHeading}
+        titleMessage={copy.unavailableTitle}
+        headingMessage={copy.unavailableHeading}
       >
         <SessionWarning />
         <RouteRecoveryPanel
-          heading={intl.formatMessage(messages.coursesUnavailableHeading)}
+          heading={intl.formatMessage(copy.unavailableHeading)}
           actions={
             <>
               {state.kind === "Check failed" ? (
@@ -148,8 +166,8 @@ export function CourseAdmissionSurface<T>({
           <p>
             {intl.formatMessage(
               state.kind === "Unavailable"
-                ? messages.coursesUnavailable
-                : messages.coursesCheckFailed,
+                ? copy.unavailableBody
+                : copy.checkFailedBody,
             )}
           </p>
           {state.error === null ? null : (

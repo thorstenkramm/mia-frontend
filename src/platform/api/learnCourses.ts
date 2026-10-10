@@ -1,10 +1,38 @@
 import { z } from "zod";
 import { ApiProtocolError, readJsonApi, type ApiFailure } from "./client";
-import { resourceId, toCourseId, toMaterialId, type CourseId } from "./entry";
-import { collectionNavigation, collectionQuery } from "./collectionNavigation";
+import {
+  resourceId,
+  toCourseId,
+  toMaterialId,
+  type CourseId,
+  type MaterialId,
+} from "./entry";
+import {
+  collectionDocument,
+  collectionNavigation,
+  collectionQuery,
+} from "./collectionNavigation";
 
 // BCG-020, owner exception 2026-10-10: only joined scope IDs are read.
 // Separate from the staff parser; student-safe getCourse may omit supervisors.
+// BCG-011 Story 6.1 slice: `readiness.new_session` is the server-authored
+// student-safe new-session eligibility; nothing else is reconstructed locally.
+const newSessionBlockers = z.enum([
+  "learning_goals",
+  "ai_tutor_instructions",
+  "language",
+  "supervisor_presence",
+  "qualifying_material",
+  "course_inactive",
+  "course_not_ready",
+  "course_membership_required",
+  "active_tutoring_session",
+]);
+export type NewSessionBlocker = z.infer<typeof newSessionBlockers>;
+export type NewSessionEligibility = {
+  readonly eligible: boolean;
+  readonly blockers: readonly NewSessionBlocker[];
+};
 const courseDocument = z.object({
   errors: z.never().optional(),
   data: z.object({
@@ -20,6 +48,11 @@ const courseDocument = z.object({
           "active_accepting",
           "active_not_accepting",
         ]),
+        new_session: z.object({
+          eligible: z.boolean(),
+          blockers: z.array(newSessionBlockers),
+          consequences: z.tuple([z.literal("start_tutoring_session")]),
+        }),
       }),
     }),
   }),
@@ -28,6 +61,7 @@ export type LearnCourse = {
   readonly id: CourseId;
   readonly name: string;
   readonly accepting: boolean;
+  readonly newSession: NewSessionEligibility;
 };
 export async function getLearnCourse(
   id: CourseId,
@@ -42,7 +76,9 @@ export async function getLearnCourse(
   if (
     data.id !== id ||
     (data.attributes.state === "active") !==
-      data.attributes.readiness.state.startsWith("active_")
+      data.attributes.readiness.state.startsWith("active_") ||
+    (data.attributes.readiness.new_session.eligible &&
+      data.attributes.readiness.new_session.blockers.length > 0)
   )
     throw new ApiProtocolError();
   return data.attributes.state === "inactive"
@@ -51,6 +87,10 @@ export async function getLearnCourse(
         id: toCourseId(data.id),
         name: data.attributes.name,
         accepting: data.attributes.readiness.state === "active_accepting",
+        newSession: {
+          eligible: data.attributes.readiness.new_session.eligible,
+          blockers: data.attributes.readiness.new_session.blockers,
+        },
       };
 }
 export type JoinedCourseBatch = {
@@ -92,7 +132,7 @@ const metadataRow = z.object({
   }),
 });
 export type LearnMaterialMetadata = {
-  readonly id: ReturnType<typeof toMaterialId>;
+  readonly id: MaterialId;
   readonly name: string;
   readonly kind: z.infer<typeof metadataRow>["attributes"]["kind"];
   readonly format: z.infer<typeof metadataRow>["attributes"]["format"];
@@ -113,35 +153,24 @@ export async function listApprovedCourseMaterialMetadata(
     path: `${path}?${collectionQuery(offset)}`,
     initiator: "user",
     signal,
-    schema: z.object({
-      errors: z.never().optional(),
-      data: z.array(metadataRow).max(25),
-      meta: z.object({ has_more: z.boolean() }),
-      links: z
-        .object({
-          next: z.string().exactOptional(),
-          prev: z.string().exactOptional(),
-        })
-        .exactOptional(),
-    }),
+    schema: collectionDocument(metadataRow),
   });
-  if (
-    new Set(doc.data.map((row) => row.id)).size !== doc.data.length ||
-    doc.data.some((row) => row.relationships.course.data.id !== course)
-  )
+  if (new Set(doc.data.map((row) => row.id)).size !== doc.data.length)
     throw new ApiProtocolError();
+  const items: LearnMaterialMetadata[] = [];
+  for (const row of doc.data) {
+    if (row.relationships.course.data.id !== course)
+      throw new ApiProtocolError();
+    const { attributes: a } = row;
+    if (a.scope !== "course-wide" || a.state !== "ready" || !a.approved)
+      continue;
+    const id = toMaterialId(row.id);
+    // A rendered row identity must be a valid opaque material ID.
+    if (id === null) throw new ApiProtocolError();
+    items.push({ id, name: a.name, kind: a.kind, format: a.format });
+  }
   return {
-    items: doc.data
-      .filter(
-        ({ attributes: a }) =>
-          a.scope === "course-wide" && a.state === "ready" && a.approved,
-      )
-      .map(({ id, attributes: a }) => ({
-        id: toMaterialId(id),
-        name: a.name,
-        kind: a.kind,
-        format: a.format,
-      })),
+    items,
     offset,
     ...collectionNavigation(path, offset, doc.meta.has_more, doc.links),
   };

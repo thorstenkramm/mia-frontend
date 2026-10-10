@@ -44,6 +44,202 @@ export const messages = defineMessages({
     id: "learn.collectionUpdated",
     defaultMessage: "Collection updated.",
   },
+  tutoringStartLink: {
+    id: "tutoring.startLink",
+    defaultMessage: "Start a tutoring session",
+  },
+  tutoringResumeLink: {
+    id: "tutoring.resumeLink",
+    defaultMessage: "Resume tutoring",
+  },
+  tutoringStartTitle: {
+    id: "tutoring.startTitle",
+    defaultMessage: "Start a tutoring session | MIA",
+  },
+  tutoringStartHeading: {
+    id: "tutoring.startHeading",
+    defaultMessage: "Start a tutoring session",
+  },
+  tutoringMaterialTitle: {
+    id: "tutoring.materialTitle",
+    defaultMessage: "Choose material | MIA",
+  },
+  tutoringMaterialHeading: {
+    id: "tutoring.materialHeading",
+    defaultMessage: "Choose material",
+  },
+  tutoringRecoveryTitle: {
+    id: "tutoring.recoveryTitle",
+    defaultMessage: "Resume tutoring | MIA",
+  },
+  tutoringRecoveryHeading: {
+    id: "tutoring.recoveryHeading",
+    defaultMessage: "Resume tutoring",
+  },
+  tutoringWorkspaceTitle: {
+    id: "tutoring.workspaceTitle",
+    defaultMessage: "Tutoring session | MIA",
+  },
+  tutoringWorkspaceHeading: {
+    id: "tutoring.workspaceHeading",
+    defaultMessage: "Tutoring session",
+  },
+  tutoringNoticeHeading: {
+    id: "tutoring.noticeHeading",
+    defaultMessage: "AI tutoring",
+  },
+  // FFR-613: fixed product copy in every launch locale; informational, never
+  // operator-configured and never a warning against speaking freely.
+  tutoringNoticeBody: {
+    id: "tutoring.noticeBody",
+    defaultMessage:
+      "MIA's tutor is AI-powered. No person watches your session while it happens. Your assigned supervisor can read the session after you finish.",
+  },
+  tutoringResumeActive: {
+    id: "tutoring.resumeActive",
+    defaultMessage: "You already have an active tutoring session in {course}.",
+  },
+  tutoringResumeHelp: {
+    id: "tutoring.resumeHelp",
+    defaultMessage:
+      "Only one tutoring session can be active. Continue the current session to keep working.",
+  },
+  tutoringContinueSession: {
+    id: "tutoring.continueSession",
+    defaultMessage: "Continue session",
+  },
+  tutoringChooseCourse: {
+    id: "tutoring.chooseCourse",
+    defaultMessage: "Choose a course",
+  },
+  tutoringActiveSession: {
+    id: "tutoring.activeSession",
+    defaultMessage: "You already have an active tutoring session.",
+  },
+  tutoringMaterialLegend: {
+    id: "tutoring.materialLegend",
+    defaultMessage: "Course material (optional)",
+  },
+  tutoringMaterialHelp: {
+    id: "tutoring.materialHelp",
+    defaultMessage:
+      "Choose at most one approved course material for the tutor, or start without material.",
+  },
+  tutoringNoMaterial: {
+    id: "tutoring.noMaterial",
+    defaultMessage: "No material",
+  },
+  tutoringStart: {
+    id: "tutoring.start",
+    defaultMessage: "Start session",
+  },
+  tutoringChecking: {
+    id: "tutoring.checking",
+    defaultMessage: "Checking current course and session state…",
+  },
+  tutoringStarting: {
+    id: "tutoring.starting",
+    defaultMessage: "Starting the tutoring session…",
+  },
+  tutoringStartRejected: {
+    id: "tutoring.startRejected",
+    defaultMessage:
+      "The session was not started. Review the current course and material choice before trying again; a new attempt is a fresh start.",
+  },
+  tutoringStartChanged: {
+    id: "tutoring.startChanged",
+    defaultMessage:
+      "Course or session state changed. Review the current state before starting.",
+  },
+  tutoringStartConflict: {
+    id: "tutoring.startConflict",
+    defaultMessage:
+      "A tutoring session is already active or this attempt conflicts. Resume the active session; nothing else was started here.",
+  },
+  tutoringStartUnknown: {
+    id: "tutoring.startUnknown",
+    defaultMessage:
+      "The start outcome is unknown. The session may have been created. Reconcile checks the current state; this attempt is never repeated automatically.",
+  },
+  tutoringRetry: {
+    id: "tutoring.retry",
+    defaultMessage: "Retry exact attempt",
+  },
+  tutoringStartAbandon: {
+    id: "tutoring.startAbandon",
+    defaultMessage: "Abandon unknown attempt",
+  },
+  tutoringStartAbandoned: {
+    id: "tutoring.startAbandoned",
+    defaultMessage:
+      "The unknown attempt was abandoned locally, not cancelled on the server. Review the current state before a new attempt.",
+  },
+  tutoringStartLeave: {
+    id: "tutoring.startLeave",
+    defaultMessage:
+      "A session start is pending or unconfirmed. Leaving drops this page’s attempt record; it does not cancel server work.",
+  },
+  tutoringRecoveryNone: {
+    id: "tutoring.recoveryNone",
+    defaultMessage: "No active tutoring session was found.",
+  },
+  tutoringTranscript: {
+    id: "tutoring.transcript",
+    defaultMessage: "Transcript",
+  },
+  tutoringTurn: {
+    id: "tutoring.turn",
+    defaultMessage: "Turn {number}",
+  },
+  tutoringTranscriptEmpty: {
+    id: "tutoring.transcriptEmpty",
+    defaultMessage: "No messages yet.",
+  },
+  tutoringTurnYou: {
+    id: "tutoring.turnYou",
+    defaultMessage: "You",
+  },
+  tutoringTurnTutor: {
+    id: "tutoring.turnTutor",
+    defaultMessage: "AI tutor",
+  },
+  tutoringResponseQueued: {
+    id: "tutoring.responseQueued",
+    defaultMessage: "Response queued",
+  },
+  tutoringResponseGenerating: {
+    id: "tutoring.responseGenerating",
+    defaultMessage: "Response in progress",
+  },
+  tutoringResponseInterrupted: {
+    id: "tutoring.responseInterrupted",
+    defaultMessage: "Response interrupted",
+  },
+  tutoringResponseFailed: {
+    id: "tutoring.responseFailed",
+    defaultMessage: "Response failed",
+  },
+  tutoringSessionFinished: {
+    id: "tutoring.sessionFinished",
+    defaultMessage: "This tutoring session is finished.",
+  },
+  tutoringUnavailableTitle: {
+    id: "tutoring.unavailableTitle",
+    defaultMessage: "Tutoring access unavailable | MIA",
+  },
+  tutoringUnavailableHeading: {
+    id: "tutoring.unavailableHeading",
+    defaultMessage: "Tutoring access unavailable",
+  },
+  tutoringUnavailableBody: {
+    id: "tutoring.unavailableBody",
+    defaultMessage: "This tutoring view is unavailable. Use an available exit.",
+  },
+  tutoringCheckFailed: {
+    id: "tutoring.checkFailed",
+    defaultMessage:
+      "The tutoring check could not be completed. This is not an empty result.",
+  },
   studentListTitle: {
     id: "students.listTitle",
     defaultMessage: "Course students | MIA",

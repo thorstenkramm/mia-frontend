@@ -158,6 +158,18 @@ export async function routeHygieneCheckpoint(
         !text.includes(fixture.teachingText) &&
         !text.includes(fixture.rawError),
     ).toBe(true);
+  } else if (point === "tutoring-content") {
+    const text = await page.locator("main").textContent();
+    expect(
+      text?.includes(fixture.teachingText) === true &&
+        !text.includes(fixture.rawError),
+    ).toBe(true);
+  } else if (point === "tutoring-course") {
+    const text = await page.locator("main").textContent();
+    expect(
+      text?.includes(fixture.courseName) === true &&
+        !text.includes(fixture.rawError),
+    ).toBe(true);
   } else if (point === "learn-hidden") {
     expect(
       (await page.locator("main").textContent())?.includes(
