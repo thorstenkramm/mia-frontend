@@ -83,3 +83,8 @@ that release one excludes.
 
 Tailwind Plus React components import from `@headlessui/react` and `@heroicons/react`. Both
 are separate npm packages and are not part of the download.
+
+## Licence
+
+MIA is source-available under the [PolyForm Noncommercial License 1.0.0](LICENCE), the same licence as the backend.
+Noncommercial use is permitted; commercial use requires a separate agreement.
