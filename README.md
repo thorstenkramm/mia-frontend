@@ -88,3 +88,8 @@ are separate npm packages and are not part of the download.
 
 MIA is source-available under the [PolyForm Noncommercial License 1.0.0](LICENCE), the same licence as the backend.
 Noncommercial use is permitted; commercial use requires a separate agreement.
+
+Parts of the user interface are derived from [Tailwind Plus](https://tailwindcss.com/plus) components and are used
+under the Tailwind Plus licence as part of this application. That licence, not the PolyForm licence, governs those
+derived components: they may not be extracted or redistributed separately from MIA, for example as a component
+library, UI kit, or template.
