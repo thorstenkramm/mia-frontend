@@ -19,7 +19,7 @@ import type { TutoringRouteProps } from "../../features/tutoring/TutoringRoutePr
 import {
   toTutoringSessionId,
   type TutoringSessionId,
-} from "../../platform/api/tutoringSessions";
+} from "../../platform/api/entry";
 import {
   toInvitationId,
   type InvitationId,
@@ -48,12 +48,12 @@ type EntryRoute =
         ComponentType<LearnCourseRouteProps>
       >;
     })
-  // Story 6.1: tutoring start carries its own ordered gate (discovery before
-  // any start affordance; course re-read before material choice).
+  // Story 6.1/6.2: tutoring start carries its own ordered gate (discovery
+  // before any start affordance; course re-read before material or intent).
   | (EntryRouteBase & {
       readonly path: (typeof learnStartPaths)[keyof typeof learnStartPaths];
       readonly gate: "Learn(start session)";
-      readonly resource: "start-choice" | "material-choice";
+      readonly resource: "start-choice" | "material-choice" | "intent";
       readonly component: LazyExoticComponent<
         ComponentType<TutoringRouteProps>
       >;
@@ -150,15 +150,23 @@ export function learnCoursePath(id: CourseId, materials = false): string {
 }
 
 // ROUTE-INVENTORY.md §Session Start. Story 6.1 registers course choice and the
-// optional material choice only; the intent/starter routes remain 6.2.
+// optional material choice; Story 6.2 adds the one intent route hosting the
+// static starters and the free-form intent (D1).
 export const learnStartPaths = {
   choice: "/learn/start",
   material: "/learn/start/:courseId/material",
+  intent: "/learn/start/:courseId/intent",
 } as const;
 export function learnStartPath(course: CourseId | null = null): string {
   return course === null
     ? learnStartPaths.choice
     : learnStartPaths.material.replace(":courseId", encodeURIComponent(course));
+}
+export function learnIntentPath(course: CourseId): string {
+  return learnStartPaths.intent.replace(
+    ":courseId",
+    encodeURIComponent(course),
+  );
 }
 
 // ROUTE-INVENTORY.md §Session Recovery and §Tutoring Workspace. Session
@@ -418,6 +426,20 @@ export const entryRoutes = {
     headingMessage: messages.tutoringMaterialHeading,
     component: lazy(
       () => import("../../features/tutoring/SessionStartMaterialRoute"),
+    ),
+  },
+  learnStartIntent: {
+    path: learnStartPaths.intent,
+    gate: "Learn(start session)",
+    resource: "intent",
+    parent: {
+      path: learnStartPaths.material,
+      label: messages.tutoringMaterialHeading,
+    },
+    titleMessage: messages.tutoringIntentTitle,
+    headingMessage: messages.tutoringIntentHeading,
+    component: lazy(
+      () => import("../../features/tutoring/SessionStartIntentRoute"),
     ),
   },
   learnSessionRecovery: {
@@ -881,6 +903,21 @@ export function authenticatedRoute(
         return {
           key: "learnStartMaterial",
           path: learnStartPath(id),
+          courseId: id,
+          invitationId: null,
+        };
+    } catch {
+      return home;
+    }
+  }
+  const startIntent = /^\/learn\/start\/([^/]+)\/intent$/u.exec(pathname);
+  if (startIntent?.[1] !== undefined) {
+    try {
+      const id = toCourseId(decodeURIComponent(startIntent[1]));
+      if (id !== "" && id !== "new")
+        return {
+          key: "learnStartIntent",
+          path: learnIntentPath(id),
           courseId: id,
           invitationId: null,
         };

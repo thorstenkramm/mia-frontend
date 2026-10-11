@@ -184,6 +184,14 @@ session-creation attempt in this machine uses it as the reconciliation path afte
 `409 tutoring_active_session`, for `/learn/session` recovery, and as the `/learn/start` pre-check. The `BLOCKED`
 line above no longer applies to this slice; Home continuation and broader BCG-002 release evidence remain blocked.
 
+Story 6.2 slice, 2026-10-11 (`BACKEND-CONTRACT-GAPS.md` §BCG-012 Story 6.2 send-and-queue slice reconciliation): the
+student-message send joins session creation as a second request-ID-bound attempt in this machine. Create ambiguity
+reconciles through the discovery read above; send ambiguity reconciles through the authoritative current-work read
+with the retained `message_request_id` (`reconciled_message` decides committed vs not committed). A definitive create
+is never repeated: an exact retry after create success re-sends only the message with its retained identity. Both
+attempts follow the table unchanged — no automatic replay, explicit reconcile/retry/abandon only, Reloaded unknown
+keeps no outcome claim.
+
 ## 3. SSE Connection Epoch and Terminal Reconciliation
 
 | State | Trigger | UI | Permitted action | Authoritative recovery |
@@ -279,6 +287,15 @@ infer absence as idle.
 
 The label is `Send` only in authoritative Idle and `Queue message` only in authoritative Slot free. Enter inserts a
 newline; the visible button is the baseline submission action. IME composition never submits.
+
+Story 6.2 slice, 2026-10-11 (`BACKEND-CONTRACT-GAPS.md` §BCG-012 Story 6.2 send-and-queue slice reconciliation):
+`GET /api/v1/tutoring-sessions/{id}/current-work` is now the authoritative current-work representation for this
+machine's bounded send/queue slice — workspace admission reads it before enabling the composer (Work checking), one
+immediate follow-up read after a definitive send refreshes it, and reconciliation of an ambiguous send runs through
+it with the retained request ID. The Composer row's checking/idle/slot-free/slot-full/outcome-unknown states and the
+Queue row's checking/absent/queued states are implemented from it; the `BLOCKED` line above no longer applies to
+this slice. Live handoff (machine 6), Stop (machine 7), Finish prevalidation (machine 8), and reconnect remain for
+Stories 6.3/6.4/6.5.
 
 ## 6. Cross-Response Queue Handoff
 

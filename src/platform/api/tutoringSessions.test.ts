@@ -4,9 +4,13 @@ import { server } from "../../../test/server";
 import {
   activeTutoringSessionDocument,
   emptyActiveTutoringSessionDocument,
+  studentMessageMutationDocument,
+  studentMessageResource,
+  tutorResponseResource,
   tutoringSessionDocument,
   tutoringTurn,
   tutoringTurnsPage,
+  tutoringWorkDocument,
 } from "../../../test/tutoringFixtures";
 import {
   courseUnitCheckpoint,
@@ -15,9 +19,11 @@ import {
 import { ApiHttpError, ApiProtocolError, jsonApiMediaType } from "./client";
 import { toCourseId, toMaterialId } from "./entry";
 import {
+  createStudentMessage,
   createTutoringSession,
   getActiveTutoringSession,
   getTutoringSession,
+  getTutoringSessionCurrentWork,
   isHiddenTutoringFailure,
   listSessionTurns,
   toTutoringSessionId,
@@ -295,6 +301,269 @@ it("Tutoring turn pages keep bounded escaped text and reject unsafe navigation",
     true,
   );
   courseUnitCheckpoint("tutoring-turn-pages");
+});
+
+it("Tutoring message send binds the request ID and exact bytes in one payload", async () => {
+  const seed = courseUnitFixture();
+  const content = `compose ${seed.name}\nsecond line <b>raw</b>`;
+  let wire: boolean | null = null;
+  let payload: unknown = null;
+  server.use(
+    http.post(
+      "/api/v1/tutoring-sessions/session_1/messages",
+      async ({ request }) => {
+        payload = await request.json();
+        wire =
+          request.headers.get("X-CSRF-Token") === seed.csrf &&
+          request.headers.get("Content-Type") === jsonApiMediaType;
+        return json(
+          studentMessageMutationDocument(seed.rawError, content),
+          201,
+        );
+      },
+    ),
+  );
+  const sent = await createStudentMessage(
+    session,
+    content,
+    "0f3b4d2c-0000-4000-8000-0123456789ab",
+    seed.csrf,
+  );
+  expect(
+    wire === true &&
+      JSON.stringify(payload) ===
+        JSON.stringify({
+          data: {
+            type: "student-messages",
+            attributes: {
+              client_request_id: "0f3b4d2c-0000-4000-8000-0123456789ab",
+              content,
+            },
+          },
+        }) &&
+      sent.content === content &&
+      Object.keys(sent).sort().join() ===
+        "content,createdAt,id,response,sequence" &&
+      Object.keys(sent.response).sort().join() ===
+        "attempt,content,id,messageId,state" &&
+      !JSON.stringify(sent).includes(seed.rawError),
+  ).toBe(true);
+  courseUnitCheckpoint("tutoring-message-send");
+});
+
+it("Tutoring message send accepts only 200 or 201 and rejects cross-identity success", async () => {
+  const seed = courseUnitFixture();
+  let status = 201;
+  server.use(
+    http.post("/api/v1/tutoring-sessions/session_1/messages", () =>
+      json(studentMessageMutationDocument(seed.rawError), status),
+    ),
+  );
+  const first = await createStudentMessage(session, "q", "id", seed.csrf);
+  expect(
+    first.id === "message_new" && first.response.id === "response_new",
+  ).toBe(true);
+  status = 200;
+  expect(
+    (await createStudentMessage(session, "q", "id", seed.csrf)).id ===
+      "message_new",
+  ).toBe(true);
+  status = 202;
+  expect(
+    await protocolRejected(createStudentMessage(session, "q", "id", seed.csrf)),
+  ).toBe(true);
+  // Cross-session and mismatched nested identity are protocol failures.
+  const crossed = JSON.parse(
+    JSON.stringify(studentMessageMutationDocument(seed.rawError)),
+  ) as {
+    data: { attributes: { session_id: string; response: { id: string } } };
+  };
+  crossed.data.attributes.session_id = "session_2";
+  server.use(
+    http.post("/api/v1/tutoring-sessions/session_1/messages", () =>
+      json(crossed),
+    ),
+  );
+  expect(
+    await protocolRejected(createStudentMessage(session, "q", "id", seed.csrf)),
+  ).toBe(true);
+  crossed.data.attributes.session_id = "session_1";
+  crossed.data.attributes.response.id = "";
+  server.use(
+    http.post("/api/v1/tutoring-sessions/session_1/messages", () =>
+      json(crossed),
+    ),
+  );
+  expect(
+    await protocolRejected(createStudentMessage(session, "q", "id", seed.csrf)),
+  ).toBe(true);
+  courseUnitCheckpoint("tutoring-message-status");
+});
+
+it("Tutoring current work parses every state and strips unused projections", async () => {
+  const seed = courseUnitFixture();
+  const generating = tutorResponseResource(
+    seed.rawError,
+    "response_g",
+    "session_1",
+    "message_g",
+    "generating",
+    seed.teachingText,
+  );
+  const queued = studentMessageResource(
+    seed.rawError,
+    "message_q",
+    "session_1",
+    seed.name,
+    "response_q",
+  );
+  const reconciled = studentMessageResource(
+    seed.rawError,
+    "message_r",
+    "session_1",
+    "reconciled question",
+    "response_r",
+    "completed",
+  );
+  let document: unknown = tutoringWorkDocument(seed.rawError);
+  server.use(
+    http.get("/api/v1/tutoring-sessions/session_1/current-work", () =>
+      json(document),
+    ),
+  );
+  const idle = await getTutoringSessionCurrentWork(session, {}, signal());
+  expect(
+    idle.state === "idle" &&
+      idle.sessionState === "active" &&
+      idle.remainingQueueCapacity === 1 &&
+      idle.generating === null &&
+      idle.queued === null &&
+      idle.reconciledMessage === null &&
+      idle.actions.submit === true &&
+      idle.actions.queue === false &&
+      Object.keys(idle).sort().join() ===
+        "actions,generating,queued,reconciledMessage,remainingQueueCapacity,sessionState,state" &&
+      Object.keys(idle.actions).sort().join() === "queue,submit" &&
+      !JSON.stringify(idle).includes(seed.rawError),
+  ).toBe(true);
+  document = tutoringWorkDocument(seed.rawError, {
+    state: "generating",
+    generating,
+    submit: false,
+    queue: true,
+  });
+  const busy = await getTutoringSessionCurrentWork(session, {}, signal());
+  expect(
+    busy.state === "generating" &&
+      busy.generating?.content === seed.teachingText &&
+      busy.actions.queue === true &&
+      busy.actions.submit === false &&
+      !JSON.stringify(busy).includes(seed.rawError),
+  ).toBe(true);
+  document = tutoringWorkDocument(seed.rawError, {
+    state: "queued",
+    queued,
+    submit: false,
+  });
+  const held = await getTutoringSessionCurrentWork(session, {}, signal());
+  expect(
+    held.state === "queued" &&
+      held.queued?.content === seed.name &&
+      held.queued?.response.state === "queued" &&
+      held.remainingQueueCapacity === 0,
+  ).toBe(true);
+  document = tutoringWorkDocument(seed.rawError, {
+    state: "generating_and_queued",
+    generating,
+    queued,
+    submit: false,
+  });
+  const both = await getTutoringSessionCurrentWork(session, {}, signal());
+  expect(both.state === "generating_and_queued").toBe(true);
+  document = tutoringWorkDocument(seed.rawError, {
+    sessionState: "completed",
+    state: "completed",
+    submit: false,
+  });
+  const done = await getTutoringSessionCurrentWork(session, {}, signal());
+  expect(done.state === "completed" && done.sessionState === "completed").toBe(
+    true,
+  );
+  courseUnitCheckpoint("tutoring-work-states");
+  // Request-ID reconciliation: the query carries only the retained ID, and a
+  // well-formed unknown ID is 200 with an explicit null, never an error.
+  let seenQuery: string | null = null;
+  document = tutoringWorkDocument(seed.rawError, { reconciled });
+  server.use(
+    http.get(
+      "/api/v1/tutoring-sessions/session_1/current-work",
+      ({ request }) => {
+        seenQuery = new URL(request.url).searchParams.get("message_request_id");
+        return json(document);
+      },
+    ),
+  );
+  const found = await getTutoringSessionCurrentWork(
+    session,
+    { messageRequestId: "0f3b4d2c-0000-4000-8000-0123456789ab" },
+    signal(),
+  );
+  expect(
+    seenQuery === "0f3b4d2c-0000-4000-8000-0123456789ab" &&
+      found.reconciledMessage?.id === "message_r" &&
+      found.reconciledMessage.response.state === "completed",
+  ).toBe(true);
+  document = tutoringWorkDocument(seed.rawError);
+  const missing = await getTutoringSessionCurrentWork(
+    session,
+    { messageRequestId: "0f3b4d2c-0000-4000-8000-0123456789ab" },
+    signal(),
+  );
+  expect(missing.reconciledMessage === null).toBe(true);
+  courseUnitCheckpoint("tutoring-work-reconcile");
+});
+
+it("Tutoring current work rejects contradictions and wrong identities", async () => {
+  const seed = courseUnitFixture();
+  const queued = studentMessageResource(seed.rawError);
+  for (const document of [
+    // Addressed identity mismatch.
+    tutoringWorkDocument(seed.rawError, { session: "session_2" }),
+    // Idle with present work, and queued state without queued work.
+    tutoringWorkDocument(seed.rawError, { queued }),
+    tutoringWorkDocument(seed.rawError, { state: "queued" }),
+    // Completed work on an active session, and work on a completed session.
+    tutoringWorkDocument(seed.rawError, { state: "completed" }),
+    tutoringWorkDocument(seed.rawError, {
+      sessionState: "completed",
+      state: "queued",
+      queued,
+      submit: false,
+    }),
+    // Out-of-range capacity.
+    {
+      ...tutoringWorkDocument(seed.rawError),
+      data: {
+        ...tutoringWorkDocument(seed.rawError).data,
+        attributes: {
+          ...tutoringWorkDocument(seed.rawError).data.attributes,
+          remaining_queue_capacity: 2,
+        },
+      },
+    },
+  ]) {
+    server.use(
+      http.get("/api/v1/tutoring-sessions/session_1/current-work", () =>
+        json(document),
+      ),
+    );
+    expect(
+      await protocolRejected(
+        getTutoringSessionCurrentWork(session, {}, signal()),
+      ),
+    ).toBe(true);
+  }
+  courseUnitCheckpoint("tutoring-work-invalid");
 });
 
 it("Tutoring hidden failures cover exactly denial unknown and throttled statuses", () => {

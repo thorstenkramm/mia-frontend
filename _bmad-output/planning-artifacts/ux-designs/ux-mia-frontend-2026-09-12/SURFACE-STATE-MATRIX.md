@@ -244,6 +244,13 @@ attempt. The Session recovery row in Tutoring workspace below runs the authorita
 registered by this slice. Home continuation, broader concurrency evidence, and the release obligations of `BCG-002`
 and `BCG-011` remain open; the blocked markers above stay for everything outside this slice.
 
+Story 6.2 slice, 2026-10-11 (`BACKEND-CONTRACT-GAPS.md` §BCG-012 Story 6.2 send-and-queue slice reconciliation): the
+Optional material choice row's primary action becomes Continue to the intent route carrying one opaque selection (or
+explicit none) as navigation state, and the Static starters and Free-form intent rows are now registered on
+`/learn/start/:courseId/intent` — five localized starters insert editable text or focus the textarea and never
+submit, and the free-form intent runs the machine-2 begin chain (creation, then the first message) with its
+documented outcome-unknown reconciliation.
+
 ### Tutoring workspace
 
 | Surface | Profiles | Domain states | Exit | Companion |
@@ -263,6 +270,14 @@ announces each state transition once. Auth expiry is called sign-in expiry, not 
 After Reload, unpersisted request IDs and message bodies are gone. The frontend renders authoritative session, work, and
 transcript state without claiming whether an absent attempt was saved and without offering exact replay. This safe
 outcome-unknown treatment is not a separate backend blocker; `BCG-002` and `BCG-012` still govern the required reads.
+
+Story 6.2 slice, 2026-10-11 (`BACKEND-CONTRACT-GAPS.md` §BCG-012 Story 6.2 send-and-queue slice reconciliation): the
+Composer row's checking/idle/slot-free/slot-full/outcome-unknown states and the Queue row's checking/absent/queued
+states are implemented from the authoritative current-work read — the composer label and enablement come only from
+server-authored `actions.submit`/`actions.queue`, and the single queued message renders in a current-work region
+keyed by response ID, deduplicated from the paginated transcript. The Queue row's handoff/generating handoff states,
+SSE state, Retry response, Stop response, and Finish session rows remain for Stories 6.3/6.4/6.5; their `BCG-012`
+markers stay.
 
 ### Learning history
 

@@ -32,8 +32,9 @@ export const unitCases = [
 type CaseId = (typeof browserCases)[number] | (typeof unitCases)[number];
 
 export const courseUnitCases = [
-  // Story 6.1 tutoring session start/resume: every connected case installs
-  // secret-bearing fixtures, including denied gates and each outcome.
+  // Story 6.1/6.2 tutoring session start/intent/workspace: every connected
+  // case installs secret-bearing fixtures, including denied gates and each
+  // outcome.
   ...(
     [
       [
@@ -94,13 +95,25 @@ export const courseUnitCases = [
   },
   {
     title:
-      "Tutoring material start dispatches one request-ID-bound creation and navigates to the workspace",
+      "Tutoring material choice continues to the intent route carrying one opaque selection",
+    file: "src/app/routes/learnSessionEntry.test.tsx",
+    points: ["tutoring-handoff"],
+  },
+  {
+    title:
+      "Tutoring intent without handoff state starts intent-only with the visible material parent",
+    file: "src/app/routes/learnSessionEntry.test.tsx",
+    points: ["tutoring-intent-only"],
+  },
+  {
+    title:
+      "Tutoring intent begin dispatches one request-ID-bound creation then the first message",
     file: "src/app/routes/learnSessionEntry.test.tsx",
     points: ["tutoring-created"],
   },
   {
     title:
-      "Tutoring start replay 200 without material is the same definitive navigation",
+      "Tutoring intent replay 200 without material is the same definitive navigation",
     file: "src/app/routes/learnSessionEntry.test.tsx",
     points: ["tutoring-replay"],
   },
@@ -141,7 +154,54 @@ export const courseUnitCases = [
   },
   {
     title:
-      "Tutoring hidden causes share one neutral presentation on the material and workspace routes",
+      "Tutoring lost first send reconciles committed through the current-work read without resending",
+    file: "src/app/routes/learnSessionEntry.test.tsx",
+    points: ["tutoring-send-unknown", "tutoring-send-reconciled"],
+  },
+  {
+    title:
+      "Tutoring uncommitted first send retries only the message with the retained request identity",
+    file: "src/app/routes/learnSessionEntry.test.tsx",
+    points: ["tutoring-send-retry"],
+  },
+  {
+    title:
+      "Tutoring first-send conflict locks the attempt to reconcile and abandon without retry",
+    file: "src/app/routes/learnSessionEntry.test.tsx",
+    points: ["tutoring-send-conflict"],
+  },
+  {
+    title:
+      "Tutoring busy first send keeps the session and draft until explicit Refresh",
+    file: "src/app/routes/learnSessionEntry.test.tsx",
+    points: ["tutoring-send-busy", "tutoring-send-fresh"],
+  },
+  {
+    title:
+      "Tutoring rejected first send mints a fresh message identity without recreating the session",
+    file: "src/app/routes/learnSessionEntry.test.tsx",
+    points: ["tutoring-send-rejected"],
+  },
+  {
+    title:
+      "Tutoring first send to a completed session ends the attempt without replay",
+    file: "src/app/routes/learnSessionEntry.test.tsx",
+    points: ["tutoring-send-finished"],
+  },
+  {
+    title: "Tutoring starters insert editable localized text and never submit",
+    file: "src/app/routes/learnSessionEntry.test.tsx",
+    points: ["tutoring-starters"],
+  },
+  {
+    title:
+      "Tutoring composer validates documented bounds locally without dispatch",
+    file: "src/app/routes/learnSessionEntry.test.tsx",
+    points: ["tutoring-bounds"],
+  },
+  {
+    title:
+      "Tutoring hidden causes share one neutral presentation on the start and workspace routes",
     file: "src/app/routes/learnSessionEntry.test.tsx",
     points: ["tutoring-route-hidden"],
   },
@@ -162,6 +222,53 @@ export const courseUnitCases = [
       "Tutoring workspace renders persisted turns as escaped text with neutral response labels",
     file: "src/app/routes/learnSessionEntry.test.tsx",
     points: ["tutoring-transcript"],
+  },
+  {
+    title:
+      "Tutoring workspace sends one message and renders the queued work from the follow-up read",
+    file: "src/app/routes/learnSessionEntry.test.tsx",
+    points: ["tutoring-workspace-send"],
+  },
+  {
+    title:
+      "Tutoring workspace queue-only work offers Queue message and dedupes current work from the transcript",
+    file: "src/app/routes/learnSessionEntry.test.tsx",
+    points: ["tutoring-workspace-queue"],
+  },
+  {
+    title:
+      "Tutoring workspace full queue keeps the draft and submission disabled until explicit Refresh",
+    file: "src/app/routes/learnSessionEntry.test.tsx",
+    points: ["tutoring-workspace-full"],
+  },
+  {
+    title:
+      "Tutoring lost workspace send reconciles through the current-work read and retries only the exact attempt",
+    file: "src/app/routes/learnSessionEntry.test.tsx",
+    points: ["tutoring-workspace-unknown", "tutoring-workspace-reconciled"],
+  },
+  {
+    title:
+      "Tutoring uncommitted workspace send retries the exact retained attempt only explicitly",
+    file: "src/app/routes/learnSessionEntry.test.tsx",
+    points: ["tutoring-workspace-retry"],
+  },
+  {
+    title: "Tutoring busy workspace send keeps the draft and never replays",
+    file: "src/app/routes/learnSessionEntry.test.tsx",
+    points: ["tutoring-workspace-busy"],
+  },
+  {
+    title:
+      "Tutoring workspace reload during an unsettled send loses the draft and never replays",
+    file: "src/app/routes/learnSessionEntry.test.tsx",
+    points: ["tutoring-workspace-reload"],
+  },
+  {
+    title:
+      "Tutoring workspace finishes read-only when the send reports the session completed",
+    file: "src/app/routes/learnSessionEntry.test.tsx",
+    points: ["tutoring-workspace-finished"],
   },
   ...(
     [

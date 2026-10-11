@@ -10,12 +10,15 @@ import {
 test.use({ trace: "off", video: "off", screenshot: "off" });
 const start = "/learn/start",
   material = `${start}/course_1/material`,
+  intent = `${start}/course_1/intent`,
   recovery = "/learn/session",
   workspace = "/learn/sessions/session_1";
 const requestIdPattern =
   /^[0-9a-f]{8}-[0-9a-f]{4}-4[0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/u;
 const unknownHeading =
   "The start outcome is unknown. The session may have been created. Reconcile checks the current state; this attempt is never repeated automatically.";
+const unknownSendHeading =
+  "The message outcome is unknown. The message may have been sent. Reconcile checks the current state; this attempt is never repeated automatically.";
 async function ready(page: Page, title: string) {
   await expect
     .poll(async () => (await page.title()) === `${title} | MIA`)
@@ -29,6 +32,12 @@ async function ready(page: Page, title: string) {
     (await page.locator("main").count()) === 1 &&
       (await page.locator("h1").count()) === 1,
   ).toBe(true);
+}
+// The 6.2 start chain: the material choice hands one opaque selection to the
+// intent route, where the composed free text starts the session.
+async function composeIntent(page: Page, content: string) {
+  await page.getByLabel("Your message to the tutor").fill(content);
+  await page.getByRole("button", { name: "Start session" }).click();
 }
 async function minimized(page: Page) {
   const fixture = routeSecretFixture(page);
@@ -64,6 +73,7 @@ test(
   "tutoring start chooses course and material once and reload resumes through recovery",
   protectedJourney(async (page) => {
     const control = await tutoringBackend(page);
+    const fixture = routeSecretFixture(page);
     await page.goto(start);
     await ready(page, "Start a tutoring session");
     // BCG-002: discovery precedes the course list; no start before it.
@@ -78,14 +88,20 @@ test(
     await expect(radios).toHaveCount(2);
     await expect(radios.first()).toBeChecked();
     await radios.nth(1).check();
-    await page.getByRole("button", { name: "Start session" }).click();
+    await page.getByRole("link", { name: "Continue" }).click();
+    await ready(page, "Choose how to begin");
+    await composeIntent(page, fixture.teachingText);
     await ready(page, "Tutoring session");
+    // One request-ID-bound creation, then exactly one first message send.
     await expect
-      .poll(async () => (await page.locator("main article").count()) === 1)
+      .poll(async () => (await page.locator("main article").count()) === 2)
       .toBe(true);
     expect(
       control.starts === 1 &&
+        control.messagePosts === 1 &&
         requestIdPattern.test(control.requestIds[0] ?? "") &&
+        requestIdPattern.test(control.messageRequestIds[0] ?? "") &&
+        control.requestIds[0] !== control.messageRequestIds[0] &&
         control.materialsSent.join() === "material_1" &&
         control.forbidden === 0,
     ).toBe(true);
@@ -100,7 +116,12 @@ test(
     await page.reload();
     await ready(page, "Tutoring session");
     await expect
-      .poll(() => control.sessionReads === 2 && control.turnReads === 2)
+      .poll(
+        () =>
+          control.sessionReads === 2 &&
+          control.workReads === 2 &&
+          control.turnReads === 2,
+      )
       .toBe(true);
     // The created session is active now: the recovery route discovers it and
     // replaces itself with the workspace.
@@ -117,20 +138,23 @@ test(
   protectedJourney(async (page) => {
     const control = await tutoringBackend(page);
     control.outcome = "conflict-active";
-    await page.goto(material);
-    await ready(page, "Choose material");
-    await page.getByRole("button", { name: "Start session" }).click();
+    await page.goto(intent);
+    await ready(page, "Choose how to begin");
+    await composeIntent(page, "a first question");
     await expect(
       page.getByRole("link", { name: "Continue session" }),
     ).toBeVisible();
     const discoveries = control.discoveryReads;
     expect(
       control.starts === 1 &&
-        page.url().endsWith(material) &&
+        control.messagePosts === 0 &&
+        page.url().endsWith(intent) &&
         control.forbidden === 0,
     ).toBe(true);
     await routeHygieneCheckpoint(page, "tutoring-course");
+    // The composed draft never dispatched; leaving confirms its discard.
     await page.getByRole("link", { name: "Continue session" }).click();
+    await page.getByRole("button", { name: "Discard and leave" }).click();
     await ready(page, "Tutoring session");
     expect(control.starts === 1 && control.discoveryReads === discoveries).toBe(
       true,
@@ -145,14 +169,18 @@ test(
     const control = await tutoringBackend(page);
     control.outcome = "lose";
     control.createOnPost = true;
-    await page.goto(material);
-    await ready(page, "Choose material");
-    await page.getByRole("button", { name: "Start session" }).click();
+    await page.goto(intent);
+    await ready(page, "Choose how to begin");
+    await composeIntent(page, "a first question");
     await expect(
       page.getByRole("heading", { name: unknownHeading }),
     ).toBeVisible();
     // No replay: the lost start stays the only dispatch until reconciliation.
-    expect(control.starts === 1 && page.url().endsWith(material)).toBe(true);
+    expect(
+      control.starts === 1 &&
+        control.messagePosts === 0 &&
+        page.url().endsWith(intent),
+    ).toBe(true);
     await page.getByRole("button", { name: "Refresh", exact: true }).click();
     await expect(
       page.getByRole("link", { name: "Continue session" }),
@@ -173,9 +201,9 @@ test(
   protectedJourney(async (page) => {
     const control = await tutoringBackend(page);
     control.outcome = "lose";
-    await page.goto(material);
-    await ready(page, "Choose material");
-    await page.getByRole("button", { name: "Start session" }).click();
+    await page.goto(intent);
+    await ready(page, "Choose how to begin");
+    await composeIntent(page, "a first question");
     await expect(
       page.getByRole("heading", { name: unknownHeading }),
     ).toBeVisible();
@@ -188,12 +216,13 @@ test(
     await retry.click();
     await ready(page, "Tutoring session");
     await expect
-      .poll(async () => (await page.locator("main article").count()) === 1)
+      .poll(async () => (await page.locator("main article").count()) === 2)
       .toBe(true);
     expect(
       control.starts === 2 &&
         control.requestIds.length === 2 &&
         control.requestIds[0] === control.requestIds[1] &&
+        control.messagePosts === 1 &&
         control.materialsSent.join() === "," &&
         control.forbidden === 0,
     ).toBe(true);
@@ -266,10 +295,154 @@ test(
     ).toBeVisible();
     expect(
       control.turnReads === 0 &&
+        control.workReads === 0 &&
         control.starts === 0 &&
         (await page.locator("main article").count()) === 0 &&
         (await page.locator(`main a[href="/learn/courses"]`).count()) === 1,
     ).toBe(true);
+    await minimized(page);
+  }),
+);
+
+test(
+  "tutoring workspace queues one message during an answer and keeps the draft when the queue is full",
+  protectedJourney(async (page) => {
+    const control = await tutoringBackend(page);
+    const fixture = routeSecretFixture(page);
+    control.workState = "generating";
+    control.workGenerating = true;
+    await page.goto(workspace);
+    await ready(page, "Tutoring session");
+    const queue = page.getByRole("button", { name: "Queue message" });
+    await expect(queue).toBeVisible();
+    const composer = page.getByLabel("Your message to the tutor");
+    await composer.fill(fixture.teachingText);
+    await queue.click();
+    // Definitive 201: exactly one immediate current-work follow-up read (D4),
+    // then the one distinct queued article keyed by the response ID.
+    await expect.poll(() => control.workReads === 2).toBe(true);
+    await expect(
+      page.getByRole("heading", { name: "Response queued" }),
+    ).toBeVisible();
+    expect(
+      control.messagePosts === 1 &&
+        requestIdPattern.test(control.messageRequestIds[0] ?? "") &&
+        control.workQueries.join() === "," &&
+        control.forbidden === 0,
+    ).toBe(true);
+    // The queue is now full: the draft stays, the submission is disabled, and
+    // nothing else dispatches.
+    await composer.fill("a follow-up question");
+    const submit = page.locator("main button[type=submit]");
+    await expect(submit).toHaveAttribute("aria-disabled", "true");
+    await submit.click({ force: true });
+    expect(
+      control.messagePosts === 1 &&
+        (await composer.inputValue()) === "a follow-up question",
+    ).toBe(true);
+    await routeHygieneCheckpoint(page, "tutoring-content");
+    await minimized(page);
+  }),
+);
+
+test(
+  "tutoring lost workspace send reconciles through the current work read and retries only the exact attempt",
+  protectedJourney(async (page) => {
+    const control = await tutoringBackend(page);
+    const fixture = routeSecretFixture(page);
+    control.sendOutcome = "lose";
+    await page.goto(workspace);
+    await ready(page, "Tutoring session");
+    const composer = page.getByLabel("Your message to the tutor");
+    await composer.fill(fixture.teachingText);
+    await page.getByRole("button", { name: "Send" }).click();
+    await expect(
+      page.getByRole("heading", { name: unknownSendHeading }),
+    ).toBeVisible();
+    expect(control.messagePosts === 1 && control.starts === 0).toBe(true);
+    // Reconcile is the current-work read with the retained request ID; the
+    // well-formed unknown ID answers reconciled_message null (not committed).
+    await page.getByRole("button", { name: "Refresh", exact: true }).click();
+    const retry = page.getByRole("button", { name: "Retry exact attempt" });
+    await expect(retry).toBeVisible();
+    expect(control.workQueries.at(-1) === control.messageRequestIds[0]).toBe(
+      true,
+    );
+    control.sendOutcome = "created";
+    await retry.click();
+    await expect.poll(() => control.messagePosts === 2).toBe(true);
+    // The exact retained identity is resent; nothing else was dispatched.
+    expect(
+      control.messageRequestIds.length === 2 &&
+        control.messageRequestIds[0] === control.messageRequestIds[1] &&
+        control.starts === 0 &&
+        control.forbidden === 0,
+    ).toBe(true);
+    await expect(
+      page.getByRole("heading", { name: "Response queued" }),
+    ).toBeVisible();
+    await routeHygieneCheckpoint(page, "tutoring-content");
+    await minimized(page);
+  }),
+);
+
+test(
+  "tutoring busy workspace send keeps the draft and recovers only through explicit Refresh",
+  protectedJourney(async (page) => {
+    const control = await tutoringBackend(page);
+    const fixture = routeSecretFixture(page);
+    control.sendOutcome = "busy";
+    await page.goto(workspace);
+    await ready(page, "Tutoring session");
+    const composer = page.getByLabel("Your message to the tutor");
+    await composer.fill(fixture.teachingText);
+    await page.getByRole("button", { name: "Send" }).click();
+    await expect(
+      page.getByRole("heading", {
+        name: "The tutor is busy with other work right now. Your draft stays unchanged. Refresh the current state before sending.",
+      }),
+    ).toBeVisible();
+    // Slot lost: the draft is retained verbatim; nothing replays.
+    expect(
+      control.messagePosts === 1 &&
+        (await composer.inputValue()) === fixture.teachingText,
+    ).toBe(true);
+    control.sendOutcome = "created";
+    await page.getByRole("button", { name: "Refresh", exact: true }).click();
+    await expect.poll(() => control.workReads === 2).toBe(true);
+    expect(control.messagePosts === 1 && control.forbidden === 0).toBe(true);
+    await routeHygieneCheckpoint(page, "tutoring-content");
+    await minimized(page);
+  }),
+);
+
+test(
+  "tutoring reload during an unsettled send loses the draft and never replays",
+  protectedJourney(async (page) => {
+    const control = await tutoringBackend(page);
+    // The response never arrives within this page lifetime.
+    control.holdSend = new Promise<void>(() => {});
+    await page.goto(workspace);
+    await ready(page, "Tutoring session");
+    const composer = page.getByLabel("Your message to the tutor");
+    await composer.fill("a question in flight");
+    await page.getByRole("button", { name: "Send" }).click();
+    await expect.poll(() => control.messagePosts === 1).toBe(true);
+    // Reload mid-flight: machine 2 Reloaded unknown — no outcome claim, no
+    // restored draft, and never an automatic replay.
+    await page.reload();
+    await ready(page, "Tutoring session");
+    await expect(page.getByRole("button", { name: "Send" })).toBeVisible();
+    expect(
+      (await composer.inputValue()) === "" &&
+        control.messagePosts === 1 &&
+        control.starts === 0 &&
+        control.forbidden === 0 &&
+        (await page
+          .getByRole("heading", { name: unknownSendHeading })
+          .count()) === 0,
+    ).toBe(true);
+    await routeHygieneCheckpoint(page, "tutoring-content");
     await minimized(page);
   }),
 );
@@ -298,7 +471,7 @@ test(
           },
           [locale, size],
         );
-        for (const route of [start, recovery, workspace]) {
+        for (const route of [start, recovery, intent, workspace]) {
           await page.goto(route);
           await expect
             .poll(async () => (await page.locator("main h1").count()) === 1)
@@ -343,7 +516,7 @@ test("tutoring surfaces preserve keyboard structure and pass axe at actual 200 p
         forcedColors: "active",
         reducedMotion: "reduce",
       });
-      for (const route of [start, recovery, workspace]) {
+      for (const route of [start, recovery, intent, workspace]) {
         await page.goto(route);
         await expect
           .poll(async () => (await page.locator("main h1").count()) === 1)

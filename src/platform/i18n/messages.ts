@@ -240,6 +240,161 @@ export const messages = defineMessages({
     defaultMessage:
       "The tutoring check could not be completed. This is not an empty result.",
   },
+  tutoringIntentTitle: {
+    id: "tutoring.intentTitle",
+    defaultMessage: "Choose how to begin | MIA",
+  },
+  tutoringIntentHeading: {
+    id: "tutoring.intentHeading",
+    defaultMessage: "Choose how to begin",
+  },
+  tutoringIntentHelp: {
+    id: "tutoring.intentHelp",
+    defaultMessage:
+      "Write your first message to the tutor, or choose a suggestion to insert editable text. Nothing is sent until you choose Start session.",
+  },
+  tutoringStarters: {
+    id: "tutoring.starters",
+    defaultMessage: "Suggestions",
+  },
+  // FFR-611: five frontend-owned static starters. Each inserts editable
+  // localized text or guides the next step; none ever submits.
+  tutoringStarterHomework: {
+    id: "tutoring.starterHomework",
+    defaultMessage: "Homework help",
+  },
+  tutoringStarterHomeworkText: {
+    id: "tutoring.starterHomeworkText",
+    defaultMessage: "I need help with my homework:",
+  },
+  tutoringStarterPractice: {
+    id: "tutoring.starterPractice",
+    defaultMessage: "Topic practice",
+  },
+  tutoringStarterPracticeText: {
+    id: "tutoring.starterPracticeText",
+    defaultMessage: "I want to practice this topic:",
+  },
+  tutoringStarterExplain: {
+    id: "tutoring.starterExplain",
+    defaultMessage: "Explanation",
+  },
+  tutoringStarterExplainText: {
+    id: "tutoring.starterExplainText",
+    defaultMessage: "Please explain this to me:",
+  },
+  tutoringStarterExam: {
+    id: "tutoring.starterExam",
+    defaultMessage: "Exam preparation",
+  },
+  tutoringStarterExamText: {
+    id: "tutoring.starterExamText",
+    defaultMessage: "Help me prepare for an exam on:",
+  },
+  tutoringStarterFreeform: {
+    id: "tutoring.starterFreeform",
+    defaultMessage: "Free-form question",
+  },
+  tutoringMaterialContinue: {
+    id: "tutoring.materialContinue",
+    defaultMessage: "Continue",
+  },
+  tutoringComposerHeading: {
+    id: "tutoring.composerHeading",
+    defaultMessage: "Write a message",
+  },
+  tutoringComposerLabel: {
+    id: "tutoring.composerLabel",
+    defaultMessage: "Your message to the tutor",
+  },
+  tutoringMessageBounds: {
+    id: "tutoring.messageBounds",
+    defaultMessage:
+      "1 to 8,000 characters and at most 32 KiB of UTF-8 text. Enter adds a new line.",
+  },
+  tutoringMessageRequired: {
+    id: "tutoring.messageRequired",
+    defaultMessage: "Enter a message first.",
+  },
+  tutoringMessageTooLong: {
+    id: "tutoring.messageTooLong",
+    defaultMessage:
+      "Shorten the message to at most 8,000 characters and 32 KiB of UTF-8 text.",
+  },
+  tutoringSending: {
+    id: "tutoring.sending",
+    defaultMessage: "Sending your message…",
+  },
+  tutoringSendRejected: {
+    id: "tutoring.sendRejected",
+    defaultMessage:
+      "The message was not sent. Review the message and current state before trying again; a new attempt is a fresh send.",
+  },
+  tutoringSendUnknown: {
+    id: "tutoring.sendUnknown",
+    defaultMessage:
+      "The message outcome is unknown. The message may have been sent. Reconcile checks the current state; this attempt is never repeated automatically.",
+  },
+  tutoringSendBusy: {
+    id: "tutoring.sendBusy",
+    defaultMessage:
+      "The tutor is busy with other work right now. Your draft stays unchanged. Refresh the current state before sending.",
+  },
+  tutoringSendConflict: {
+    id: "tutoring.sendConflict",
+    defaultMessage:
+      "This attempt conflicts with committed work. Reconcile to review the current state; the conflicting attempt is discarded and never resent.",
+  },
+  tutoringSendAbandoned: {
+    id: "tutoring.sendAbandoned",
+    defaultMessage:
+      "The unknown attempt was abandoned locally, not cancelled on the server. Review the current state before a new attempt.",
+  },
+  tutoringSendLeave: {
+    id: "tutoring.sendLeave",
+    defaultMessage:
+      "A message send is pending or unconfirmed. Leaving drops this page’s attempt record; it does not cancel server work.",
+  },
+  tutoringSessionReady: {
+    id: "tutoring.sessionReady",
+    defaultMessage:
+      "The session exists and your message was not sent yet. Choose Start session to send it.",
+  },
+  tutoringWorkUnknown: {
+    id: "tutoring.workUnknown",
+    defaultMessage:
+      "Your message was sent, but the current work state could not be read. Refresh to check the current state.",
+  },
+  // AC-013 seed: polite, deduped per response ID for the page lifetime.
+  tutoringMessageQueued: {
+    id: "tutoring.messageQueued",
+    defaultMessage: "Message queued.",
+  },
+  tutoringCurrentWork: {
+    id: "tutoring.currentWork",
+    defaultMessage: "Current work",
+  },
+  tutoringAttempt: {
+    id: "tutoring.attempt",
+    defaultMessage: "Attempt {number}",
+  },
+  tutoringSend: {
+    id: "tutoring.send",
+    defaultMessage: "Send",
+  },
+  tutoringQueueMessage: {
+    id: "tutoring.queueMessage",
+    defaultMessage: "Queue message",
+  },
+  tutoringDraftDiscard: {
+    id: "tutoring.draftDiscard",
+    defaultMessage: "Discard the unsent message?",
+  },
+  tutoringDraftLeaveHelp: {
+    id: "tutoring.draftLeaveHelp",
+    defaultMessage:
+      "Leaving discards the unsent message. It stays only in this page’s memory and is never saved; nothing will be restored when you return.",
+  },
   studentListTitle: {
     id: "students.listTitle",
     defaultMessage: "Course students | MIA",

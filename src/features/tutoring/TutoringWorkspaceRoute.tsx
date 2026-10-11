@@ -1,47 +1,63 @@
-import { useState } from "react";
+import { useLayoutEffect, useRef, useState } from "react";
 import { useIntl } from "react-intl";
 import type { EntryApiFailure } from "../../platform/api/entry";
+import { TechnicalErrorDisclosure } from "../../platform/api/TechnicalErrorDisclosure";
 import {
   listSessionTurns,
   type SessionTurnPage,
+  type StudentMessageProjection,
   type TutoringSession,
-  type TutorResponseState,
+  type TutoringWork,
 } from "../../platform/api/tutoringSessions";
+import { useSessionActions } from "../../platform/data/EntryDataProvider";
 import { messages } from "../../platform/i18n/messages";
+import { DiscardChangesDialog } from "../../platform/ui/DiscardChangesDialog";
+import { RouteDepartureLink } from "../../platform/ui/RouteDepartureLink";
 import {
   TutoringCheckedAt,
   TutoringCollectionFeedback,
   TutoringEmpty,
-  TutoringExits,
   TutoringPagination,
+  tutoringActionClass,
   useTutoringCollection,
 } from "./SessionStartCourseChoiceRoute";
+import { TutoringComposer } from "./TutoringComposer";
+import {
+  TutoringCurrentWork,
+  tutoringResponseLabels,
+} from "./TutoringCurrentWork";
 import { TutoringEntryNotice } from "./TutoringEntryNotice";
 import type { TutoringLinks } from "./TutoringRouteProps";
 import type { TutoringRouteProps } from "./TutoringRouteProps";
+import { useStudentMessageSend } from "./useStudentMessageSend";
 
 // ROUTE-INVENTORY.md §Tutoring Workspace, D3/D4: fixed identity, no course
-// re-read. A non-active addressed session is the fixed finished notice without
-// a transcript read; only an active owned session renders the FFR-613 notice
-// and its persisted transcript.
+// re-read. A non-active addressed session (or one whose authoritative work
+// read reports completed) is the fixed finished notice without a transcript
+// read; only an active owned session renders the FFR-613 notice, its
+// persisted transcript, the current-work region and the composer.
 export default function TutoringWorkspaceRoute(props: TutoringRouteProps) {
   if (props.resource.kind !== "workspace")
     throw new Error("The workspace requires its admitted session resource.");
-  if (props.resource.session.state !== "active")
-    return <SessionFinished {...props} />;
-  if (props.resource.page === null)
-    throw new Error("An active workspace requires its transcript page.");
+  if (
+    props.resource.session.state !== "active" ||
+    props.resource.work?.sessionState === "completed"
+  )
+    return <SessionFinished links={props.links} />;
+  if (props.resource.page === null || props.resource.work === null)
+    throw new Error("An active workspace requires its work and transcript.");
   return (
     <Transcript
       session={props.resource.session}
       initial={props.resource.page}
+      initialWork={props.resource.work}
       links={props.links}
       unavailable={props.unavailable}
     />
   );
 }
 
-function SessionFinished({ links }: TutoringRouteProps) {
+function SessionFinished({ links }: { readonly links: TutoringLinks }) {
   const intl = useIntl();
   return (
     <>
@@ -49,44 +65,76 @@ function SessionFinished({ links }: TutoringRouteProps) {
         {intl.formatMessage(messages.tutoringSessionFinished)}
       </p>
       <div className="mt-6 flex flex-wrap gap-3">
-        <TutoringExits links={links} />
+        <RouteDepartureLink to={links.courses} className={tutoringActionClass}>
+          {intl.formatMessage(messages.learnCourses)}
+        </RouteDepartureLink>
+        <RouteDepartureLink to={links.home} className={tutoringActionClass}>
+          {intl.formatMessage(messages.invitationsBackToHome)}
+        </RouteDepartureLink>
       </div>
     </>
   );
 }
-
-// Neutral per-response truth for a persisted non-completed response; a
-// completed response needs no label. No streaming or retry state exists here.
-const responseLabels: Partial<
-  Record<TutorResponseState, (typeof messages)[keyof typeof messages]>
-> = {
-  queued: messages.tutoringResponseQueued,
-  generating: messages.tutoringResponseGenerating,
-  interrupted: messages.tutoringResponseInterrupted,
-  failed: messages.tutoringResponseFailed,
-};
 
 // Tailwind Plus: Application UI > Lists > Stacked Lists > Simple,
 // v4/react-light.jsx, library 2026-09-13-083323. MIA deltas: one labelled
 // <article> per turn keyed by its opaque response id, student and tutor text
 // as escaped plain text paragraphs with preserved line breaks, a neutral
 // response-state label only for non-completed responses, and no avatars,
-// secondary metadata column, links or actions.
+// secondary metadata column, links or actions. Story 6.2 adds the
+// current-work region and composer below the transcript; D5 suppresses
+// transcript turns whose response IDs the current work already renders, so
+// each attempt has exactly one stable rendered identity.
 function Transcript({
   session,
   initial,
+  initialWork,
   links,
   unavailable,
 }: {
   readonly session: TutoringSession;
   readonly initial: SessionTurnPage;
+  readonly initialWork: TutoringWork;
   readonly links: TutoringLinks;
   readonly unavailable: (failure: EntryApiFailure | null) => void;
 }) {
   const intl = useIntl();
+  const { checkRouteAdmission } = useSessionActions();
   const [page, setPage] = useState(initial);
   const [checkedAt, setCheckedAt] = useState(Date.now);
+  // The authoritative work state: admitted with the route, then only the send
+  // owner's D4 follow-up, reconcile or an explicit route Refresh replaces it.
+  const [work, setWork] = useState(initialWork);
+  // False only after a definitive send whose follow-up read failed: the
+  // committed message still renders, the composer stays covered (criterion 7).
+  const [workKnown, setWorkKnown] = useState(true);
+  // Definitively sent this page lifetime; rendered from the mutation document
+  // until an authoritative work read carries the same response ID (D5).
+  const [sent, setSent] = useState<readonly StudentMessageProjection[]>([]);
+  // The draft lives in page memory only, guarded by the send owner's
+  // unsaved-input guard; nothing enters storage, URL text or history state.
+  const [draft, setDraft] = useState("");
+  const inputRef = useRef<HTMLTextAreaElement>(null);
   const collection = useTutoringCollection(unavailable);
+  const send = useStudentMessageSend({
+    session: session.id,
+    work,
+    settle: (update) => {
+      if (update.kind === "work") {
+        setWork(update.work);
+        setWorkKnown(true);
+      } else if (update.kind === "committed") {
+        setSent((current) => [...current, update.message]);
+        setDraft("");
+      } else setWorkKnown(false);
+    },
+    unavailable,
+    hasContent: draft !== "",
+  });
+  const { status, feedback } = send;
+  useLayoutEffect(() => {
+    if (feedback !== null) status.current?.focus();
+  }, [feedback, status]);
   const load = (offset: number) =>
     void collection.load(
       (signal) => listSessionTurns(session.id, offset, signal),
@@ -95,6 +143,23 @@ function Transcript({
         setCheckedAt(Date.now());
       },
     );
+  // The session completed mid-view (409 tutoring_invalid_state or a reconcile
+  // truth): the fixed read-only finished presentation replaces the workspace.
+  if (send.finished) return <SessionFinished links={links} />;
+  const waiting =
+    send.state.kind === "Sending" ||
+    send.state.kind === "Checking" ||
+    send.state.kind === "Reconciling";
+  const locked = waiting || send.unknown || send.pending;
+  // D5: one rendered identity per attempt — response IDs the current work (or
+  // a definitive send) already renders leave the paginated transcript.
+  const regionIds = new Set<string>();
+  if (workKnown) {
+    if (work.generating !== null) regionIds.add(work.generating.id);
+    if (work.queued !== null) regionIds.add(work.queued.response.id);
+  }
+  for (const message of sent) regionIds.add(message.response.id);
+  const turns = page.items.filter((turn) => !regionIds.has(turn.id));
   return (
     <>
       <TutoringEntryNotice />
@@ -106,14 +171,15 @@ function Transcript({
         state={collection.state}
         retry={() => load(page.offset)}
       />
-      {collection.state.kind === "Loading" ? null : page.items.length === 0 ? (
+      {collection.state.kind === "Loading" ? null : turns.length === 0 &&
+        page.items.length === 0 ? (
         <TutoringEmpty
           text={intl.formatMessage(messages.tutoringTranscriptEmpty)}
         />
       ) : (
         <ul role="list" className="mt-6 divide-y divide-gray-100">
-          {page.items.map((turn, index) => {
-            const label = responseLabels[turn.responseState];
+          {turns.map((turn, index) => {
+            const label = tutoringResponseLabels[turn.responseState];
             return (
               <li key={turn.id} className="py-5">
                 <article
@@ -149,9 +215,111 @@ function Transcript({
         busy={collection.state.kind === "Loading"}
         load={load}
       />
-      <div className="mt-6 flex flex-wrap gap-3">
-        <TutoringExits links={links} refresh />
+      <TutoringCurrentWork work={workKnown ? work : null} sent={sent} />
+      <h2
+        ref={status}
+        tabIndex={-1}
+        className="mt-6 text-base font-semibold text-gray-900"
+      >
+        {intl.formatMessage(feedback ?? messages.tutoringComposerHeading)}
+      </h2>
+      {send.error !== null ? (
+        <TechnicalErrorDisclosure error={send.error} />
+      ) : null}
+      {waiting ? (
+        <p className="mt-3 text-sm/6 text-gray-700">
+          {intl.formatMessage(
+            send.state.kind === "Sending"
+              ? messages.tutoringSending
+              : messages.tutoringChecking,
+          )}
+        </p>
+      ) : null}
+      <TutoringComposer
+        draft={draft}
+        locked={locked}
+        submitLabel={intl.formatMessage(
+          workKnown && !work.actions.submit && work.actions.queue
+            ? messages.tutoringQueueMessage
+            : messages.tutoringSend,
+        )}
+        submitEnabled={workKnown && send.enabled}
+        onDraft={setDraft}
+        action={send.action}
+        guardSubmit={send.guardSubmit}
+        inputRef={inputRef}
+      />
+      <div className="mt-6 flex flex-wrap items-center gap-3">
+        {waiting ? (
+          <button
+            type="button"
+            className={tutoringActionClass}
+            onClick={send.stop}
+          >
+            {intl.formatMessage(messages.lifecycleStopWaiting)}
+          </button>
+        ) : send.unknown ? (
+          <button
+            type="button"
+            className={tutoringActionClass}
+            onClick={() => void send.reconcile()}
+          >
+            {intl.formatMessage(messages.invitationsRefresh)}
+          </button>
+        ) : (
+          <button
+            type="button"
+            className={tutoringActionClass}
+            onClick={() => void checkRouteAdmission()}
+          >
+            {intl.formatMessage(messages.invitationsRefresh)}
+          </button>
+        )}
+        {send.canRetry ? (
+          <button
+            type="button"
+            className={tutoringActionClass}
+            onClick={() => void send.retry()}
+          >
+            {intl.formatMessage(messages.tutoringRetry)}
+          </button>
+        ) : null}
+        {send.canAbandon ? (
+          <button
+            type="button"
+            className={tutoringActionClass}
+            onClick={send.abandon}
+          >
+            {intl.formatMessage(messages.tutoringStartAbandon)}
+          </button>
+        ) : null}
+        {!send.pending && !send.unknown ? (
+          <>
+            <RouteDepartureLink
+              to={links.courses}
+              className={tutoringActionClass}
+            >
+              {intl.formatMessage(messages.learnCourses)}
+            </RouteDepartureLink>
+            <RouteDepartureLink to={links.home} className={tutoringActionClass}>
+              {intl.formatMessage(messages.invitationsBackToHome)}
+            </RouteDepartureLink>
+          </>
+        ) : null}
       </div>
+      <DiscardChangesDialog
+        departure={send.departure}
+        title={intl.formatMessage(
+          send.attemptDirty
+            ? messages.tutoringSendUnknown
+            : messages.tutoringDraftDiscard,
+        )}
+        description={intl.formatMessage(
+          send.attemptDirty
+            ? messages.tutoringSendLeave
+            : messages.tutoringDraftLeaveHelp,
+        )}
+      />
     </>
   );
 }

@@ -495,7 +495,8 @@ export const routeHygieneCases = [
     title: "course connected process remains operable at real 200 percent zoom",
     checkpoints: ["course-input", "course-persisted", "complete"],
   },
-  // Story 6.1 tutoring session start/resume (e2e/tutoringSessions.spec.ts).
+  // Story 6.1/6.2 tutoring session start/intent/workspace
+  // (e2e/tutoringSessions.spec.ts).
   {
     id: "tutoring-start",
     title:
@@ -531,6 +532,30 @@ export const routeHygieneCases = [
     title:
       "tutoring completed session shows the fixed finished notice without transcript reads",
     checkpoints: ["complete"],
+  },
+  {
+    id: "tutoring-queue",
+    title:
+      "tutoring workspace queues one message during an answer and keeps the draft when the queue is full",
+    checkpoints: ["tutoring-content", "complete"],
+  },
+  {
+    id: "tutoring-send-unknown",
+    title:
+      "tutoring lost workspace send reconciles through the current work read and retries only the exact attempt",
+    checkpoints: ["tutoring-content", "complete"],
+  },
+  {
+    id: "tutoring-send-busy",
+    title:
+      "tutoring busy workspace send keeps the draft and recovers only through explicit Refresh",
+    checkpoints: ["tutoring-content", "complete"],
+  },
+  {
+    id: "tutoring-send-reload",
+    title:
+      "tutoring reload during an unsettled send loses the draft and never replays",
+    checkpoints: ["tutoring-content", "complete"],
   },
   {
     id: "tutoring-locales",

@@ -80,7 +80,7 @@ development_status:
 
   epic-6: backlog
   6-1-start-or-resume-the-students-tutoring-session: done
-  6-2-send-messages-and-show-the-single-queued-message: backlog
+  6-2-send-messages-and-show-the-single-queued-message: done
   6-3-stream-answers-without-disrupting-reading: backlog
   6-4-recover-stop-and-deliberately-retry-tutoring-work: backlog
   6-5-finish-and-show-the-completed-transcript: backlog

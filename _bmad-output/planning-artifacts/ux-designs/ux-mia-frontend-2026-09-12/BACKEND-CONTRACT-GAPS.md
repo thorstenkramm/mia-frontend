@@ -1241,6 +1241,22 @@ to the response targeted by Stop or infer the targeted outcome from current-work
 - Browser integration fixtures proving reload and reconnect recover one current state without duplicate messages,
   responses, provider requests, or false Finish availability.
 
+#### Story 6.2 send-and-queue slice reconciliation — 2026-10-11
+
+The authorized unattended batch resumes the student send/queue slice only: the first message of the begin chain and
+workspace sends consume `GET /api/v1/tutoring-sessions/{id}/current-work` (`TutoringWorkDocument`) as the one
+authoritative per-session work representation — idle/generating/queued/generating-and-queued/completed states,
+generating and queued identities, remaining queue capacity, and server-authored `actions.submit`/`actions.queue`
+eligibility — read atomically with the one-generating/one-queued invariants, owner-only, under
+`Cache-Control: no-store`. Composer enablement and the Send/Queue label come only from those server-authored actions;
+ambiguous sends reconcile through the same read with the retained `message_request_id` (`reconciled_message` present
+means committed, `null` with a well-formed ID means not committed); the mutation document's `links.current_work`
+pattern backs exactly one immediate non-refreshing follow-up read after a definitive send. The "current docs/OpenAPI
+mismatch" section above no longer describes current transport for this slice (backend `63c9992`; OpenAPI
+`getTutoringSessionCurrentWork`, `createStudentMessage`). BCG-012 is **not** globally closed: machine 6 live handoff,
+machine 7 Stop reconciliation, machine 8 Finish prevalidation, two-tab concurrency browser evidence, and the release
+obligations remain outstanding for Stories 6.3/6.4/6.5.
+
 ### BCG-013: Student mentoring-request eligibility
 
 #### BCG-013 frontend capability blocked

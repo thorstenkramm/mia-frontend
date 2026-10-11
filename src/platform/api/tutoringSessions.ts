@@ -15,23 +15,18 @@ import {
 import {
   resourceId,
   toCourseId,
+  toTutoringSessionId,
   utcInstant,
   type CourseId,
   type MaterialId,
+  type TutoringSessionId,
 } from "./entry";
 import type { operations } from "./generated";
 
-declare const tutoringSessionIdBrand: unique symbol;
-export type TutoringSessionId = string & {
-  readonly [tutoringSessionIdBrand]: "TutoringSessionId";
-};
-// Opaque backend identity conversion; invalid values never become a route or
-// request identity.
-export function toTutoringSessionId(value: string): TutoringSessionId | null {
-  return resourceId.safeParse(value).success
-    ? (value as TutoringSessionId)
-    : null;
-}
+// The opaque session identity brand lives with the other route-identity
+// brands in ./entry so eager route parsing never pulls this module's parsers
+// into the initial bundle; re-exported here for the tutoring consumers.
+export { toTutoringSessionId, type TutoringSessionId };
 
 // BCG-002 Story 6.1 slice: the one authoritative cross-course discovery read.
 // Non-refreshing and no-store through the shared transport; only the minimal
@@ -247,6 +242,216 @@ export async function listSessionTurns(
       document.meta.has_more,
       document.links,
     ),
+  };
+}
+
+// Story 6.2: one student message with its nested initial tutor response. The
+// minimal projection (identity, sequence, escaped content, creation instant,
+// response identity/attempt/state/content) is shared by the mutation document,
+// the queued-work slot and request-ID reconciliation; every other field is
+// stripped at the boundary. 6.3–6.5 extend this schema, never fork it.
+const tutorResponseResource = z.object({
+  type: z.literal("tutor-responses"),
+  id: resourceId,
+  attributes: z.object({
+    session_id: resourceId,
+    message_id: resourceId,
+    attempt: z.number().int().min(1),
+    state: z.enum(responseStates),
+    content: z.string(),
+  }),
+});
+export type TutorResponseProjection = {
+  readonly id: string;
+  readonly messageId: string;
+  readonly attempt: number;
+  readonly state: TutorResponseState;
+  readonly content: string;
+};
+function toResponseProjection(
+  session: TutoringSessionId,
+  resource: z.infer<typeof tutorResponseResource>,
+): TutorResponseProjection {
+  if (resource.attributes.session_id !== session) throw new ApiProtocolError();
+  return {
+    id: resource.id,
+    messageId: resource.attributes.message_id,
+    attempt: resource.attributes.attempt,
+    state: resource.attributes.state,
+    content: resource.attributes.content,
+  };
+}
+const studentMessageResource = z.object({
+  type: z.literal("student-messages"),
+  id: resourceId,
+  attributes: z.object({
+    session_id: resourceId,
+    sequence: z.number().int().min(1),
+    content: z.string(),
+    created_at: utcInstant,
+    response: tutorResponseResource,
+  }),
+});
+export type StudentMessageProjection = {
+  readonly id: string;
+  readonly sequence: number;
+  readonly content: string;
+  readonly createdAt: number;
+  readonly response: TutorResponseProjection;
+};
+function toMessageProjection(
+  session: TutoringSessionId,
+  resource: z.infer<typeof studentMessageResource>,
+): StudentMessageProjection {
+  const response = toResponseProjection(session, resource.attributes.response);
+  if (
+    resource.attributes.session_id !== session ||
+    response.messageId !== resource.id
+  )
+    throw new ApiProtocolError();
+  return {
+    id: resource.id,
+    sequence: resource.attributes.sequence,
+    content: resource.attributes.content,
+    createdAt: Date.parse(resource.attributes.created_at),
+    response,
+  };
+}
+
+// Machine 2 message send: one request-ID-bound immutable payload, dispatched
+// at most once per attempt. 201 (new message with queued tutor response) and
+// 200 (identical-request replay) are one definitive success (D9); the
+// `links.current_work` URL is never consumed — the follow-up read is
+// constructed locally from trusted branded identities (D4).
+const messageMutationDocument = z.object({
+  errors: z.never().optional(),
+  data: studentMessageResource,
+});
+export async function createStudentMessage(
+  session: TutoringSessionId,
+  content: string,
+  clientRequestId: string,
+  csrfToken: string,
+): Promise<StudentMessageProjection> {
+  const body = {
+    data: {
+      type: "student-messages",
+      attributes: { client_request_id: clientRequestId, content },
+    },
+  } satisfies operations["createStudentMessage"]["requestBody"]["content"][typeof jsonApiMediaType];
+  const response = await sendUnsafeRequest({
+    method: "POST",
+    path: `/api/v1/tutoring-sessions/${encodeURIComponent(session)}/messages`,
+    csrfToken,
+    body: JSON.stringify(body),
+  });
+  const document = await parseJsonApiResponse(
+    response,
+    messageMutationDocument,
+    response.status === 201 ? 201 : 200,
+  );
+  return toMessageProjection(session, document.data);
+}
+
+// BCG-012 Story 6.2 slice: the one authoritative per-session work read.
+// Owner-only, non-refreshing, no-store; the optional well-formed request ID
+// reconciles an ambiguous send (a null reconciled message is the authoritative
+// not-committed answer; a malformed parameter is a 422 protocol rejection,
+// never "not committed"). `latest_response`, `reconciled_response` and the
+// stop/retry/reconnect/finish action fields are stripped for 6.3–6.5.
+const workDocument = z.object({
+  errors: z.never().optional(),
+  data: z.object({
+    type: z.literal("tutoring-work-states"),
+    id: resourceId,
+    attributes: z.object({
+      session_state: z.enum(["active", "completed"]),
+      state: z.enum([
+        "idle",
+        "generating",
+        "queued",
+        "generating_and_queued",
+        "completed",
+      ]),
+      remaining_queue_capacity: z.number().int().min(0).max(1),
+      generating_response: tutorResponseResource.nullable(),
+      queued_work: studentMessageResource.nullable(),
+      reconciled_message: studentMessageResource.nullable(),
+      actions: z.object({
+        submit: z.boolean(),
+        queue: z.boolean(),
+      }),
+    }),
+  }),
+});
+export type TutoringWorkState =
+  "idle" | "generating" | "queued" | "generating_and_queued" | "completed";
+export type TutoringWork = {
+  readonly sessionState: "active" | "completed";
+  readonly state: TutoringWorkState;
+  readonly remainingQueueCapacity: number;
+  readonly generating: TutorResponseProjection | null;
+  readonly queued: StudentMessageProjection | null;
+  // Server-authored eligibility only; never reconstructed locally.
+  readonly actions: {
+    readonly submit: boolean;
+    readonly queue: boolean;
+  };
+  readonly reconciledMessage: StudentMessageProjection | null;
+};
+export async function getTutoringSessionCurrentWork(
+  session: TutoringSessionId,
+  reconcile: { readonly messageRequestId?: string } = {},
+  signal: AbortSignal,
+): Promise<TutoringWork> {
+  const query =
+    reconcile.messageRequestId === undefined
+      ? ""
+      : `?message_request_id=${encodeURIComponent(reconcile.messageRequestId)}`;
+  const { data } = await readJsonApi({
+    path: `/api/v1/tutoring-sessions/${encodeURIComponent(session)}/current-work${query}`,
+    schema: workDocument,
+    initiator: "user",
+    signal,
+  });
+  if (data.id !== session) throw new ApiProtocolError();
+  const { attributes: a } = data;
+  const generating =
+    a.generating_response === null
+      ? null
+      : toResponseProjection(session, a.generating_response);
+  const queued =
+    a.queued_work === null ? null : toMessageProjection(session, a.queued_work);
+  const reconciledMessage =
+    a.reconciled_message === null
+      ? null
+      : toMessageProjection(session, a.reconciled_message);
+  // The state enum is atomic with the one-generating/one-queued invariants; a
+  // contradiction is a protocol failure, never a guessed presentation.
+  const consistent =
+    (a.state === "idle" && generating === null && queued === null) ||
+    (a.state === "generating" && generating !== null && queued === null) ||
+    (a.state === "queued" && generating === null && queued !== null) ||
+    (a.state === "generating_and_queued" &&
+      generating !== null &&
+      queued !== null) ||
+    (a.state === "completed" &&
+      a.session_state === "completed" &&
+      generating === null &&
+      queued === null);
+  if (
+    !consistent ||
+    (a.state === "completed") !== (a.session_state === "completed")
+  )
+    throw new ApiProtocolError();
+  return {
+    sessionState: a.session_state,
+    state: a.state,
+    remainingQueueCapacity: a.remaining_queue_capacity,
+    generating,
+    queued,
+    actions: { submit: a.actions.submit, queue: a.actions.queue },
+    reconciledMessage,
   };
 }
 

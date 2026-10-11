@@ -1,4 +1,8 @@
-import type { CourseId, EntryApiFailure } from "../../platform/api/entry";
+import type {
+  CourseId,
+  EntryApiFailure,
+  MaterialId,
+} from "../../platform/api/entry";
 import type {
   JoinedCourseBatch,
   LearnCourse,
@@ -9,9 +13,10 @@ import type {
   SessionTurnPage,
   TutoringSession,
   TutoringSessionId,
+  TutoringWork,
 } from "../../platform/api/tutoringSessions";
 
-// The closed admitted-resource union for the four Story 6.1 tutoring routes.
+// The closed admitted-resource union for the Story 6.1/6.2 tutoring routes.
 // The host (app/routes/LearnSessionRoute.tsx) owns the ordered reads; a
 // component only ever sees the resource its route admitted.
 export type TutoringResource =
@@ -46,6 +51,23 @@ export type TutoringResource =
       readonly page: LearnMaterialPage | null;
     }
   | {
+      readonly kind: "intent";
+      readonly course: LearnCourse;
+      // BCG-002 discovery precedes the compose affordance: a found active
+      // session renders the resume presentation, never a starter.
+      readonly active: ActiveTutoringSession;
+      readonly material: null;
+    }
+  | {
+      readonly kind: "intent";
+      readonly course: LearnCourse;
+      readonly active: null;
+      // The D2 material-choice handoff: one opaque ID or explicit none.
+      // Absent or malformed handoff state is the documented intent-only
+      // start; a selection is never fabricated.
+      readonly material: MaterialId | null;
+    }
+  | {
       readonly kind: "recovery";
       // Explicit null is the authoritative no-active-session result.
       readonly active: ActiveTutoringSession | null;
@@ -53,8 +75,11 @@ export type TutoringResource =
   | {
       readonly kind: "workspace";
       readonly session: TutoringSession;
-      // A completed session renders the fixed finished notice without a
-      // transcript read (D4).
+      // BCG-012 Story 6.2 slice: the authoritative work read, admitted with
+      // the transcript page for an active session before the composer is
+      // enabled. A completed session renders the fixed finished notice
+      // without either read.
+      readonly work: TutoringWork | null;
       readonly page: SessionTurnPage | null;
     };
 
@@ -65,6 +90,7 @@ export type TutoringLinks = {
   readonly courses: string;
   readonly start: string;
   readonly material: (course: CourseId) => string;
+  readonly intent: (course: CourseId) => string;
   readonly recovery: string;
   readonly workspace: (session: TutoringSessionId) => string;
 };

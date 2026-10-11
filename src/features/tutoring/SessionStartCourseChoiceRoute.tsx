@@ -343,6 +343,8 @@ function CourseChoice({
   const [checkedAt, setCheckedAt] = useState(Date.now);
   const heading = useRef<HTMLHeadingElement>(null);
   const collection = useTutoringCollection(unavailable);
+  // The paginated-load callback rhymes with SessionStartMaterialRoute's
+  // material-page loader; the jscpd marker lives there.
   const load = (offset: number) =>
     void collection.load(
       async (signal) => {

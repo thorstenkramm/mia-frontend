@@ -1,0 +1,41 @@
+story: 6-2-send-messages-and-show-the-single-queued-message
+phase: commit-pending
+spec: _bmad-output/implementation-artifacts/spec-6-2-send-messages-and-show-the-single-queued-message.md
+baseline_commit: 958188b3e0b4f89b57e9d458cf90c1804ca6ef8c
+pre_existing_changes:
+  - ".opencode/ agent and protocol edits (owner workflow updates, uncommitted)"
+  - "execution checkpoints for stories 2-1, 2-2, 3-1, 3-2, 4-1 (bookkeeping, uncommitted)"
+  - "sprint-status.yaml unstaged hunk (Epic 2 retrospective closure + done/next_story bookkeeping around committed hunks)"
+  - "_bmad-output/implementation-artifacts/epic-2-retro-2026-10-07.md (untracked)"
+files: []
+worker_session: ses_ed74c13e7ffecxNbszr7H5TnWx
+reviewer_session: null
+models:
+  prepare: kimi-code/k3
+  implement: kimi-code/k3
+completed_blocks:
+  - "Story 6.1 closed: commit 958188b3e0b4f89b57e9d458cf90c1804ca6ef8c at HEAD on 2026-10-10 (session start/resume, workspace entry, FFR-613 notice)."
+  - "Owner scope 2026-10-11: proceed to 6-2 with the established batch rules: unattended within the story, per-story reviewed+verified commit, no push, interim-workaround pattern with mia/tmp RFCs, never weaken security/privacy invariants, rate-limit rotation openai -> kimi-code/k3 -> anthropic (retry openai default after the new day; switch on observed limit)."
+  - "Approved interim precedents: hardcoded documented-contract limits; generic authorized list with scope labels; bounded bundle mitigation within 256000 gzip bytes keeping seven languages; approval-observation ledger interim; G1 least-data exception with mandatory API-boundary discard (BCG-020)."
+  - "Prepare complete 2026-10-11 (kimi-code/k3): spec ready; createStudentMessage (client_request_id + content 1-8000 code points/<=32 KiB, 201/200 replay, 409 tutoring_work_busy/invalid_state/request_conflict, 422) and getTutoringSessionCurrentWork (TutoringWorkDocument: states, capacity, generating/queued identities, server-authored submit/queue actions, reconciled_message via message_request_id, no-store) both verified in current transport and generated types; BCG-012 Story 6.2 slice reconciliation recorded (not globally closed; no RFC); bounded decisions D1-D9 recorded (intent route registered, Start moves from material choice, location.state opaque material handoff, two-attempt begin chain, D4 follow-up read, response-ID dedup, intent-only starters, no SSE/polling, mirrored content bounds, 200=201)."
+repair_queue: []
+last_verification:
+  status: passed
+  command: ./run-all-tests.sh
+  exit_code: 0
+  stages_completed: 16
+  skipped: []
+  unit_tests: 901
+  browser_tests: 304
+  build_count: 1
+  bundle_gzip_bytes: 255436
+  bundle_budget_bytes: 256000
+  fingerprint_stability: "sha256 aggregate 6b670008...d2242c over 272 inputs"
+  report: tmp/agent-execution/6-2-send-messages-and-show-the-single-queued-message/verify-report.json
+  history: "Single completed gate instance; two earlier tool-layer-timeout kills cleaned (port 4173 freed) before the decisive run. Advisories: 4 low KaTeX, Trivy LOW KaTeX + MEDIUM country-code false positive."
+resume_attempts: 0
+commit:
+  intended_message: "feat: add tutoring composer with single queued message"
+  sha: null
+next_action: Dispatch worker implement for story 6.2 against the bounded spec.
+blocked_on: null

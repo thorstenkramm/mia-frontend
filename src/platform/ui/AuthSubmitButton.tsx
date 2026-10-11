@@ -1,6 +1,8 @@
 // Tailwind Plus: Application UI > Forms > Sign-in and Registration > Simple card
 // Library version: 2026-09-13-083323, v4 React light. The card's primary submit
 // button; MIA keeps it focusable while unavailable and refuses activation instead.
+// The tutoring composer's trailing submit rhymes with this binding; the jscpd
+// marker lives in features/tutoring/TutoringComposer.tsx.
 import { useFormStatus } from "react-dom";
 
 export function AuthSubmitButton({

@@ -1075,6 +1075,17 @@ spacing/forced-colors/reduced-motion checks. Actual check results/counts and con
 Story 6.1 implementation spec/report; this note does not mark CP-05 or its rows Pass. Message send/queue, stop,
 retry, finish, the wider stream/queue process states, supported Chrome/Edge/Safari and assistive-technology manual
 evidence remain outstanding, so every CP-05 row stays Blocked/Not run.
+
+Story 6.2 slice disposition, 2026-10-11: the batch-authorized send-and-queue slice reconciliation in
+`BACKEND-CONTRACT-GAPS.md` (BCG-012 Story 6.2 slice) extends the bounded subset with the intent route (static
+starters and free-form begin chain) and workspace send/queue against the authoritative current-work read. Focused
+unit and bundled-Chromium evidence covers starter insertion without submission, client-side documented-bounds
+validation, send/queue enablement from server-authored actions, the single queued presentation, ambiguous-send
+reconcile/retry/abandon, busy slot loss, reload without replay, hidden-cause equality, seven locales at 320px and
+real 200% zoom with forced-colors/reduced-motion and axe checks. Actual check results/counts and content-free logs
+are recorded in the Story 6.2 implementation spec/report; this note does not mark CP-05 or its rows Pass. Stop,
+retry-response, finish, live stream/queue handoff, and the manual supported-browser/assistive-technology matrix
+remain outstanding, so every CP-05 row stays Blocked/Not run.
 | `CP-06/CHK` | `LP-CHK` + `PS-06` | `CV-S` | Planned: `EP-CHK` | `BCG-001`, `003`, `004` | Blocked |
 | `CP-06/EMP` | `LP-EMP` + `PS-06` | `CV-S` | Planned: `EP-EMP` | None | Not run |
 | `CP-06/SUC` | `LP-SUC` + `PS-06` | `CV-S` | Planned: `EP-SUC` | `BCG-004`, `005` | Blocked |
@@ -1199,6 +1210,13 @@ start/recovery/workspace slice (see the CP-05 row note above): unit and bundled-
 recovery, hidden failure and the completed-session notice, in seven locales at 320px and real zoom. The row remains
 Blocked; its manual supported-browser/assistive-technology matrix and the complete start-to-first-turn process stay
 outstanding, and CP-05/A02 through A05 are untouched by this story.
+
+Story 6.2 slice disposition, 2026-10-11: CP-05/A02 and CP-05/A04 gain partial automated evidence only for the
+bounded send/queue slice (see the CP-05 row note above): unit and bundled-Chromium checks for composer validation,
+Send/Queue enablement from server-authored work state, ambiguous-send reconciliation, exact-attempt retry and
+abandon, busy slot loss, and reload without replay, in seven locales at 320px and real zoom. Both rows remain
+Blocked; the manual supported-browser/assistive-technology matrix stays outstanding, and CP-05/A03 and A05 are
+untouched by this story.
 | `CP-06/A01` | Review completed transcript | `PS-06` + `LP-SUC`; `EP-SUC` | None | Not run |
 | `CP-06/A02` | Correct or regenerate summary | `PS-06` + `LP-STA`; `EP-STA` | `BCG-004` | Blocked |
 | `CP-07/A01` | Student creates mentoring request | `PS-07` + `LP-SUC`; `EP-SUC` | `BCG-013` | Blocked |

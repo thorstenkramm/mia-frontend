@@ -135,6 +135,17 @@ export type MaterialId = string & { readonly [materialIdBrand]: "MaterialId" };
 export type MaterialFileId = string & {
   readonly [materialFileIdBrand]: "MaterialFileId";
 };
+declare const tutoringSessionIdBrand: unique symbol;
+export type TutoringSessionId = string & {
+  readonly [tutoringSessionIdBrand]: "TutoringSessionId";
+};
+// Primitive route identity conversion stays eager; tutoring resource parsers
+// do not.
+export function toTutoringSessionId(value: string): TutoringSessionId | null {
+  return resourceId.safeParse(value).success
+    ? (value as TutoringSessionId)
+    : null;
+}
 export function toMaterialId(value: string): MaterialId | null {
   return resourceId.safeParse(value).success ? (value as MaterialId) : null;
 }
