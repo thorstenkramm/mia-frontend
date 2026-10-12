@@ -1,5 +1,5 @@
 story: 6-2-send-messages-and-show-the-single-queued-message
-phase: commit-pending
+phase: complete
 spec: _bmad-output/implementation-artifacts/spec-6-2-send-messages-and-show-the-single-queued-message.md
 baseline_commit: 958188b3e0b4f89b57e9d458cf90c1804ca6ef8c
 pre_existing_changes:
@@ -36,6 +36,6 @@ last_verification:
 resume_attempts: 0
 commit:
   intended_message: "feat: add tutoring composer with single queued message"
-  sha: null
-next_action: Dispatch worker implement for story 6.2 against the bounded spec.
+  sha: 3a254c230b7fab5b6052f7bfe75ee8d27fec9074
+next_action: "Closed 2026-10-11. 38-file commit confirmed at HEAD. Owner scope covered 6-2 only; 6-3 requires a fresh dispatch."
 blocked_on: null

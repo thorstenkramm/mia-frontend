@@ -1,5 +1,5 @@
 story: 5-2-student-first-sign-in-and-joined-course-entry
-phase: commit-pending
+phase: complete
 spec: _bmad-output/implementation-artifacts/spec-5-2-student-first-sign-in-and-joined-course-entry.md
 baseline_commit: 3737013c4f36fd830fbff45874d0068e5288eb4b
 pre_existing_changes:
@@ -38,9 +38,10 @@ last_verification:
   history: "Single uninterrupted gate run after the R1 test-ordering fix; exit 0. Scope: handoff slice only."
 resume_attempts: 0
 commit:
-  intended_message: "test: verify provisioned student sign-in and password replacement handoff"
-  sha: 3737013c4f36fd830fbff45874d0068e5288eb4b
-next_action: "Implement the Learn discovery slice under the owner's G1 exception, then review + gate + done commit."
+  intended_message: "feat: add student Learn course discovery and material metadata"
+  sha: 94174e27ad0d6682f09591d5eee127895800f3e1
+  prior_slice_commit: 3737013c4f36fd830fbff45874d0068e5288eb4b
+next_action: "Closed 2026-10-10. Story complete in two commits: 3737013 (handoff slice) + 94174e2 (Learn slice, 39 files). Epic 5 complete. Batch ends per owner scope; Epic 6 requires a fresh dispatch."
 blocked_on: null
 owner_decisions:
   g1_partial_scope:

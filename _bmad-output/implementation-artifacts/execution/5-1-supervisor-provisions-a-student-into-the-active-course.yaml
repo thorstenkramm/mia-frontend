@@ -1,5 +1,5 @@
 story: 5-1-supervisor-provisions-a-student-into-the-active-course
-phase: commit-pending
+phase: complete
 spec: _bmad-output/implementation-artifacts/spec-5-1-supervisor-provisions-a-student-into-the-active-course.md
 baseline_commit: a7b01a399864f1dfbf27315d63045cfbf3b2d31d
 pre_existing_changes:
@@ -49,8 +49,8 @@ last_verification:
 resume_attempts: 0
 commit:
   intended_message: "feat: add student provisioning and course roster"
-  sha: null
-next_action: "Worker persists rereview-report.json and runs the authoritative final gate ./run-all-tests.sh; on pass, prepare commit-pending."
+  sha: 1d6354f70ac96fb4569cb47f20c14fe528e26685
+next_action: "Closed 2026-10-10. 46-file commit confirmed. Next: 5-2-student-first-sign-in-and-joined-course-entry (final Epic 5 story in this batch)."
 review_evidence:
   implement_report: tmp/agent-execution/5-1-supervisor-provisions-a-student-into-the-active-course/implement-report.json
   diff: tmp/agent-execution/5-1-supervisor-provisions-a-student-into-the-active-course/story.diff

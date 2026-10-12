@@ -1,5 +1,5 @@
 story: 4-4-process-material-and-approve-its-brief
-phase: commit-pending
+phase: complete
 spec: _bmad-output/implementation-artifacts/spec-4-4-process-material-and-approve-its-brief.md
 baseline_commit: 025a5b0a30cd8fe68cfe33a876a3551345aba6c7
 pre_existing_changes:
@@ -52,8 +52,8 @@ last_verification:
 resume_attempts: 0
 commit:
   intended_message: "feat: add material finalization, brief review and approval"
-  sha: null
-next_action: "Worker persists rereview2-report.json and runs the authoritative final gate ./run-all-tests.sh; on pass, prepare commit-pending."
+  sha: 1c1e62d211816dd4eb34f705030502859b078ea4
+next_action: "Closed 2026-10-09. 56-file commit confirmed. Next: 4-5-activate-the-ready-course (final Epic 4 story in this batch)."
 review_evidence:
   implement_report: tmp/agent-execution/4-4-process-material-and-approve-its-brief/implement-report.json
   diff: tmp/agent-execution/4-4-process-material-and-approve-its-brief/story.diff
