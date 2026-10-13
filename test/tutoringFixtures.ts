@@ -31,6 +31,7 @@ export function tutoringSessionDocument(
   id = "session_1",
   course = "course_1",
   state: "active" | "completed" = "active",
+  student = "account-id",
 ) {
   return {
     data: {
@@ -38,7 +39,7 @@ export function tutoringSessionDocument(
       id,
       attributes: {
         course_id: course,
-        student_id: forbidden,
+        student_id: student,
         state,
         summary: forbidden,
         follow_up: forbidden,
@@ -198,7 +199,7 @@ export function studentMessageMutationDocument(
 }
 
 // The current-work document in one of the five states. Stripped projections
-// (`latest_response`, finish) carry the forbidden marker. Capacity/eligibility default to the
+// (`latest_response`, summary) carry the forbidden marker. Capacity/eligibility default to the
 // documented per-state truth; callers may override to test contradictions.
 export function tutoringWorkDocument(
   forbidden: string,
@@ -216,6 +217,7 @@ export function tutoringWorkDocument(
     retryId = null,
     latest = null as unknown,
     reconnectId,
+    finish,
   }: {
     session?: string;
     sessionState?: string;
@@ -230,6 +232,7 @@ export function tutoringWorkDocument(
     retryId?: string | null;
     latest?: unknown;
     reconnectId?: string | null;
+    finish?: boolean;
   } = {},
 ) {
   const generatingId = (generating as { id?: string } | null)?.id ?? null;
@@ -273,7 +276,7 @@ export function tutoringWorkDocument(
           retry_response_id: retryId,
           reconnect: reconnect !== null,
           reconnect_response_id: reconnect,
-          finish: forbidden,
+          finish: finish ?? (sessionState === "active" && state === "idle"),
         },
       },
     },

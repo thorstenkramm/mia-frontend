@@ -6,7 +6,10 @@ const root = process.cwd();
 // Owner decision 2026-10-12 (Story 6.3): 258000 gzip bytes. About 66 KB of
 // non-active locale catalogs remain in the synchronous entry bundle; deferring
 // them without changing first paint for all seven locales is follow-up work.
-const limit = 258_000;
+// Owner decision 2026-10-13 (Story 6.5): 260000 gzip bytes; finish-state copy
+// alone estimates +307 B against 182 B headroom. Locale on-demand remains
+// filed in deferred-work.md, outside this story.
+const limit = 260_000;
 const manifestPath = join(root, "dist/.vite/manifest.json");
 
 if (!existsSync(manifestPath)) {

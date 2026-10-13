@@ -77,10 +77,15 @@ export type TutoringResource =
       readonly session: TutoringSession;
       // BCG-012 Story 6.2 slice: the authoritative work read, admitted with
       // the transcript page for an active session before the composer is
-      // enabled. A completed session renders the fixed finished notice
-      // without either read.
+      // enabled. A completed owner session admits persisted turns only, with
+      // no current-work read, and renders without the composer or stream.
       readonly work: TutoringWork | null;
       readonly page: SessionTurnPage | null;
+    }
+  | {
+      readonly kind: "finish";
+      readonly session: TutoringSession;
+      readonly work: TutoringWork | null;
     };
 
 // Trusted concrete-path builders supplied by the route host; components never
@@ -93,6 +98,7 @@ export type TutoringLinks = {
   readonly intent: (course: CourseId) => string;
   readonly recovery: string;
   readonly workspace: (session: TutoringSessionId) => string;
+  readonly finish: (session: TutoringSessionId) => string;
 };
 
 export type TutoringRouteProps = {

@@ -402,6 +402,11 @@ unknown mutation outcome remains on its owning route without success copy until 
 - Gate: `Learn(own completed session :sessionId)`.
 - Fallback: `/learn/history`, or `/learn/courses` if history access is lost.
 
+Story 6.5 scoped route decision (product owner, 2026-10-13): the completed transcript renders in place on the existing
+`/learn/sessions/:sessionId` workspace after definitive completion and on an authorized return to that route. The
+`/learn/history` list, completed-detail deep link, their parent structure, and the Finish route's history-detail fallback
+above ship with Story 8.4, not 6.5. This does not change their canonical inventory for later scope.
+
 ### Summary and Follow-Up
 
 - Path: `/learn/history/:sessionId/summary`

@@ -136,7 +136,9 @@ export function useStudentMessageSend({
     attempt.current = null;
     retained.current = null;
     flushSync(() => update({ kind: "Finished" }));
-    announce(intl.formatMessage(messages.tutoringSessionFinished), "urgent");
+    // A send conflict alone cannot prove the addressed session completed.
+    // The workspace's explicit re-admission supplies that confirmation.
+    announce(intl.formatMessage(messages.tutoringFinishChanged), "urgent");
   };
   // The definitive committed presentation: the mutation document's message is
   // authoritative and renders even when the D4 follow-up read fails.

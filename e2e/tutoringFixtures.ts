@@ -39,6 +39,8 @@ export async function tutoringResources(page: Page) {
     accepting: true,
     activeSession: false,
     sessionState: "active" as "active" | "completed",
+    studentOwner: "account-id",
+    supervisesCourse: false,
     outcome: "created",
     sendOutcome: "created",
     createOnPost: false,
@@ -50,6 +52,11 @@ export async function tutoringResources(page: Page) {
     workQueued: false,
     workSubmit: undefined as boolean | undefined,
     workQueue: undefined as boolean | undefined,
+    finishEligible: undefined as boolean | undefined,
+    finishOutcome: "success" as "success" | "busy" | "completed" | "lose",
+    finishCommitsOnLoss: false,
+    finishPosts: 0,
+    holdFinish: null as Promise<void> | null,
     denyCourse: 0,
     denyDiscovery: 0,
     denySession: 0,
@@ -242,6 +249,9 @@ export async function tutoringResources(page: Page) {
             : null),
         submit: control.workSubmit,
         queue: control.workQueue,
+        ...(control.finishEligible === undefined
+          ? {}
+          : { finish: control.finishEligible }),
         reconciled,
         retryId:
           control.stopped && !control.retryCommitted
@@ -253,9 +263,14 @@ export async function tutoringResources(page: Page) {
       }),
     );
   };
-  await page.route("**/api/v1/users/me/capabilities", (route) =>
-    json(route, learnCapabilities(control.ids, control.available)),
-  );
+  await page.route("**/api/v1/users/me/capabilities", (route) => {
+    const document = learnCapabilities(control.ids, control.available);
+    if (control.supervisesCourse)
+      document.data.attributes.capabilities.find(
+        (item) => item.action === "courses.supervise",
+      )!.scope.course_ids = ["course_1"];
+    return json(route, document);
+  });
   await page.route("**/api/v1/users/me/active-tutoring-session", (route) => {
     control.discoveryReads++;
     if (control.denyDiscovery)
@@ -381,6 +396,38 @@ export async function tutoringResources(page: Page) {
         new URL(route.request().url()).pathname.split("/").at(-2) ??
         "session_1";
       return json(route, workDocument(sessionId, reconcile, responseQuery));
+    },
+  );
+  await page.route(
+    /\/api\/v1\/tutoring-sessions\/[^/?]+\/completion$/u,
+    async (route) => {
+      control.finishPosts++;
+      if (control.holdFinish) await control.holdFinish;
+      if (control.finishOutcome === "busy") {
+        control.workState = "generating";
+        control.workGenerating = true;
+        return fail(route, 409, "tutoring_busy");
+      }
+      if (control.finishOutcome === "completed") {
+        control.sessionState = "completed";
+        return fail(route, 409, "tutoring_invalid_state");
+      }
+      if (control.finishOutcome === "success" || control.finishCommitsOnLoss) {
+        control.sessionState = "completed";
+        control.activeSession = false;
+      }
+      if (control.finishOutcome === "lose") return route.abort("failed");
+      return json(route, {
+        ...tutoringSessionDocument(
+          fixture.rawError,
+          "session_1",
+          "course_1",
+          "completed",
+        ),
+        links: {
+          current_work: "/api/v1/tutoring-sessions/session_1/current-work",
+        },
+      });
     },
   );
   await page.route(
@@ -530,6 +577,7 @@ export async function tutoringResources(page: Page) {
         "session_1",
         "course_1",
         control.sessionState,
+        control.studentOwner,
       ),
     );
   });
@@ -549,7 +597,8 @@ export async function tutoringResources(page: Page) {
       (/^\/api\/v1\/courses\/[^/]+\/tutoring-sessions$/u.test(path) ||
         /^\/api\/v1\/tutoring-sessions\/[^/]+\/messages$/u.test(path) ||
         /^\/api\/v1\/tutor-responses\/[^/]+\/interruptions$/u.test(path) ||
-        /^\/api\/v1\/student-messages\/[^/]+\/response-retries$/u.test(path));
+        /^\/api\/v1\/student-messages\/[^/]+\/response-retries$/u.test(path) ||
+        /^\/api\/v1\/tutoring-sessions\/[^/]+\/completion$/u.test(path));
     if (
       path.startsWith("/api/") &&
       !allowedPost &&

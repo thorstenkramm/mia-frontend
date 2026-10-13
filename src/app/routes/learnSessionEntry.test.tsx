@@ -94,6 +94,8 @@ function backend() {
     blockers: [] as string[],
     activeSession: false,
     sessionState: "active" as "active" | "completed",
+    studentOwner: "account-id",
+    supervisesCourse: false,
     denyCourse: 0,
     denyDiscovery: 0,
     denySession: 0,
@@ -110,6 +112,10 @@ function backend() {
     workQueued: false,
     workSubmit: undefined as boolean | undefined,
     workQueue: undefined as boolean | undefined,
+    finishEligible: undefined as boolean | undefined,
+    finishOutcome: "success" as "success" | "busy" | "lose",
+    finishCommitsOnLoss: false,
+    finishPosts: 0,
     courseReads: 0,
     discoveryReads: 0,
     materialReads: 0,
@@ -189,6 +195,9 @@ function backend() {
         : null,
       submit: control.workSubmit,
       queue: control.workQueue,
+      ...(control.finishEligible === undefined
+        ? {}
+        : { finish: control.finishEligible }),
       reconciled,
     });
   };
@@ -201,7 +210,12 @@ function backend() {
       control.capabilityReads++;
       control.ledger.push("capabilities");
       if (control.holdCapabilities) await control.holdCapabilities;
-      return json(learnCapabilities(control.ids, control.available));
+      const document = learnCapabilities(control.ids, control.available);
+      if (control.supervisesCourse)
+        document.data.attributes.capabilities.find(
+          (item) => item.action === "courses.supervise",
+        )!.scope.course_ids = ["course_1"];
+      return json(document);
     }),
     http.get("/api/v1/users/me/active-tutoring-session", () => {
       control.discoveryReads++;
@@ -349,6 +363,7 @@ function backend() {
           String(params.id),
           "course_1",
           control.sessionState,
+          control.studentOwner,
         ),
       );
     }),
@@ -371,6 +386,30 @@ function backend() {
         ),
       );
     }),
+    http.post("/api/v1/tutoring-sessions/:id/completion", () => {
+      control.finishPosts++;
+      if (control.finishOutcome === "busy") {
+        control.workState = "generating";
+        control.workGenerating = true;
+        return fail(409, "tutoring_busy");
+      }
+      if (control.finishOutcome === "success" || control.finishCommitsOnLoss) {
+        control.sessionState = "completed";
+        control.activeSession = false;
+      }
+      if (control.finishOutcome === "lose") return HttpResponse.error();
+      return json({
+        ...tutoringSessionDocument(
+          seed.rawError,
+          "session_1",
+          "course_1",
+          "completed",
+        ),
+        links: {
+          current_work: "/api/v1/tutoring-sessions/session_1/current-work",
+        },
+      });
+    }),
   );
   return { control, seed };
 }
@@ -388,11 +427,11 @@ function mount(location = "/learn/start", state: unknown = null) {
     </AnnouncementProvider>,
   );
 }
-async function ready(name: string) {
+async function ready(name: string, title = name) {
   await waitFor(() =>
     expect(
       screen.getByRole("heading", { level: 1 }).textContent === name &&
-        document.title === `${name} | MIA`,
+        document.title === `${title} | MIA`,
     ).toBe(true),
   );
   await waitFor(() =>
@@ -1413,22 +1452,68 @@ it("Tutoring recovery replaces a found session with the workspace and offers fix
   courseUnitCheckpoint("tutoring-recovery");
 });
 
-it("Tutoring completed session renders the fixed finished notice without a transcript read", async () => {
+it("Tutoring completed session renders persisted transcript read-only on the workspace route", async () => {
   const { control, seed } = backend();
   control.sessionState = "completed";
   mount("/learn/sessions/session_1");
   await ready("Tutoring session");
   await within(main()).findByText("This tutoring session is finished.");
   expect(
-    control.turnReads === 0 &&
+    control.turnReads === 1 &&
       control.workReads === 0 &&
-      !document.body.textContent?.includes(seed.teachingText) &&
+      document.body.textContent?.includes(seed.teachingText) &&
       !document.body.textContent?.includes(seed.rawError) &&
+      screen.queryByLabelText("Your message to the tutor") === null &&
+      within(main()).queryByRole("link", {
+        name: "Start a tutoring session",
+      }) !== null &&
       within(main())
         .getByRole("link", { name: "Joined courses" })
         .getAttribute("href") === "/learn/courses",
   ).toBe(true);
   courseUnitCheckpoint("tutoring-finished");
+});
+
+it("Tutoring dual-capability non-owner completed session hides before transcript or finish work reads", async () => {
+  for (const path of [
+    "/learn/sessions/session_1",
+    "/learn/sessions/session_1/finish",
+  ]) {
+    let hiddenSurface: string | null = null;
+    for (const reason of ["non-owner", "unknown"] as const) {
+      const { control, seed } = backend();
+      control.sessionState = "completed";
+      control.supervisesCourse = true;
+      if (reason === "non-owner") control.studentOwner = "another-student";
+      else control.denySession = 404;
+      const view = mount(path);
+      await ready("Tutoring access unavailable");
+      const surface = JSON.stringify({
+        title: document.title,
+        heading: screen.getByRole("heading", { level: 1 }).textContent,
+        text: within(main()).getByText(
+          "This tutoring view is unavailable. Use an available exit.",
+        ).textContent,
+        links: Array.from(main().querySelectorAll("a")).map((link) =>
+          link.getAttribute("href"),
+        ),
+        focus: document.activeElement?.tagName,
+      });
+      if (hiddenSurface === null) hiddenSurface = surface;
+      expect(
+        surface === hiddenSurface &&
+          control.capabilityReads === 1 &&
+          control.sessionReads === 1 &&
+          control.turnReads === 0 &&
+          control.workReads === 0 &&
+          control.finishPosts === 0 &&
+          !document.body.textContent?.includes(seed.teachingText) &&
+          !document.body.textContent?.includes(seed.rawError),
+      ).toBe(true);
+      view.unmount();
+    }
+  }
+  courseUnitCheckpoint("tutoring-finish-owner");
 });
 
 it("Tutoring workspace renders persisted turns as escaped text with neutral response labels", async () => {
@@ -1729,7 +1814,7 @@ it("Tutoring workspace reload during an unsettled send loses the draft and never
   courseUnitCheckpoint("tutoring-workspace-reload");
 });
 
-it("Tutoring workspace finishes read-only when the send reports the session completed", async () => {
+it("Tutoring workspace waits for an addressed session read after a send state conflict", async () => {
   const { control, seed } = backend();
   control.sendOutcome = "invalid-state";
   mount("/learn/sessions/session_1");
@@ -1739,11 +1824,78 @@ it("Tutoring workspace finishes read-only when the send reports the session comp
   await user.click(composer());
   await user.keyboard("last question");
   await user.click(screen.getByRole("button", { name: "Send" }));
+  await within(main()).findByText(
+    "Tutoring work changed. Review the current state before confirming Finish.",
+  );
+  expect(screen.queryByRole("button", { name: "Send" }) === null).toBe(true);
+  expect(control.messagePosts === 1).toBe(true);
+  expect(
+    within(main()).queryByText("This tutoring session is finished.") === null,
+  ).toBe(true);
+  expect(!document.body.textContent?.includes(seed.rawError)).toBe(true);
+  control.sessionState = "completed";
+  await user.click(within(main()).getByRole("button", { name: "Refresh" }));
   await within(main()).findByText("This tutoring session is finished.");
   expect(
-    screen.queryByRole("button", { name: "Send" }) === null &&
-      control.messagePosts === 1 &&
-      !document.body.textContent?.includes(seed.rawError),
+    control.turnReads >= 2 &&
+      screen.queryByLabelText("Your message to the tutor") === null,
   ).toBe(true);
   courseUnitCheckpoint("tutoring-workspace-finished");
+});
+
+it("Tutoring Finish revalidates and installs only definitive persisted completion", async () => {
+  const { control, seed } = backend();
+  mount("/learn/sessions/session_1");
+  await ready("Tutoring session");
+  const user = userEvent.setup();
+  await user.click(await screen.findByRole("link", { name: "Finish session" }));
+  await ready("Finish session", "Finish tutoring session");
+  await user.click(
+    await screen.findByRole("button", { name: "Review Finish" }),
+  );
+  await waitFor(() =>
+    expect(
+      screen
+        .getByRole("button", { name: "Confirm Finish" })
+        .hasAttribute("disabled"),
+    ).toBe(false),
+  );
+  await user.click(screen.getByRole("button", { name: "Confirm Finish" }));
+  await ready("Tutoring session");
+  expect(
+    control.finishPosts === 1 &&
+      control.turnReads > 1 &&
+      screen.queryByLabelText("Your message to the tutor") === null &&
+      document.body.textContent?.includes(seed.teachingText) === true &&
+      !document.body.textContent.includes(seed.rawError) &&
+      within(main())
+        .getByRole("link", { name: "Start a tutoring session" })
+        .getAttribute("href") === "/learn/start",
+  ).toBe(true);
+  courseUnitCheckpoint("tutoring-finish-success");
+});
+
+it("Tutoring Finish stays unavailable when work is busy or eligibility denied", async () => {
+  const { control } = backend();
+  control.finishEligible = false;
+  mount("/learn/sessions/session_1");
+  await ready("Tutoring session");
+  await screen.findByRole("button", { name: "Finish session" });
+  expect(
+    screen.queryByRole("link", { name: "Finish session" }) === null &&
+      screen
+        .getByRole("button", { name: "Finish session" })
+        .hasAttribute("disabled"),
+  ).toBe(true);
+  control.workState = "generating";
+  control.workGenerating = true;
+  await userEvent
+    .setup()
+    .click(screen.getByRole("button", { name: "Refresh" }));
+  await ready("Tutoring session");
+  expect(
+    control.finishPosts === 0 &&
+      screen.queryByRole("link", { name: "Finish session" }) === null,
+  ).toBe(true);
+  courseUnitCheckpoint("tutoring-finish-ineligible");
 });

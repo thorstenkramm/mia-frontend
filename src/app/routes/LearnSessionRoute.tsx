@@ -129,8 +129,16 @@ export default function LearnSessionRoute({
         case "workspace": {
           if (sessionId === null) return null;
           const session = await getTutoringSession(sessionId, signal);
+          // Get also admits an assigned supervisor for a completed session;
+          // the learner route must reject non-owners before any turn GET.
+          if (session.studentId !== access.accountId) return null;
           if (session.state !== "active")
-            return { kind: "workspace", session, work: null, page: null };
+            return {
+              kind: "workspace",
+              session,
+              work: null,
+              page: await listSessionTurns(session.id, 0, signal),
+            };
           // The authoritative work read precedes the transcript so the
           // composer never enables without server-authored actions (BCG-012).
           const work = await getTutoringSessionCurrentWork(
@@ -145,6 +153,19 @@ export default function LearnSessionRoute({
             page: await listSessionTurns(session.id, 0, signal),
           };
         }
+        case "finish": {
+          if (sessionId === null) return null;
+          const session = await getTutoringSession(sessionId, signal);
+          if (session.studentId !== access.accountId) return null;
+          return {
+            kind: "finish",
+            session,
+            work:
+              session.state === "active"
+                ? await getTutoringSessionCurrentWork(session.id, {}, signal)
+                : null,
+          };
+        }
       }
     },
     isHiddenTutoringFailure,
@@ -153,7 +174,10 @@ export default function LearnSessionRoute({
   // workspace must discard page memory even when account/scope/route keys
   // remain identical; a nondefinitive check failure keeps it covered.
   useLayoutEffect(() => {
-    if (route.resource === "workspace" && state.kind === "Unavailable")
+    if (
+      (route.resource === "workspace" || route.resource === "finish") &&
+      state.kind === "Unavailable"
+    )
       tutoringRetention.destroy();
   }, [route.resource, state.kind]);
   // Fixed safe exit, never a cached or potentially revoked resource parent.
@@ -193,6 +217,7 @@ export default function LearnSessionRoute({
             intent: (id) => learnIntentPath(id),
             recovery: learnSessionPaths.recovery,
             workspace: (id) => learnSessionPath(id),
+            finish: (id) => learnSessionPath(id, true),
           }}
           unavailable={unavailable}
         />

@@ -1269,6 +1269,18 @@ mismatch" section above no longer describes current transport for this slice (ba
 machine 7 Stop reconciliation, machine 8 Finish prevalidation, two-tab concurrency browser evidence, and the release
 obligations remain outstanding for Stories 6.3/6.4/6.5.
 
+#### Story 6.5 Finish slice evidence — 2026-10-13
+
+The frontend projects server-authored `TutoringWorkActions.finish` with idle/no-current-work consistency checks and
+prevalidates session stage, current account/scope, addressed session and current work before enabling the canonical
+Finish confirmation. A single CSRF-protected no-body completion POST accepts only the addressed completed 200 resource;
+409 re-reads authoritative truth without attributing success to the rejected request, and loss/Stop waiting never
+replays it. The completed workspace reads only persisted paginated turns after an addressed completed-session read.
+Focused API/route units and bundled-Chromium Finish, conflict, lost response and read-only return fixtures provide
+consumer evidence (Story 6.5 spec). These tests do not establish backend concurrency tests, cross-browser release
+evidence or global BCG-012 closure; the historical blocked heading above is not a statement that current transport is
+missing for this slice.
+
 ### BCG-013: Student mentoring-request eligibility
 
 #### BCG-013 frontend capability blocked

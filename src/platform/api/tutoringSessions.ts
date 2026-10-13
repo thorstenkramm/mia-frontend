@@ -14,10 +14,12 @@ import {
 } from "./collectionNavigation";
 import {
   resourceId,
+  toAccountId,
   toCourseId,
   toTutoringSessionId,
   utcInstant,
   type CourseId,
+  type AccountId,
   type MaterialId,
   type TutoringSessionId,
 } from "./entry";
@@ -84,6 +86,7 @@ const sessionResource = z.object({
   id: resourceId,
   attributes: z.object({
     course_id: resourceId,
+    student_id: resourceId,
     state: z.enum(["active", "completed"]),
     started_at: utcInstant,
     last_activity_at: utcInstant,
@@ -93,9 +96,15 @@ const sessionDocument = z.object({
   errors: z.never().optional(),
   data: sessionResource,
 });
+const completionDocument = sessionDocument.extend({
+  links: z.object({
+    current_work: z.string(),
+  }),
+});
 export type TutoringSession = {
   readonly id: TutoringSessionId;
   readonly courseId: CourseId;
+  readonly studentId: AccountId;
   readonly state: "active" | "completed";
   readonly startedAt: number;
   readonly lastActivityAt: number;
@@ -106,6 +115,7 @@ function toSession(resource: z.infer<typeof sessionResource>): TutoringSession {
   return {
     id,
     courseId: toCourseId(resource.attributes.course_id),
+    studentId: toAccountId(resource.attributes.student_id),
     state: resource.attributes.state,
     startedAt: Date.parse(resource.attributes.started_at),
     lastActivityAt: Date.parse(resource.attributes.last_activity_at),
@@ -126,6 +136,35 @@ export async function getTutoringSession(
   });
   const session = toSession(data);
   if (session.id !== id) throw new ApiProtocolError();
+  return session;
+}
+
+// The completion result, not local work or a disappearing active-session
+// discovery result, is the only confirmation of this POST. Its link is
+// checked against the addressed opaque identity; never follow an arbitrary
+// server-returned URL.
+export async function completeTutoringSession(
+  id: TutoringSessionId,
+  csrfToken: string,
+): Promise<TutoringSession> {
+  const response = await sendUnsafeRequest({
+    method: "POST",
+    path: `/api/v1/tutoring-sessions/${encodeURIComponent(id)}/completion`,
+    csrfToken,
+  });
+  const document = await parseJsonApiResponse(
+    response,
+    completionDocument,
+    200,
+  );
+  const session = toSession(document.data);
+  if (
+    session.id !== id ||
+    session.state !== "completed" ||
+    document.links.current_work !==
+      `/api/v1/tutoring-sessions/${encodeURIComponent(id)}/current-work`
+  )
+    throw new ApiProtocolError();
   return session;
 }
 
@@ -391,6 +430,7 @@ const workDocument = z.object({
         retry_response_id: resourceId.nullable(),
         reconnect: z.boolean(),
         reconnect_response_id: resourceId.nullable(),
+        finish: z.boolean(),
       }),
     }),
   }),
@@ -411,6 +451,7 @@ export type TutoringWork = {
     readonly stopResponseIds: readonly string[];
     readonly retryResponseId: string | null;
     readonly reconnectResponseId: string | null;
+    readonly finish: boolean;
   };
   readonly reconciledMessage: StudentMessageProjection | null;
   readonly reconciledResponse?: TutorResponseProjection | null;
@@ -484,7 +525,15 @@ function projectWork(
     !consistent ||
     (a.state === "completed") !== (a.session_state === "completed") ||
     (a.session_state === "completed" &&
-      (stopIds.length !== 0 || actions.retry || actions.reconnect))
+      (stopIds.length !== 0 ||
+        actions.retry ||
+        actions.reconnect ||
+        actions.finish)) ||
+    (actions.finish &&
+      (a.session_state !== "active" ||
+        a.state !== "idle" ||
+        generating !== null ||
+        queued !== null))
   )
     throw new ApiProtocolError();
   return {
@@ -500,6 +549,7 @@ function projectWork(
       stopResponseIds: stopIds,
       retryResponseId: actions.retry_response_id,
       reconnectResponseId: actions.reconnect_response_id,
+      finish: actions.finish,
     },
     reconciledMessage,
     ...(responseId === undefined ? {} : { reconciledResponse }),

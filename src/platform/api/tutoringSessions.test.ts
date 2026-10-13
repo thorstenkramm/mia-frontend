@@ -19,6 +19,7 @@ import {
 import { ApiHttpError, ApiProtocolError, jsonApiMediaType } from "./client";
 import { toCourseId, toMaterialId } from "./entry";
 import {
+  completeTutoringSession,
   createStudentMessage,
   createTutoringSession,
   getActiveTutoringSession,
@@ -41,6 +42,77 @@ const course = toCourseId("course_1");
 const session = toTutoringSessionId("session_1");
 if (session === null) throw new Error("Fixture session identity is invalid.");
 const signal = () => new AbortController().signal;
+
+it("Tutoring Finish requires atomic server eligibility and the exact definitive completion document", async () => {
+  const seed = courseUnitFixture();
+  let workFinish = false;
+  let status = 200;
+  let responseSession = "session_1";
+  let responseState: "active" | "completed" = "completed";
+  let responseLink = "/api/v1/tutoring-sessions/session_1/current-work";
+  let dispatched = 0;
+  let correctWire = false;
+  server.use(
+    http.get("/api/v1/tutoring-sessions/session_1/current-work", () =>
+      json(tutoringWorkDocument(seed.rawError, { finish: workFinish })),
+    ),
+    http.post(
+      "/api/v1/tutoring-sessions/session_1/completion",
+      async ({ request }) => {
+        dispatched++;
+        correctWire =
+          request.headers.get("X-CSRF-Token") === seed.csrf &&
+          (await request.text()) === "";
+        return json(
+          {
+            ...tutoringSessionDocument(
+              seed.rawError,
+              responseSession,
+              "course_1",
+              responseState,
+            ),
+            links: { current_work: responseLink },
+          },
+          status,
+        );
+      },
+    ),
+  );
+  const denied = await getTutoringSessionCurrentWork(session, {}, signal());
+  expect(denied.state === "idle" && !denied.actions.finish).toBe(true);
+  workFinish = true;
+  expect(
+    (await getTutoringSessionCurrentWork(session, {}, signal())).actions.finish,
+  ).toBe(true);
+  const result = await completeTutoringSession(session, seed.csrf);
+  expect(
+    dispatched === 1 &&
+      correctWire &&
+      result.id === session &&
+      result.state === "completed" &&
+      !JSON.stringify(result).includes(seed.rawError),
+  ).toBe(true);
+  responseSession = "session_other";
+  expect(
+    await protocolRejected(completeTutoringSession(session, seed.csrf)),
+  ).toBe(true);
+  responseSession = "session_1";
+  responseState = "active";
+  expect(
+    await protocolRejected(completeTutoringSession(session, seed.csrf)),
+  ).toBe(true);
+  responseState = "completed";
+  responseLink = "/api/v1/tutoring-sessions/session_other/current-work";
+  expect(
+    await protocolRejected(completeTutoringSession(session, seed.csrf)),
+  ).toBe(true);
+  responseLink = "/api/v1/tutoring-sessions/session_1/current-work";
+  status = 204;
+  expect(
+    await protocolRejected(completeTutoringSession(session, seed.csrf)),
+  ).toBe(true);
+  courseUnitCheckpoint("tutoring-finish-document");
+});
 
 it("Tutoring terminal reconciliation accepts only the targeted persisted response", async () => {
   const seed = courseUnitFixture();
@@ -445,7 +517,7 @@ it("Tutoring session read requires the addressed identity and strips summary fie
   expect(
     read.state === "active" &&
       Object.keys(read).sort().join() ===
-        "courseId,id,lastActivityAt,startedAt,state" &&
+        "courseId,id,lastActivityAt,startedAt,state,studentId" &&
       !JSON.stringify(read).includes(seed.teachingText),
   ).toBe(true);
   wrong = true;
@@ -666,7 +738,7 @@ it("Tutoring current work parses every state and strips unused projections", asy
       Object.keys(idle).sort().join() ===
         "actions,generating,latest,queued,reconciledMessage,remainingQueueCapacity,sessionState,state" &&
       Object.keys(idle.actions).sort().join() ===
-        "queue,reconnectResponseId,retryResponseId,stopResponseIds,submit" &&
+        "finish,queue,reconnectResponseId,retryResponseId,stopResponseIds,submit" &&
       !JSON.stringify(idle).includes(seed.rawError),
   ).toBe(true);
   document = tutoringWorkDocument(seed.rawError, {

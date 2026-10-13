@@ -279,6 +279,14 @@ keyed by response ID, deduplicated from the paginated transcript. The Queue row'
 SSE state, Retry response, Stop response, and Finish session rows remain for Stories 6.3/6.4/6.5; their `BCG-012`
 markers stay.
 
+Story 6.5 Finish slice, 2026-10-13: the Finish row's checking, eligible, busy, prevalidating and unknown states now
+consume server-authored `actions.finish` and an ordered session/account/addressed-session/current-work check. The
+confirmed 200 (or an explicit completed-session read after an ambiguous response) leads to a read-only paginated
+persisted transcript in the **existing workspace**, per `ROUTE-INVENTORY.md`'s scoped exception. No transcript absence
+enables Finish, and no summary metadata is displayed. The Learning history collection, history routes and complete
+history browsing remain Story 8.4; neither row is claimed fully implemented here. The row's original history exit
+describes the later complete flow, not the 6.5 destination.
+
 ### Learning history
 
 | Surface | Profiles | Domain states | Exit | Companion |

@@ -17,6 +17,7 @@ import { DiscardChangesDialog } from "../../platform/ui/DiscardChangesDialog";
 import { RouteDepartureLink } from "../../platform/ui/RouteDepartureLink";
 import {
   TutoringCheckedAt,
+  type TutoringCollectionActivity,
   TutoringCollectionFeedback,
   TutoringEmpty,
   TutoringPagination,
@@ -40,19 +41,28 @@ import { useTutorResponseActions } from "./useTutorResponseActions";
 import { useAuthenticatedAccess } from "../../platform/data/EntryDataProvider";
 import { useLocation } from "react-router";
 
-// ROUTE-INVENTORY.md §Tutoring Workspace, D3/D4: fixed identity, no course
-// re-read. A non-active addressed session (or one whose authoritative work
-// read reports completed) is the fixed finished notice without a transcript
-// read; only an active owned session renders the FFR-613 notice, its
-// persisted transcript, the current-work region and the composer.
+// ROUTE-INVENTORY.md §Tutoring Workspace and Story 6.5's completed-in-place
+// exception: only a completed addressed session admits a persisted read-only
+// transcript. Active sessions retain their current-work/composer/stream owner.
 export default function TutoringWorkspaceRoute(props: TutoringRouteProps) {
   if (props.resource.kind !== "workspace")
     throw new Error("The workspace requires its admitted session resource.");
-  if (
-    props.resource.session.state !== "active" ||
-    props.resource.work?.sessionState === "completed"
-  )
-    return <SessionFinished links={props.links} />;
+  if (props.resource.session.state === "completed") {
+    if (props.resource.page === null)
+      throw new Error(
+        "Completed transcript requires admitted persisted turns.",
+      );
+    return (
+      <SessionFinished
+        session={props.resource.session}
+        initial={props.resource.page}
+        links={props.links}
+        unavailable={props.unavailable}
+      />
+    );
+  }
+  if (props.resource.work?.sessionState === "completed")
+    return <CompletionObserved />;
   if (props.resource.page === null || props.resource.work === null)
     throw new Error("An active workspace requires its work and transcript.");
   return (
@@ -66,14 +76,66 @@ export default function TutoringWorkspaceRoute(props: TutoringRouteProps) {
   );
 }
 
-function SessionFinished({ links }: { readonly links: TutoringLinks }) {
+function CompletionObserved() {
   const intl = useIntl();
+  const { checkRouteAdmission } = useSessionActions();
+  useLayoutEffect(() => tutoringRetention.destroy(), []);
+  return (
+    <>
+      <p className="text-sm/6 text-gray-700">
+        {intl.formatMessage(messages.tutoringFinishChanged)}
+      </p>
+      <button
+        type="button"
+        className={tutoringActionClass}
+        onClick={() => void checkRouteAdmission()}
+      >
+        {intl.formatMessage(messages.invitationsRefresh)}
+      </button>
+    </>
+  );
+}
+
+function SessionFinished({
+  session,
+  initial,
+  links,
+  unavailable,
+}: {
+  readonly session: TutoringSession;
+  readonly initial: SessionTurnPage;
+  readonly links: TutoringLinks;
+  readonly unavailable: (failure: EntryApiFailure | null) => void;
+}) {
+  const intl = useIntl();
+  useLayoutEffect(() => tutoringRetention.destroy(), []);
+  const collection = useTutoringCollection(unavailable);
+  const [page, setPage] = useState(initial);
+  const [checkedAt, setCheckedAt] = useState(Date.now);
+  const load = (offset: number) =>
+    void collection.load(
+      (signal) => listSessionTurns(session.id, offset, signal),
+      (value) => {
+        setPage(value);
+        setCheckedAt(Date.now());
+      },
+    );
   return (
     <>
       <p className="text-sm/6 font-semibold text-gray-900">
         {intl.formatMessage(messages.tutoringSessionFinished)}
       </p>
+      <TranscriptCollection
+        page={page}
+        turns={page.items}
+        checkedAt={checkedAt}
+        state={collection.state}
+        load={load}
+      />
       <div className="mt-6 flex flex-wrap gap-3">
+        <RouteDepartureLink to={links.start} className={tutoringActionClass}>
+          {intl.formatMessage(messages.tutoringStartLink)}
+        </RouteDepartureLink>
         <RouteDepartureLink to={links.courses} className={tutoringActionClass}>
           {intl.formatMessage(messages.learnCourses)}
         </RouteDepartureLink>
@@ -236,13 +298,27 @@ function Transcript({
     );
   // The session completed mid-view (409 tutoring_invalid_state or a reconcile
   // truth): the fixed read-only finished presentation replaces the workspace.
-  if (send.finished) return <SessionFinished links={links} />;
+  if (send.finished) return <CompletionObserved />;
   const waiting =
     send.state.kind === "Sending" ||
     send.state.kind === "Checking" ||
     send.state.kind === "Reconciling";
   const locked =
     waiting || send.unknown || send.pending || actions.state.kind !== "ready";
+  const finishUnknown = tutoringRetention.finishUnresolved(
+    access.accountId,
+    access.epoch,
+    session.id,
+  );
+  const finishEligible =
+    workKnown &&
+    !locked &&
+    !finishUnknown &&
+    work.sessionState === "active" &&
+    work.state === "idle" &&
+    work.generating === null &&
+    work.queued === null &&
+    work.actions.finish;
   // D5: one rendered identity per attempt — response IDs the current work (or
   // a definitive send) already renders leave the paginated transcript.
   const regionIds = new Set<string>();
@@ -259,61 +335,11 @@ function Transcript({
   return (
     <>
       <TutoringEntryNotice />
-      <h2 className="mt-6 text-base font-semibold text-gray-900">
-        {intl.formatMessage(messages.tutoringTranscript)}
-      </h2>
-      <TutoringCheckedAt time={checkedAt} />
-      <TutoringCollectionFeedback
-        state={collection.state}
-        retry={() => load(page.offset)}
-      />
-      {collection.state.kind === "Loading" ? null : turns.length === 0 &&
-        page.items.length === 0 ? (
-        <TutoringEmpty
-          text={intl.formatMessage(messages.tutoringTranscriptEmpty)}
-        />
-      ) : (
-        <ul role="list" className="mt-6 divide-y divide-gray-100">
-          {turns.map((turn, index) => {
-            const label = tutoringResponseLabels[turn.responseState];
-            return (
-              <li key={turn.id} className="py-5">
-                <article
-                  aria-label={intl.formatMessage(messages.tutoringTurn, {
-                    number: page.offset + index + 1,
-                  })}
-                >
-                  <p className="text-sm/6 font-semibold text-gray-900">
-                    {intl.formatMessage(messages.tutoringTurnYou)}
-                  </p>
-                  <p className="mt-1 text-sm/6 whitespace-pre-line wrap-anywhere text-gray-700">
-                    {turn.studentContent}
-                  </p>
-                  <p className="mt-4 text-sm/6 font-semibold text-gray-900">
-                    {intl.formatMessage(messages.tutoringTurnTutor)}
-                    {label === undefined ? null : (
-                      <span className="ml-2 text-xs/5 font-normal text-gray-500">
-                        {intl.formatMessage(label)}
-                      </span>
-                    )}
-                  </p>
-                  <ModelMarkdown
-                    text={turn.responseContent}
-                    context={intl.formatMessage(messages.tutoringTurnTutor)}
-                    partial={
-                      turn.responseState === "queued" ||
-                      turn.responseState === "generating"
-                    }
-                  />
-                </article>
-              </li>
-            );
-          })}
-        </ul>
-      )}
-      <TutoringPagination
+      <TranscriptCollection
         page={page}
-        busy={collection.state.kind === "Loading"}
+        turns={turns}
+        checkedAt={checkedAt}
+        state={collection.state}
         load={load}
       />
       <TutoringStreamControls
@@ -452,6 +478,40 @@ function Transcript({
         inputRef={inputRef}
       />
       <div className="mt-6 flex flex-wrap items-center gap-3">
+        {finishEligible ? (
+          <RouteDepartureLink
+            to={links.finish(session.id)}
+            className={tutoringActionClass}
+          >
+            {intl.formatMessage(messages.tutoringFinishHeading)}
+          </RouteDepartureLink>
+        ) : (
+          <button
+            type="button"
+            className={tutoringActionClass}
+            disabled
+            aria-describedby="finish-unavailable"
+          >
+            {intl.formatMessage(messages.tutoringFinishHeading)}
+          </button>
+        )}
+        {!finishEligible ? (
+          <p id="finish-unavailable" className="w-full text-sm/6 text-gray-700">
+            {intl.formatMessage(
+              finishUnknown
+                ? messages.tutoringFinishUnknown
+                : messages.tutoringFinishUnavailable,
+            )}
+          </p>
+        ) : null}
+        {finishUnknown ? (
+          <RouteDepartureLink
+            to={links.finish(session.id)}
+            className={tutoringActionClass}
+          >
+            {intl.formatMessage(messages.tutoringFinishCheckOutcome)}
+          </RouteDepartureLink>
+        ) : null}
         {waiting ? (
           <button
             type="button"
@@ -523,5 +583,100 @@ function Transcript({
         )}
       />
     </>
+  );
+}
+
+// One persisted-turn collection for both the active and completed workspace.
+// Each owner supplies its own visible turns and authorized page loader.
+function TranscriptCollection({
+  page,
+  turns,
+  checkedAt,
+  state,
+  load,
+}: {
+  readonly page: SessionTurnPage;
+  readonly turns: SessionTurnPage["items"];
+  readonly checkedAt: number;
+  readonly state: TutoringCollectionActivity;
+  readonly load: (offset: number) => void;
+}) {
+  const intl = useIntl();
+  return (
+    <>
+      <h2 className="mt-6 text-base font-semibold text-gray-900">
+        {intl.formatMessage(messages.tutoringTranscript)}
+      </h2>
+      <TutoringCheckedAt time={checkedAt} />
+      <TutoringCollectionFeedback
+        state={state}
+        retry={() => load(page.offset)}
+      />
+      {state.kind !== "Loading" && (
+        <TranscriptTurns page={page} turns={turns} />
+      )}
+      <TutoringPagination
+        page={page}
+        busy={state.kind === "Loading"}
+        load={load}
+      />
+    </>
+  );
+}
+
+// Same exact Tailwind Plus stacked-list anatomy for active and completed
+// persisted turns. No current-work or stream content enters the read-only path.
+function TranscriptTurns({
+  page,
+  turns,
+}: {
+  readonly page: SessionTurnPage;
+  readonly turns: SessionTurnPage["items"];
+}) {
+  const intl = useIntl();
+  if (page.items.length === 0)
+    return (
+      <TutoringEmpty
+        text={intl.formatMessage(messages.tutoringTranscriptEmpty)}
+      />
+    );
+  return (
+    <ul role="list" className="mt-6 divide-y divide-gray-100">
+      {turns.map((turn, index) => {
+        const label = tutoringResponseLabels[turn.responseState];
+        return (
+          <li key={turn.id} className="py-5">
+            <article
+              aria-label={intl.formatMessage(messages.tutoringTurn, {
+                number: page.offset + index + 1,
+              })}
+            >
+              <p className="text-sm/6 font-semibold text-gray-900">
+                {intl.formatMessage(messages.tutoringTurnYou)}
+              </p>
+              <p className="mt-1 text-sm/6 whitespace-pre-line wrap-anywhere text-gray-700">
+                {turn.studentContent}
+              </p>
+              <p className="mt-4 text-sm/6 font-semibold text-gray-900">
+                {intl.formatMessage(messages.tutoringTurnTutor)}
+                {label === undefined ? null : (
+                  <span className="ml-2 text-xs/5 font-normal text-gray-500">
+                    {intl.formatMessage(label)}
+                  </span>
+                )}
+              </p>
+              <ModelMarkdown
+                text={turn.responseContent}
+                context={intl.formatMessage(messages.tutoringTurnTutor)}
+                partial={
+                  turn.responseState === "queued" ||
+                  turn.responseState === "generating"
+                }
+              />
+            </article>
+          </li>
+        );
+      })}
+    </ul>
   );
 }

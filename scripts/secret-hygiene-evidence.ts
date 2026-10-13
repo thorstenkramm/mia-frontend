@@ -251,9 +251,35 @@ export const courseUnitCases = [
   },
   {
     title:
-      "Tutoring completed session renders the fixed finished notice without a transcript read",
+      "Tutoring completed session renders persisted transcript read-only on the workspace route",
     file: "src/app/routes/learnSessionEntry.test.tsx",
     points: ["tutoring-finished"],
+  },
+  ...(
+    [
+      [
+        "Tutoring Finish revalidates and installs only definitive persisted completion",
+        "tutoring-finish-success",
+      ],
+      [
+        "Tutoring Finish stays unavailable when work is busy or eligibility denied",
+        "tutoring-finish-ineligible",
+      ],
+      [
+        "Tutoring dual-capability non-owner completed session hides before transcript or finish work reads",
+        "tutoring-finish-owner",
+      ],
+    ] as const
+  ).map(([title, point]) => ({
+    title,
+    file: "src/app/routes/learnSessionEntry.test.tsx",
+    points: [point],
+  })),
+  {
+    title:
+      "Tutoring Finish requires atomic server eligibility and the exact definitive completion document",
+    file: "src/platform/api/tutoringSessions.test.ts",
+    points: ["tutoring-finish-document"],
   },
   {
     title:
@@ -304,7 +330,7 @@ export const courseUnitCases = [
   },
   {
     title:
-      "Tutoring workspace finishes read-only when the send reports the session completed",
+      "Tutoring workspace waits for an addressed session read after a send state conflict",
     file: "src/app/routes/learnSessionEntry.test.tsx",
     points: ["tutoring-workspace-finished"],
   },

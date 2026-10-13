@@ -1217,6 +1217,14 @@ Send/Queue enablement from server-authored work state, ambiguous-send reconcilia
 abandon, busy slot loss, and reload without replay, in seven locales at 320px and real zoom. Both rows remain
 Blocked; the manual supported-browser/assistive-technology matrix stays outstanding, and CP-05/A03 and A05 are
 untouched by this story.
+
+Story 6.5 slice disposition, 2026-10-13: CP-05/A05 gains partial **automated** evidence for ordered Finish
+prevalidation, safe Cancel autofocus, no replay after unknown/Stop waiting, and the read-only persisted transcript in
+the existing workspace. Bundled Chromium checks cover the Finish dialog and completed transcript at direct 320px in
+three text modes, actual 200% zoom, reduced motion, forced colors and representative axe-core WCAG 2.2 A/AA scans;
+the Story 6.5 spec records commands and limitations. No manual supported-browser or assistive-technology evidence
+has been collected, so CP-05/A05 and the complete-process rows remain **Blocked**, not Pass. Story 8.4 owns the
+complete history route and supervisor flow.
 | `CP-06/A01` | Review completed transcript | `PS-06` + `LP-SUC`; `EP-SUC` | None | Not run |
 | `CP-06/A02` | Correct or regenerate summary | `PS-06` + `LP-STA`; `EP-STA` | `BCG-004` | Blocked |
 | `CP-07/A01` | Student creates mentoring request | `PS-07` + `LP-SUC`; `EP-SUC` | `BCG-013` | Blocked |

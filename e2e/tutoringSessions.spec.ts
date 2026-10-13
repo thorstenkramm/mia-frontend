@@ -13,6 +13,7 @@ const start = "/learn/start",
   intent = `${start}/course_1/intent`,
   recovery = "/learn/session",
   workspace = "/learn/sessions/session_1";
+const finishPath = `${workspace}/finish`;
 const requestIdPattern =
   /^[0-9a-f]{8}-[0-9a-f]{4}-4[0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/u;
 const unknownHeading =
@@ -1235,7 +1236,7 @@ test(
 );
 
 test(
-  "tutoring completed session shows the fixed finished notice without transcript reads",
+  "tutoring completed session renders only persisted read-only turns and can begin another permitted session",
   protectedJourney(async (page) => {
     const control = await tutoringBackend(page);
     control.sessionState = "completed";
@@ -1245,15 +1246,477 @@ test(
       page.getByText("This tutoring session is finished."),
     ).toBeVisible();
     expect(
-      control.turnReads === 0 &&
+      control.turnReads === 1 &&
         control.workReads === 0 &&
         control.starts === 0 &&
-        (await page.locator("main article").count()) === 0 &&
+        (await page.locator("main article").count()) === 1 &&
+        (await page.getByLabel("Your message to the tutor").count()) === 0 &&
+        (await page.locator(`main a[href="/learn/start"]`).count()) === 1 &&
         (await page.locator(`main a[href="/learn/courses"]`).count()) === 1,
     ).toBe(true);
     await minimized(page);
+    await routeHygieneCheckpoint(page, "tutoring-finished");
   }),
 );
+
+test(
+  "tutoring Finish confirms once after ordered prevalidation then reads persisted transcript without new messages",
+  protectedJourney(async (page) => {
+    const control = await tutoringBackend(page);
+    const fixture = routeSecretFixture(page);
+    await page.goto(workspace);
+    await ready(page, "Tutoring session");
+    await page.getByRole("link", { name: "Finish session" }).click();
+    await ready(page, "Finish tutoring session");
+    expect(page.url().endsWith(finishPath)).toBe(true);
+    await page.getByRole("button", { name: "Review Finish" }).click();
+    await expect(
+      page.getByRole("button", { name: "Confirm Finish" }),
+    ).toBeEnabled();
+    await page.getByRole("button", { name: "Confirm Finish" }).click();
+    await ready(page, "Tutoring session");
+    await expect(
+      page.getByText("This tutoring session is finished."),
+    ).toBeVisible();
+    expect(
+      control.finishPosts === 1 &&
+        control.turnReads >= 2 &&
+        control.messagePosts === 0 &&
+        control.workReads >= 2 &&
+        (await page.getByLabel("Your message to the tutor").count()) === 0 &&
+        (await page.locator("main article").count()) === 1 &&
+        !page.url().includes("/learn/history/"),
+    ).toBe(true);
+    expect(
+      (await page.locator("main").textContent())?.includes(
+        fixture.teachingText,
+      ),
+    ).toBe(true);
+    await minimized(page);
+    await routeHygieneCheckpoint(page, "tutoring-finish-success");
+    await page
+      .locator("main")
+      .getByRole("link", { name: "Start a tutoring session" })
+      .click();
+    await ready(page, "Start a tutoring session");
+    expect(control.discoveryReads > 0 && control.starts === 0).toBe(true);
+  }),
+);
+
+test(
+  "tutoring dual-capability non-owner completed session denies before transcript GET with the fixed unknown surface",
+  protectedJourney(async (page) => {
+    const control = await tutoringBackend(page);
+    control.supervisesCourse = true;
+    control.sessionState = "completed";
+    control.studentOwner = "another-student";
+    await page.goto(workspace);
+    await ready(page, "Tutoring access unavailable");
+    const surface = async () => ({
+      title: await page.title(),
+      heading: await page.getByRole("heading", { level: 1 }).textContent(),
+      links: await page
+        .locator("main a")
+        .evaluateAll((links) => links.map((link) => link.getAttribute("href"))),
+      focus: await page.evaluate(() => document.activeElement?.tagName),
+    });
+    const nonOwner = await surface();
+    expect(
+      control.sessionReads === 1 &&
+        control.turnReads === 0 &&
+        control.workReads === 0 &&
+        control.finishPosts === 0 &&
+        (await page.locator("main article").count()) === 0,
+    ).toBe(true);
+    control.studentOwner = "account-id";
+    control.denySession = 404;
+    await page.reload();
+    await ready(page, "Tutoring access unavailable");
+    expect(
+      JSON.stringify(await surface()) === JSON.stringify(nonOwner) &&
+        control.sessionReads === 2 &&
+        control.turnReads === 0 &&
+        control.workReads === 0,
+    ).toBe(true);
+    await routeHygieneCheckpoint(page, "tutoring-finish-owner");
+  }),
+);
+
+test(
+  "tutoring Finish stays unavailable for denied or generating work without a completion POST",
+  protectedJourney(async (page) => {
+    const control = await tutoringBackend(page);
+    control.finishEligible = false;
+    await page.goto(workspace);
+    await ready(page, "Tutoring session");
+    await expect(
+      page.getByRole("button", { name: "Finish session" }),
+    ).toBeDisabled();
+    await page.goto(finishPath);
+    await ready(page, "Finish tutoring session");
+    await expect(
+      page.getByRole("button", { name: "Review Finish" }),
+    ).toBeDisabled();
+    control.finishEligible = undefined;
+    control.workState = "generating";
+    control.workGenerating = true;
+    await page.reload();
+    await ready(page, "Finish tutoring session");
+    await expect(
+      page.getByRole("button", { name: "Review Finish" }),
+    ).toBeDisabled();
+    expect(control.finishPosts === 0).toBe(true);
+    await routeHygieneCheckpoint(page, "tutoring-finish-ineligible");
+  }),
+);
+
+test(
+  "tutoring lost Finish response stays unknown until explicit completed-session read without replay",
+  protectedJourney(async (page) => {
+    const control = await tutoringBackend(page);
+    control.finishOutcome = "lose";
+    control.finishCommitsOnLoss = true;
+    await page.goto(finishPath);
+    await ready(page, "Finish tutoring session");
+    await page.getByRole("button", { name: "Review Finish" }).click();
+    await expect(
+      page.getByRole("button", { name: "Confirm Finish" }),
+    ).toBeEnabled();
+    await page.getByRole("button", { name: "Confirm Finish" }).click();
+    await expect(
+      page.getByRole("dialog").getByText(/finish outcome is unknown/u),
+    ).toBeVisible();
+    expect(control.finishPosts === 1 && control.turnReads === 0).toBe(true);
+    await routeHygieneCheckpoint(page, "tutoring-finish-unknown");
+    await page.getByRole("button", { name: "Refresh" }).click();
+    await ready(page, "Tutoring session");
+    expect(control.finishPosts === 1 && control.turnReads === 1).toBe(true);
+    await minimized(page);
+  }),
+);
+
+test(
+  "tutoring Stop waiting on Finish never claims success or replays the late POST",
+  protectedJourney(async (page) => {
+    const control = await tutoringBackend(page);
+    let release = () => {};
+    control.holdFinish = new Promise<void>((resolve) => {
+      release = resolve;
+    });
+    try {
+      await page.goto(finishPath);
+      await ready(page, "Finish tutoring session");
+      await page.getByRole("button", { name: "Review Finish" }).click();
+      await expect(
+        page.getByRole("button", { name: "Confirm Finish" }),
+      ).toBeEnabled();
+      await page.getByRole("button", { name: "Confirm Finish" }).click();
+      await expect.poll(() => control.finishPosts).toBe(1);
+      await page.getByRole("button", { name: "Stop waiting" }).click();
+      await expect(
+        page.getByRole("dialog").getByText(/finish outcome is unknown/u),
+      ).toBeVisible();
+      release();
+      await expect(
+        page.getByRole("dialog").getByText(/finish outcome is unknown/u),
+      ).toBeVisible();
+      expect(control.finishPosts === 1 && control.turnReads === 0).toBe(true);
+      await routeHygieneCheckpoint(page, "tutoring-finish-stopped");
+      await page.getByRole("button", { name: "Refresh" }).click();
+      await ready(page, "Tutoring session");
+      expect(control.finishPosts === 1 && control.turnReads === 1).toBe(true);
+    } finally {
+      release();
+    }
+  }),
+);
+
+test(
+  "tutoring unknown Finish stays interlocked after workspace return while the first POST is held",
+  protectedJourney(async (page) => {
+    const control = await tutoringBackend(page);
+    control.finishOutcome = "lose";
+    let release = () => {};
+    control.holdFinish = new Promise<void>((resolve) => {
+      release = resolve;
+    });
+    try {
+      await page.goto(finishPath);
+      await ready(page, "Finish tutoring session");
+      await page.getByRole("button", { name: "Review Finish" }).click();
+      await expect(
+        page.getByRole("button", { name: "Confirm Finish" }),
+      ).toBeEnabled();
+      await page.getByRole("button", { name: "Confirm Finish" }).click();
+      await expect.poll(() => control.finishPosts).toBe(1);
+      await page.getByRole("button", { name: "Stop waiting" }).click();
+      await page.getByRole("button", { name: "Cancel" }).click();
+      await page
+        .locator("main")
+        .getByRole("link", { name: "Tutoring session" })
+        .click();
+      await ready(page, "Tutoring session");
+      await expect(
+        page.getByRole("button", { name: "Finish session" }),
+      ).toBeDisabled();
+      await expect(
+        page
+          .locator("main")
+          .getByRole("link", { name: "Check Finish outcome" }),
+      ).toBeVisible();
+      expect(
+        control.finishPosts === 1 &&
+          control.workReads >= 2 &&
+          control.turnReads >= 1,
+      ).toBe(true);
+      await page
+        .locator("main")
+        .getByRole("link", { name: "Back to Home" })
+        .click();
+      expect(new URL(page.url()).pathname === "/").toBe(true);
+      await page.goBack();
+      await expect(
+        page.getByRole("heading", { level: 1, name: "Tutoring session" }),
+      ).toBeVisible();
+      await expect(
+        page.getByRole("button", { name: "Finish session" }),
+      ).toBeDisabled();
+      expect(control.finishPosts === 1).toBe(true);
+      await page
+        .locator("main")
+        .getByRole("link", { name: "Check Finish outcome" })
+        .click();
+      await ready(page, "Finish tutoring session");
+      await expect(
+        page.getByRole("button", { name: "Review Finish" }),
+      ).toBeDisabled();
+      await page
+        .locator("main")
+        .getByRole("button", { name: "Refresh" })
+        .click();
+      await expect(
+        page.locator("main").getByText(/finish outcome is unknown/u),
+      ).toBeVisible();
+      expect(control.finishPosts === 1).toBe(true);
+      release();
+      await expect(
+        page.locator("main").getByText(/finish outcome is unknown/u),
+      ).toBeVisible();
+      expect(control.finishPosts === 1).toBe(true);
+      await routeHygieneCheckpoint(page, "tutoring-finish-return");
+    } finally {
+      release();
+    }
+  }),
+);
+
+test(
+  "tutoring lost uncommitted Finish stays reconcile-only after failed then eligible Refresh",
+  protectedJourney(async (page) => {
+    const control = await tutoringBackend(page);
+    control.finishOutcome = "lose";
+    await page.goto(finishPath);
+    await ready(page, "Finish tutoring session");
+    await page.getByRole("button", { name: "Review Finish" }).click();
+    await expect(
+      page.getByRole("button", { name: "Confirm Finish" }),
+    ).toBeEnabled();
+    await page.getByRole("button", { name: "Confirm Finish" }).click();
+    await expect(
+      page.getByRole("dialog").getByText(/finish outcome is unknown/u),
+    ).toBeVisible();
+    expect(control.finishPosts === 1).toBe(true);
+
+    control.denySession = 503;
+    const failedRead = page.waitForResponse(
+      (response) =>
+        response.request().method() === "GET" &&
+        new URL(response.url()).pathname ===
+          "/api/v1/tutoring-sessions/session_1" &&
+        response.status() === 503,
+    );
+    await page.getByRole("button", { name: "Refresh" }).click();
+    await failedRead;
+    await expect(
+      page.getByRole("dialog").getByText(/finish outcome is unknown/u),
+    ).toBeVisible();
+    await expect(
+      page
+        .getByRole("dialog")
+        .getByRole("button", { name: "Technical details" }),
+    ).toBeVisible();
+    await expect(
+      page.getByRole("button", { name: "Confirm Finish" }),
+    ).toBeDisabled();
+    expect(control.finishPosts === 1).toBe(true);
+
+    control.denySession = 0;
+    const eligibleRead = page.waitForResponse(
+      (response) =>
+        response.request().method() === "GET" &&
+        new URL(response.url()).pathname ===
+          "/api/v1/tutoring-sessions/session_1/current-work",
+    );
+    await page.getByRole("button", { name: "Refresh" }).click();
+    await eligibleRead;
+    await expect(
+      page.getByRole("dialog").getByText(/finish outcome is unknown/u),
+    ).toBeVisible();
+    await expect(
+      page
+        .getByRole("dialog")
+        .getByRole("button", { name: "Technical details" }),
+    ).toHaveCount(0);
+    await expect(
+      page.getByRole("button", { name: "Confirm Finish" }),
+    ).toBeDisabled();
+    expect(control.finishPosts === 1 && control.workReads >= 2).toBe(true);
+    await routeHygieneCheckpoint(page, "tutoring-finish-failed-check");
+  }),
+);
+
+test(
+  "tutoring late definitive Finish rejection clears unknown for a freshly confirmed attempt",
+  protectedJourney(async (page) => {
+    const control = await tutoringBackend(page);
+    control.finishOutcome = "busy";
+    let release = () => {};
+    control.holdFinish = new Promise<void>((resolve) => {
+      release = resolve;
+    });
+    try {
+      await page.goto(finishPath);
+      await ready(page, "Finish tutoring session");
+      await page.getByRole("button", { name: "Review Finish" }).click();
+      await expect(
+        page.getByRole("button", { name: "Confirm Finish" }),
+      ).toBeEnabled();
+      await page.getByRole("button", { name: "Confirm Finish" }).click();
+      await expect.poll(() => control.finishPosts).toBe(1);
+      await page.getByRole("button", { name: "Stop waiting" }).click();
+      await expect(
+        page.getByRole("button", { name: "Confirm Finish" }),
+      ).toBeDisabled();
+      const definitive = page.waitForResponse(
+        (response) =>
+          response.request().method() === "POST" &&
+          new URL(response.url()).pathname ===
+            "/api/v1/tutoring-sessions/session_1/completion" &&
+          response.status() === 409,
+      );
+      release();
+      await definitive;
+      control.workGenerating = false;
+      control.workState = "idle";
+      control.finishOutcome = "success";
+      const eligibleRead = page.waitForResponse(
+        (response) =>
+          response.request().method() === "GET" &&
+          new URL(response.url()).pathname ===
+            "/api/v1/tutoring-sessions/session_1/current-work",
+      );
+      await page.getByRole("button", { name: "Refresh" }).click();
+      await eligibleRead;
+      await expect(
+        page.getByRole("button", { name: "Confirm Finish" }),
+      ).toBeEnabled();
+      expect(control.finishPosts === 1).toBe(true);
+      await page.getByRole("button", { name: "Confirm Finish" }).click();
+      await ready(page, "Tutoring session");
+      expect(control.finishPosts === 2 && control.turnReads === 1).toBe(true);
+      await routeHygieneCheckpoint(page, "tutoring-finish-resolved");
+    } finally {
+      release();
+    }
+  }),
+);
+
+test(
+  "tutoring Finish race reads new authoritative work after a stale eligibility conflict",
+  protectedJourney(async (page) => {
+    const control = await tutoringBackend(page);
+    await page.goto(finishPath);
+    await ready(page, "Finish tutoring session");
+    await page.getByRole("button", { name: "Review Finish" }).click();
+    await expect(
+      page.getByRole("button", { name: "Confirm Finish" }),
+    ).toBeEnabled();
+    control.finishOutcome = "busy";
+    const reads = control.workReads;
+    await page.getByRole("button", { name: "Confirm Finish" }).click();
+    await expect(
+      page.getByRole("dialog").getByText(/work changed/u),
+    ).toBeVisible();
+    await expect(
+      page.getByRole("button", { name: "Confirm Finish" }),
+    ).toBeDisabled();
+    expect(
+      control.finishPosts === 1 &&
+        control.workReads > reads &&
+        control.turnReads === 0,
+    ).toBe(true);
+    await routeHygieneCheckpoint(page, "tutoring-finish-race");
+  }),
+);
+
+test(
+  "tutoring Finish dialog and completed transcript retain keyboard access and reflow at 320 pixels",
+  protectedJourney(async (page) => {
+    const control = await tutoringBackend(page);
+    await page.setViewportSize({ width: 320, height: 900 });
+    for (const size of ["standard", "large", "extra-large"]) {
+      await page.addInitScript(
+        (value) => localStorage.setItem("mia.interface.text-size", value),
+        size,
+      );
+      await page.goto(finishPath);
+      await ready(page, "Finish tutoring session");
+      await noScroll(page);
+      await page.getByRole("button", { name: "Review Finish" }).click();
+      await expect(page.getByRole("button", { name: "Cancel" })).toBeFocused();
+      await expect(
+        page.getByRole("button", { name: "Confirm Finish" }),
+      ).toBeEnabled();
+      await noScroll(page);
+      const dialogAxe = await new AxeBuilder({ page })
+        .withTags(["wcag2a", "wcag2aa", "wcag21aa", "wcag22aa"])
+        .analyze();
+      expect(dialogAxe.violations.length === 0).toBe(true);
+      await page.getByRole("button", { name: "Cancel" }).click();
+      await expect(page.getByRole("dialog")).toHaveCount(0);
+    }
+    control.sessionState = "completed";
+    await page.goto(workspace);
+    await ready(page, "Tutoring session");
+    await expect(page.locator("main article")).toHaveCount(1);
+    await noScroll(page);
+    const completedAxe = await new AxeBuilder({ page })
+      .withTags(["wcag2a", "wcag2aa", "wcag21aa", "wcag22aa"])
+      .analyze();
+    expect(completedAxe.violations.length === 0).toBe(true);
+    await routeHygieneCheckpoint(page, "tutoring-finish-access");
+  }),
+);
+
+test("tutoring completed transcript preserves semantics at actual 200 percent zoom in forced colors", async () => {
+  await atBrowserZoom(2, async (page) => {
+    const control = await tutoringBackend(page);
+    control.sessionState = "completed";
+    await page.emulateMedia({
+      forcedColors: "active",
+      reducedMotion: "reduce",
+    });
+    await page.goto(workspace);
+    await ready(page, "Tutoring session");
+    await expect(page.locator("main article")).toHaveCount(1);
+    await noScroll(page);
+    const axe = await new AxeBuilder({ page })
+      .withTags(["wcag2a", "wcag2aa", "wcag21aa", "wcag22aa"])
+      .analyze();
+    expect(axe.violations.length === 0 && control.workReads === 0).toBe(true);
+    await routeHygieneCheckpoint(page, "tutoring-finish-zoom");
+  });
+});
 
 test(
   "tutoring workspace queues one message during an answer and keeps the draft when the queue is full",

@@ -61,7 +61,7 @@ type EntryRoute =
   | (EntryRouteBase & {
       readonly path: (typeof learnSessionPaths)[keyof typeof learnSessionPaths];
       readonly gate: "Learn(tutoring session)";
-      readonly resource: "recovery" | "workspace";
+      readonly resource: "recovery" | "workspace" | "finish";
       readonly component: LazyExoticComponent<
         ComponentType<TutoringRouteProps>
       >;
@@ -174,9 +174,13 @@ export function learnIntentPath(course: CourseId): string {
 export const learnSessionPaths = {
   recovery: "/learn/session",
   workspace: "/learn/sessions/:sessionId",
+  finish: "/learn/sessions/:sessionId/finish",
 } as const;
-export function learnSessionPath(id: TutoringSessionId): string {
-  return learnSessionPaths.workspace.replace(
+export function learnSessionPath(
+  id: TutoringSessionId,
+  finish = false,
+): string {
+  return learnSessionPaths[finish ? "finish" : "workspace"].replace(
     ":sessionId",
     encodeURIComponent(id),
   );
@@ -462,6 +466,20 @@ export const entryRoutes = {
     headingMessage: messages.tutoringWorkspaceHeading,
     component: lazy(
       () => import("../../features/tutoring/TutoringWorkspaceRoute"),
+    ),
+  },
+  learnSessionFinish: {
+    path: learnSessionPaths.finish,
+    gate: "Learn(tutoring session)",
+    resource: "finish",
+    parent: {
+      path: learnSessionPaths.workspace,
+      label: messages.tutoringWorkspaceHeading,
+    },
+    titleMessage: messages.tutoringFinishTitle,
+    headingMessage: messages.tutoringFinishHeading,
+    component: lazy(
+      () => import("../../features/tutoring/TutoringFinishRoute"),
     ),
   },
   studentList: {
@@ -927,7 +945,7 @@ export function authenticatedRoute(
   }
   if (pathname === learnSessionPaths.recovery)
     return { key: "learnSessionRecovery", path: pathname, invitationId: null };
-  const session = /^\/learn\/sessions\/([^/]+)$/u.exec(pathname);
+  const session = /^\/learn\/sessions\/([^/]+)(\/finish)?$/u.exec(pathname);
   if (session?.[1] !== undefined) {
     let sessionId: TutoringSessionId | null = null;
     try {
@@ -937,8 +955,11 @@ export function authenticatedRoute(
     }
     if (sessionId !== null)
       return {
-        key: "learnSessionWorkspace",
-        path: learnSessionPath(sessionId),
+        key:
+          session[2] === undefined
+            ? "learnSessionWorkspace"
+            : "learnSessionFinish",
+        path: learnSessionPath(sessionId, session[2] !== undefined),
         sessionId,
         invitationId: null,
       };

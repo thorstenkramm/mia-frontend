@@ -464,7 +464,7 @@ export default function MaterialFilesRoute({
         }}
         className="relative z-50"
       >
-        {/* Shared Simple alert anatomy is marked in MaterialApprovalRoute; finalization stays separate. */}
+        {/* Simple alert presentation: MaterialApprovalRoute and TutoringFinishRoute mark their blueprint copies; material finalization remains separate. */}
         <DialogBackdrop className="fixed inset-0 bg-gray-500/75" />
         <div className="fixed inset-0 z-10 w-screen overflow-y-auto">
           <div className="flex min-h-full items-end justify-center p-4 text-center sm:items-center sm:p-0">

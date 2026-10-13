@@ -620,9 +620,57 @@ export const routeHygieneCases = [
   {
     id: "tutoring-finished",
     title:
-      "tutoring completed session shows the fixed finished notice without transcript reads",
-    checkpoints: ["complete"],
+      "tutoring completed session renders only persisted read-only turns and can begin another permitted session",
+    checkpoints: ["tutoring-finished", "complete"],
   },
+  ...(
+    [
+      [
+        "tutoring-finish-success",
+        "tutoring Finish confirms once after ordered prevalidation then reads persisted transcript without new messages",
+      ],
+      [
+        "tutoring-finish-owner",
+        "tutoring dual-capability non-owner completed session denies before transcript GET with the fixed unknown surface",
+      ],
+      [
+        "tutoring-finish-ineligible",
+        "tutoring Finish stays unavailable for denied or generating work without a completion POST",
+      ],
+      [
+        "tutoring-finish-unknown",
+        "tutoring lost Finish response stays unknown until explicit completed-session read without replay",
+      ],
+      [
+        "tutoring-finish-stopped",
+        "tutoring Stop waiting on Finish never claims success or replays the late POST",
+      ],
+      [
+        "tutoring-finish-return",
+        "tutoring unknown Finish stays interlocked after workspace return while the first POST is held",
+      ],
+      [
+        "tutoring-finish-failed-check",
+        "tutoring lost uncommitted Finish stays reconcile-only after failed then eligible Refresh",
+      ],
+      [
+        "tutoring-finish-resolved",
+        "tutoring late definitive Finish rejection clears unknown for a freshly confirmed attempt",
+      ],
+      [
+        "tutoring-finish-race",
+        "tutoring Finish race reads new authoritative work after a stale eligibility conflict",
+      ],
+      [
+        "tutoring-finish-access",
+        "tutoring Finish dialog and completed transcript retain keyboard access and reflow at 320 pixels",
+      ],
+      [
+        "tutoring-finish-zoom",
+        "tutoring completed transcript preserves semantics at actual 200 percent zoom in forced colors",
+      ],
+    ] as const
+  ).map(([id, title]) => ({ id, title, checkpoints: [id, "complete"] })),
   {
     id: "tutoring-queue",
     title:

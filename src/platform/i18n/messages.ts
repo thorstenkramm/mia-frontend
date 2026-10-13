@@ -298,6 +298,54 @@ export const messages = defineMessages({
     id: "tutoring.sessionFinished",
     defaultMessage: "This tutoring session is finished.",
   },
+  tutoringFinishTitle: {
+    id: "tutoring.finishTitle",
+    defaultMessage: "Finish tutoring session | MIA",
+  },
+  tutoringFinishHeading: {
+    id: "tutoring.finishHeading",
+    defaultMessage: "Finish session",
+  },
+  tutoringFinishReview: {
+    id: "tutoring.finishReview",
+    defaultMessage: "Review Finish",
+  },
+  tutoringFinishCheckOutcome: {
+    id: "tutoring.finishCheckOutcome",
+    defaultMessage: "Check Finish outcome",
+  },
+  tutoringFinishConfirm: {
+    id: "tutoring.finishConfirm",
+    defaultMessage: "Confirm Finish",
+  },
+  tutoringFinishCancel: {
+    id: "tutoring.finishCancel",
+    defaultMessage: "Cancel",
+  },
+  tutoringFinishConsequence: {
+    id: "tutoring.finishConsequence",
+    defaultMessage:
+      "Finishing ends this session. You can read the saved transcript and start another permitted session.",
+  },
+  tutoringFinishUnavailable: {
+    id: "tutoring.finishUnavailable",
+    defaultMessage:
+      "Finish is unavailable while tutoring work is in flight or eligibility cannot be confirmed. Check the current work before trying again.",
+  },
+  tutoringFinishChanged: {
+    id: "tutoring.finishChanged",
+    defaultMessage:
+      "Tutoring work changed. Review the current state before confirming Finish.",
+  },
+  tutoringFinishUnknown: {
+    id: "tutoring.finishUnknown",
+    defaultMessage:
+      "The finish outcome is unknown. Refresh to check the session. Finish was not repeated.",
+  },
+  tutoringFinishing: {
+    id: "tutoring.finishing",
+    defaultMessage: "Finishing the session…",
+  },
   tutoringUnavailableTitle: {
     id: "tutoring.unavailableTitle",
     defaultMessage: "Tutoring access unavailable | MIA",
