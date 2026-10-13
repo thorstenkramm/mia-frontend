@@ -374,6 +374,13 @@ Reuse accumulated story evidence and existing fixtures; add one backend-connecte
 recovery/denial evidence. Do not repeat every auth suite or Epic 9 release-evidence matrix as new story work; required
 repository checks still apply, and the broader release evidence stays in Epic 9.
 
+**Owner decision, 2026-10-13 (Story 6.6 only):** Set aside the automated real-backend test requirement, including the
+backend-served setup, backend-connected chain, and "mocked UI alone is not proof" clause, for this milestone. Prove one
+consolidated UI journey with existing local-fake E2E infrastructure and focused fake-backed recovery/denial evidence;
+record explicitly that real frontend/backend integration is **not proven**. The operator-run real-deployment demonstration
+is not authorized and is **not performed**. This exception does not change the remaining story scope or Epic 9 release
+evidence obligations.
+
 ## Epic 7: Mentoring — after the tutoring milestone
 
 Deferred in its entirety; no mentor invitations, assignment UI, or mentoring controls are prerequisites for Epics 2–6.

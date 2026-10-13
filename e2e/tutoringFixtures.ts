@@ -73,6 +73,7 @@ export async function tutoringResources(page: Page) {
     requestIds: [] as string[],
     messageRequestIds: [] as string[],
     workQueries: [] as (string | null)[],
+    reconciliationResults: [] as (boolean | null)[],
     streamReads: 0,
     streamEvents: null as
       null | { name: string; data: Record<string, string> }[],
@@ -381,6 +382,11 @@ export async function tutoringResources(page: Page) {
           "session_1";
         const snapshot = workDocument(sessionId, reconcile, responseQuery);
         await control.holdTerminal;
+        control.reconciliationResults.push(
+          reconcile === null
+            ? null
+            : snapshot.data.attributes.reconciled_message !== null,
+        );
         return json(route, snapshot);
       }
       if (responseQuery !== null && control.holdTerminal !== null)
@@ -395,7 +401,13 @@ export async function tutoringResources(page: Page) {
       const sessionId =
         new URL(route.request().url()).pathname.split("/").at(-2) ??
         "session_1";
-      return json(route, workDocument(sessionId, reconcile, responseQuery));
+      const snapshot = workDocument(sessionId, reconcile, responseQuery);
+      control.reconciliationResults.push(
+        reconcile === null
+          ? null
+          : snapshot.data.attributes.reconciled_message !== null,
+      );
+      return json(route, snapshot);
     },
   );
   await page.route(

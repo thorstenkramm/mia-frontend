@@ -78,13 +78,13 @@ development_status:
   5-2-student-first-sign-in-and-joined-course-entry: done
   epic-5-retrospective: optional
 
-  epic-6: backlog
+  epic-6: done
   6-1-start-or-resume-the-students-tutoring-session: done
   6-2-send-messages-and-show-the-single-queued-message: done
   6-3-stream-answers-without-disrupting-reading: done
   6-4-recover-stop-and-deliberately-retry-tutoring-work: done
   6-5-finish-and-show-the-completed-transcript: done
-  6-6-prove-the-complete-tutoring-journey: backlog
+  6-6-prove-the-complete-tutoring-journey: done
   epic-6-retrospective: optional
 
   # Later scope: select only after the student-tutoring MVP milestone or a new owner decision.

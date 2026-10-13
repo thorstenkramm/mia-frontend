@@ -1,5 +1,5 @@
 import type { Page, Route } from "@playwright/test";
-import { courseBackend } from "./courseFixtures";
+import { courseBackend, courseRoutes } from "./courseFixtures";
 import { routeSecretFixture } from "./routeSecretHygiene";
 
 // No request/response object survives the handler. Tests inspect public counters
@@ -11,6 +11,15 @@ export async function studentBackend(page: Page) {
   course.courseState = "active";
   course.readiness = "active_not_accepting";
   course.activatedAt = "2026-10-10T10:00:00.000000Z";
+  return studentRoutes(page, course);
+}
+
+// Install just the roster routes when another journey already owns the course
+// and its capability handler. Do not register a second course fake on that page.
+export async function studentRoutes(
+  page: Page,
+  course: Awaited<ReturnType<typeof courseRoutes>>,
+) {
   const fixture = routeSecretFixture(page);
   const control = {
     course,

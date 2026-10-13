@@ -9,6 +9,7 @@ export async function courseBackend(page: Page) {
 export async function courseRoutes(page: Page) {
   const fixture = routeSecretFixture(page);
   const control = {
+    accountId: "account-id",
     grants: new Set([
       "course_records.manage",
       "courses.create",
@@ -168,7 +169,7 @@ export async function courseRoutes(page: Page) {
     json(route, {
       data: {
         type: "account-capabilities",
-        id: "account-id",
+        id: control.accountId,
         attributes: {
           capabilities: actions.map((action) => ({
             action,

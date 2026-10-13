@@ -1,5 +1,5 @@
 import type { Page, Route } from "@playwright/test";
-import { courseBackend } from "./courseFixtures";
+import { courseBackend, courseRoutes } from "./courseFixtures";
 import { routeSecretFixture } from "./routeSecretHygiene";
 import {
   materialBriefSchema,
@@ -8,9 +8,13 @@ import {
 
 export async function materialBackend(
   page: Page,
-  options: { lifecycle?: boolean } = {},
+  options: {
+    lifecycle?: boolean;
+    course?: Awaited<ReturnType<typeof courseRoutes>>;
+    enforceValidRequests?: boolean;
+  } = {},
 ) {
-  const course = await courseBackend(page);
+  const course = options.course ?? (await courseBackend(page));
   course.scopeIds = ["course_1"];
   const fixture = routeSecretFixture(page);
   const control = {
@@ -131,6 +135,8 @@ export async function materialBackend(
                 },
               },
             }) && route.request().headers()["x-csrf-token"] === fixture.csrf;
+        if (options.enforceValidRequests && !control.validCreate)
+          return fail(route, 422, "material_invalid");
         if (control.createOutcome === "reject")
           return fail(route, 422, "material_invalid");
         control.persisted = true;
@@ -227,6 +233,8 @@ export async function materialBackend(
         "id" in body.data &&
         body.data.id === "material_1" &&
         route.request().headers()["x-csrf-token"] === fixture.csrf;
+      if (options.enforceValidRequests && !control.lifecycleValid)
+        return fail(route, 422, "material_invalid");
       return mutate(route, "save");
     }
     control.reads++;
@@ -245,6 +253,8 @@ export async function materialBackend(
           route.request().method() === "POST" &&
           route.request().postData() === null &&
           route.request().headers()["x-csrf-token"] === fixture.csrf;
+        if (options.enforceValidRequests && !control.lifecycleValid)
+          return fail(route, 422, "material_invalid");
         return mutate(route, "finalize");
       },
     );
@@ -256,6 +266,8 @@ export async function materialBackend(
         (approve || route.request().method() === "DELETE") &&
         route.request().postData() === null &&
         route.request().headers()["x-csrf-token"] === fixture.csrf;
+      if (options.enforceValidRequests && !control.lifecycleValid)
+        return fail(route, 422, "material_invalid");
       return mutate(route, approve ? "approve" : "revoke");
     });
     await page.route(
@@ -315,6 +327,8 @@ export async function materialBackend(
           "multipart/form-data; boundary=",
         ) === true &&
         headers["x-csrf-token"] === fixture.csrf;
+      if (options.enforceValidRequests && !control.validMultipart)
+        return fail(route, 422, "material_invalid");
       if (control.release) await control.release;
       if (control.uploadOutcome === "hidden")
         return fail(route, 404, "material_not_found");
@@ -377,6 +391,15 @@ export async function materialBackend(
   });
   return Object.assign(control, {
     makeReady: () => {
+      if (
+        options.enforceValidRequests &&
+        (!control.validCreate ||
+          !control.validMultipart ||
+          !control.lifecycleValid ||
+          control.state !== "processing" ||
+          control.files.length === 0)
+      )
+        throw new Error("Invalid fake material processing preconditions.");
       control.state = "ready";
       control.briefSource = "generated";
       control.brief = {

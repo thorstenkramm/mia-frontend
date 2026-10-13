@@ -144,7 +144,7 @@ export async function routeHygieneCheckpoint(
   const item = currentCase();
   if (
     process.env.MIA_ROUTE_HYGIENE_CASE !== item.id ||
-    !item.checkpoints.includes(point)
+    !item.checkpoints.some((checkpoint) => checkpoint === point)
   )
     throw new Error("Unexpected route-hygiene test/checkpoint selection.");
   const fixture = routeSecretFixture(page);

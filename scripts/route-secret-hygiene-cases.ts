@@ -2,6 +2,21 @@
 // R1 repair. IDs/checkpoints are fixed public labels, never fixture-derived.
 export const routeHygieneCases = [
   {
+    id: "complete-tutoring-journey",
+    title:
+      "one synthetic invitation-to-second-tutoring-session journey preserves recovery and scope",
+    checkpoints: [
+      "journey-invitation",
+      "journey-acceptance",
+      "journey-student-input",
+      "journey-student-replacement",
+      "journey-tutoring",
+      "journey-interrupted",
+      "journey-denied",
+      "complete",
+    ],
+  },
+  {
     id: "student-entry-learn",
     title:
       "student replacement enters Learn and later sign-in rediscovers persisted joined-course metadata",
