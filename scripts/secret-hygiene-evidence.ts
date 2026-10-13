@@ -77,6 +77,12 @@ export const courseUnitCases = [
   })),
   {
     title:
+      "Tutoring terminal reconciliation accepts only the targeted persisted response",
+    file: "src/platform/api/tutoringSessions.test.ts",
+    points: ["tutoring-targeted-terminal"],
+  },
+  {
+    title:
       "Tutoring workspace withholds session and transcript reads until learning participation settles",
     file: "src/app/routes/learnSessionEntry.test.tsx",
     points: ["tutoring-admitted"],

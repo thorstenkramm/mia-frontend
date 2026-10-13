@@ -219,6 +219,42 @@ export const messages = defineMessages({
     id: "tutoring.responseFailed",
     defaultMessage: "Response failed",
   },
+  tutoringStreamLost: {
+    id: "tutoring.streamLost",
+    defaultMessage: "Connection lost. Response may continue; text unconfirmed.",
+  },
+  tutoringStreamInvalid: {
+    id: "tutoring.streamInvalid",
+    defaultMessage: "Stream invalid. Text unconfirmed.",
+  },
+  tutoringFinalPending: {
+    id: "tutoring.finalPending",
+    defaultMessage: "Checking saved response…",
+  },
+  tutoringFinalUnconfirmed: {
+    id: "tutoring.finalUnconfirmed",
+    defaultMessage: "Saved response unconfirmed.",
+  },
+  tutoringResponseComplete: {
+    id: "tutoring.responseComplete",
+    defaultMessage: "Tutor response complete.",
+  },
+  tutoringPauseUpdates: {
+    id: "tutoring.pauseUpdates",
+    defaultMessage: "Pause transcript updates",
+  },
+  tutoringResumeUpdates: {
+    id: "tutoring.resumeUpdates",
+    defaultMessage: "Resume transcript updates",
+  },
+  tutoringNewContent: {
+    id: "tutoring.newContent",
+    defaultMessage: "New tutor content",
+  },
+  tutoringViewFinal: {
+    id: "tutoring.viewFinal",
+    defaultMessage: "View final response",
+  },
   tutoringSessionFinished: {
     id: "tutoring.sessionFinished",
     defaultMessage: "This tutoring session is finished.",

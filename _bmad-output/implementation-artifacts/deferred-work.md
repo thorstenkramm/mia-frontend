@@ -4,3 +4,6 @@
 - source_spec: `_bmad-output/implementation-artifacts/spec-1-8-session-lifecycle-idle-warning-expiry-shield-logout-bcg-001.md`
   summary: The direct application type check (`npx tsc -p tsconfig.app.json --noEmit`) reports 16 pre-existing errors, some in files this story touched. The solution-level `npm run typecheck` hides them.
   evidence: The count dropped from the 19-error baseline and this story added none. The `typecheck` script should be fixed so these errors surface.
+- source_spec: `_bmad-output/implementation-artifacts/spec-6-3-stream-answers-without-disrupting-reading.md`
+  summary: Move all seven catalog assets out of the initial-route bundle while preserving synchronous first paint for whichever of the seven locales is active; keep all seven available. Cover locale bootstrap, immediate switching, asynchronous failure and recovery with unit and browser tests before changing delivery.
+  evidence: The 2026-10-12 owner decision raised FFR-955 to 258000 gzip bytes for Story 6.3. A measured English-pinned trial reached 189823 versus the current 256554 bytes (about 66 KB potential saving), but cannot preserve first paint and switching for other active locales. See `tmp/agent-execution/6-3-stream-answers-without-disrupting-reading/analysis-*.log`; on-demand loading is approved follow-up, not Story 6.3.

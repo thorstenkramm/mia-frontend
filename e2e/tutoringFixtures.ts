@@ -66,6 +66,14 @@ export async function tutoringResources(page: Page) {
     requestIds: [] as string[],
     messageRequestIds: [] as string[],
     workQueries: [] as (string | null)[],
+    streamReads: 0,
+    streamEvents: null as
+      null | { name: string; data: Record<string, string> }[],
+    terminalContent: null as string | null,
+    terminalState: "completed" as "completed" | "interrupted" | "failed",
+    holdTerminal: null as Promise<void> | null,
+    longTurn: false,
+    responseQueries: [] as (string | null)[],
     materialsSent: [] as string[],
     holdPost: null as Promise<void> | null,
     holdSend: null as Promise<void> | null,
@@ -77,6 +85,23 @@ export async function tutoringResources(page: Page) {
       status,
     );
   const workDocument = (sessionId: string, reconcile: string | null) => {
+    const response =
+      control.terminalContent === null
+        ? null
+        : tutorResponseResource(
+            fixture.rawError,
+            "response_gen",
+            sessionId,
+            "message_gen",
+            control.terminalState,
+            control.terminalContent,
+          );
+    const withResponse = (value: ReturnType<typeof tutoringWorkDocument>) => {
+      if (control.terminalContent !== null) {
+        value.data.attributes.reconciled_response = response;
+      }
+      return value;
+    };
     const sentMessage = () =>
       studentMessageResource(
         fixture.rawError,
@@ -87,9 +112,29 @@ export async function tutoringResources(page: Page) {
     const reconciled =
       reconcile !== null && control.sent ? sentMessage() : null;
     if (control.sent)
-      return tutoringWorkDocument(fixture.rawError, {
+      return withResponse(
+        tutoringWorkDocument(fixture.rawError, {
+          session: sessionId,
+          state: control.workGenerating ? "generating_and_queued" : "queued",
+          generating: control.workGenerating
+            ? tutorResponseResource(
+                fixture.rawError,
+                "response_gen",
+                sessionId,
+                "message_gen",
+                "generating",
+                fixture.teachingText,
+              )
+            : null,
+          queued: sentMessage(),
+          reconciled,
+        }),
+      );
+    return withResponse(
+      tutoringWorkDocument(fixture.rawError, {
         session: sessionId,
-        state: control.workGenerating ? "generating_and_queued" : "queued",
+        sessionState: control.sessionState,
+        state: control.workState,
         generating: control.workGenerating
           ? tutorResponseResource(
               fixture.rawError,
@@ -100,37 +145,21 @@ export async function tutoringResources(page: Page) {
               fixture.teachingText,
             )
           : null,
-        queued: sentMessage(),
+        queued: control.workQueued
+          ? studentMessageResource(
+              fixture.rawError,
+              "message_q",
+              sessionId,
+              fixture.courseName,
+              "response_q",
+              "queued",
+            )
+          : null,
+        submit: control.workSubmit,
+        queue: control.workQueue,
         reconciled,
-      });
-    return tutoringWorkDocument(fixture.rawError, {
-      session: sessionId,
-      sessionState: control.sessionState,
-      state: control.workState,
-      generating: control.workGenerating
-        ? tutorResponseResource(
-            fixture.rawError,
-            "response_gen",
-            sessionId,
-            "message_gen",
-            "generating",
-            fixture.teachingText,
-          )
-        : null,
-      queued: control.workQueued
-        ? studentMessageResource(
-            fixture.rawError,
-            "message_q",
-            sessionId,
-            fixture.courseName,
-            "response_q",
-            "queued",
-          )
-        : null,
-      submit: control.workSubmit,
-      queue: control.workQueue,
-      reconciled,
-    });
+      }),
+    );
   };
   await page.route("**/api/v1/users/me/capabilities", (route) =>
     json(route, learnCapabilities(control.ids, control.available)),
@@ -215,7 +244,7 @@ export async function tutoringResources(page: Page) {
   );
   await page.route(
     /\/api\/v1\/tutoring-sessions\/[^/?]+\/current-work(?:\?|$)/u,
-    (route) => {
+    async (route) => {
       control.workReads++;
       if (control.denyWork)
         return fail(route, control.denyWork, "tutoring_not_found");
@@ -223,12 +252,48 @@ export async function tutoringResources(page: Page) {
         "message_request_id",
       );
       control.workQueries.push(reconcile);
+      const responseQuery = new URL(route.request().url()).searchParams.get(
+        "response_id",
+      );
+      control.responseQueries.push(responseQuery);
+      if (responseQuery !== null && control.holdTerminal !== null)
+        await control.holdTerminal;
+      if (responseQuery !== null && control.terminalContent !== null) {
+        control.workGenerating = false;
+        control.workState = "idle";
+      }
       const sessionId =
         new URL(route.request().url()).pathname.split("/").at(-2) ??
         "session_1";
       return json(route, workDocument(sessionId, reconcile));
     },
   );
+  await page.route(/\/api\/v1\/tutor-responses\/[^/?]+\/events$/u, (route) => {
+    control.streamReads++;
+    const responseId = new URL(route.request().url()).pathname
+      .split("/")
+      .at(-2);
+    const events = control.streamEvents ?? [
+      {
+        name: "snapshot",
+        data:
+          responseId === "response_gen"
+            ? { state: "generating", content: fixture.teachingText }
+            : { state: "queued" },
+      },
+    ];
+    void route.fulfill({
+      status: 200,
+      contentType: "text/event-stream",
+      headers: { "Cache-Control": "no-store" },
+      body: events
+        .map(
+          (event) =>
+            `event: ${event.name}\ndata: ${JSON.stringify(event.data)}\n\n`,
+        )
+        .join(""),
+    });
+  });
   await page.route(
     /\/api\/v1\/tutoring-sessions\/[^/?]+\/messages(?:\?|$)/u,
     async (route) => {
@@ -241,7 +306,9 @@ export async function tutoringResources(page: Page) {
               fixture.rawError,
               "response_1",
               "session_1",
-              fixture.teachingText,
+              control.longTurn
+                ? fixture.teachingText.repeat(30)
+                : fixture.teachingText,
               "completed",
               "tutor reply",
             ),
@@ -306,6 +373,7 @@ export async function tutoringResources(page: Page) {
       /^\/api\/v1\/users\/me\/active-tutoring-session$/u,
       /^\/api\/v1\/courses\/[^/]+(?:\/materials)?$/u,
       /^\/api\/v1\/tutoring-sessions\/[^/]+(?:\/messages|\/current-work)?$/u,
+      /^\/api\/v1\/tutor-responses\/[^/]+\/events$/u,
     ].some((pattern) => pattern.test(path));
     const allowedPost =
       request.method() === "POST" &&

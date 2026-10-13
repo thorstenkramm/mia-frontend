@@ -69,6 +69,438 @@ async function noScroll(page: Page) {
   ).toBe(true);
 }
 
+// A browser-local controllable EventSource. No provider/network SSE and no
+// protected content in test names, traces, screenshots or console output.
+declare global {
+  interface Window {
+    __miaTutorSse?: {
+      send: (name: string, payload: unknown) => void;
+      fail: () => void;
+      closed: () => boolean;
+      count: () => number;
+    };
+  }
+}
+async function controllableStream(page: Page) {
+  await page.addInitScript(() => {
+    const sources: FixtureSource[] = [];
+    class FixtureSource extends EventTarget {
+      onerror: ((event: Event) => void) | null = null;
+      onmessage: ((event: MessageEvent) => void) | null = null;
+      closed = false;
+      constructor(url: string) {
+        super();
+        if (!url.startsWith("/api/v1/tutor-responses/"))
+          throw new Error("Unexpected stream endpoint.");
+        sources.push(this);
+      }
+      close() {
+        this.closed = true;
+      }
+    }
+    Object.defineProperty(window, "EventSource", { value: FixtureSource });
+    window.__miaTutorSse = {
+      send(name, payload) {
+        sources
+          .at(-1)
+          ?.dispatchEvent(
+            new MessageEvent(name, { data: JSON.stringify(payload) }),
+          );
+      },
+      fail() {
+        sources.at(-1)?.onerror?.(new Event("error"));
+      },
+      closed: () => sources.at(-1)?.closed ?? false,
+      count: () => sources.length,
+    };
+  });
+}
+async function emitStream(page: Page, name: string, payload: unknown) {
+  await page.evaluate(
+    ({ name, payload }) => window.__miaTutorSse?.send(name, payload),
+    { name, payload },
+  );
+}
+
+const currentAttempt = '[aria-labelledby="tutoring-current-work-response_gen"]';
+async function liveText(page: Page) {
+  return (await page.locator("[aria-live]").allTextContents()).join(" ");
+}
+
+test(
+  "tutoring initial generating snapshots stay silent; queued to generating speaks only once",
+  protectedJourney(async (page) => {
+    const control = await tutoringBackend(page);
+    const fixture = routeSecretFixture(page);
+    await controllableStream(page);
+    control.activeSession = true;
+    control.workGenerating = true;
+    control.workState = "generating";
+    await page.goto(workspace);
+    await ready(page, "Tutoring session");
+    await expect
+      .poll(() => page.evaluate(() => window.__miaTutorSse?.count()))
+      .toBe(1);
+    await emitStream(page, "snapshot", {
+      state: "generating",
+      content: `${fixture.teachingText} updated`,
+    });
+    await emitStream(page, "snapshot", {
+      state: "generating",
+      content: `${fixture.teachingText} updated`,
+    });
+    await expect(page.locator(currentAttempt)).toContainText("updated");
+    expect((await liveText(page)).includes("Response in progress")).toBe(false);
+    expect(control.streamReads === 0 && control.forbidden === 0).toBe(true);
+  }),
+);
+
+test(
+  "tutoring queued to generating transition speaks once without speaking deltas",
+  protectedJourney(async (page) => {
+    const control = await tutoringBackend(page);
+    await controllableStream(page);
+    control.activeSession = true;
+    control.workState = "queued";
+    control.workQueued = true;
+    await page.goto(workspace);
+    await ready(page, "Tutoring session");
+    await expect
+      .poll(() => page.evaluate(() => window.__miaTutorSse?.count()))
+      .toBe(1);
+    await emitStream(page, "snapshot", { state: "queued" });
+    await emitStream(page, "started", { state: "generating" });
+    await expect.poll(() => liveText(page)).toContain("Response in progress");
+    await emitStream(page, "delta", { text: "one" });
+    await emitStream(page, "snapshot", { state: "generating", content: "one" });
+    expect((await liveText(page)).match(/Response in progress/gu)?.length).toBe(
+      1,
+    );
+    expect(control.streamReads === 0 && control.forbidden === 0).toBe(true);
+  }),
+);
+
+test(
+  "tutoring reader away preserves earlier focus selection and scroll until unseen action is activated",
+  protectedJourney(async (page) => {
+    const control = await tutoringBackend(page);
+    const fixture = routeSecretFixture(page);
+    await controllableStream(page);
+    control.activeSession = true;
+    control.workState = "generating";
+    control.workGenerating = true;
+    control.longTurn = true;
+    await page.setViewportSize({ width: 950, height: 320 });
+    await page.goto(workspace);
+    await ready(page, "Tutoring session");
+    await expect
+      .poll(() => page.evaluate(() => window.__miaTutorSse?.count()))
+      .toBe(1);
+    await emitStream(page, "snapshot", {
+      state: "generating",
+      content: fixture.teachingText,
+    });
+    const previous = page.locator("main article").first().locator("p").first();
+    const node = await previous.elementHandle();
+    if (node === null) throw new Error("Earlier transcript node missing.");
+    await previous.evaluate((element) => {
+      if (!(element instanceof HTMLElement) || element.firstChild === null)
+        return;
+      element.tabIndex = -1;
+      element.focus({ preventScroll: true });
+      const range = document.createRange();
+      range.setStart(element.firstChild, 0);
+      range.setEnd(element.firstChild, 2);
+      const selection = window.getSelection();
+      selection?.removeAllRanges();
+      selection?.addRange(range);
+      window.scrollTo(0, 0);
+    });
+    await expect.poll(() => page.evaluate(() => window.scrollY)).toBe(0);
+    await emitStream(page, "delta", { text: " additional tutor content" });
+    await expect(
+      page.getByRole("button", { name: "New tutor content" }),
+    ).toBeVisible();
+    expect(
+      await node.evaluate((element) => {
+        const selection = window.getSelection();
+        return (
+          element.isConnected &&
+          document.activeElement === element &&
+          selection?.anchorNode === element.firstChild &&
+          selection.toString().length === 2 &&
+          window.scrollY === 0
+        );
+      }),
+    ).toBe(true);
+    await page.getByRole("button", { name: "New tutor content" }).click();
+    await expect(
+      page.getByRole("button", { name: "New tutor content" }),
+    ).toHaveCount(0);
+    expect(
+      await page
+        .locator("#tutoring-current-work-response_gen")
+        .evaluate((element) => document.activeElement === element),
+    ).toBe(true);
+    await noScroll(page);
+  }),
+);
+
+test(
+  "tutoring pause buffers transport loss without changing transcript or live region until Resume",
+  protectedJourney(async (page) => {
+    const control = await tutoringBackend(page);
+    const fixture = routeSecretFixture(page);
+    await controllableStream(page);
+    control.activeSession = true;
+    control.workState = "generating";
+    control.workGenerating = true;
+    await page.goto(workspace);
+    await ready(page, "Tutoring session");
+    await expect
+      .poll(() => page.evaluate(() => window.__miaTutorSse?.count()))
+      .toBe(1);
+    await emitStream(page, "snapshot", {
+      state: "generating",
+      content: fixture.teachingText,
+    });
+    await page
+      .getByRole("button", { name: "Pause transcript updates" })
+      .click();
+    const frozen = await page
+      .locator(currentAttempt)
+      .evaluate((element) => element.outerHTML);
+    await emitStream(page, "delta", { text: " buffered" });
+    await page.evaluate(() => window.__miaTutorSse?.fail());
+    await expect
+      .poll(() => page.evaluate(() => window.__miaTutorSse?.closed()))
+      .toBe(true);
+    await page.waitForTimeout(150);
+    expect(
+      await page
+        .locator(currentAttempt)
+        .evaluate((element, before) => element.outerHTML === before, frozen),
+    ).toBe(true);
+    expect((await liveText(page)).includes("Connection lost.")).toBe(false);
+    expect(await page.evaluate(() => window.__miaTutorSse?.count())).toBe(1);
+    await page
+      .getByRole("button", { name: "Resume transcript updates" })
+      .click();
+    await expect(page.locator(currentAttempt)).toContainText(
+      "Connection lost.",
+    );
+    await expect.poll(() => liveText(page)).toContain("Connection lost.");
+    expect(control.streamReads === 0 && control.forbidden === 0).toBe(true);
+  }),
+);
+
+test(
+  "tutoring terminal remains unconfirmed and silent until persisted targeted truth arrives",
+  protectedJourney(async (page) => {
+    const control = await tutoringBackend(page);
+    const fixture = routeSecretFixture(page);
+    await controllableStream(page);
+    control.activeSession = true;
+    control.workGenerating = true;
+    control.workState = "generating";
+    control.terminalContent = `**${fixture.teachingText}**`;
+    let release = () => {};
+    control.holdTerminal = new Promise<void>((resolve) => {
+      release = resolve;
+    });
+    await page.goto(workspace);
+    await ready(page, "Tutoring session");
+    await expect
+      .poll(() => page.evaluate(() => window.__miaTutorSse?.count()))
+      .toBe(1);
+    await emitStream(page, "snapshot", {
+      state: "generating",
+      content: fixture.teachingText,
+    });
+    await emitStream(page, "completed", { state: "completed" });
+    await expect
+      .poll(
+        () =>
+          control.responseQueries.filter((id) => id === "response_gen").length,
+      )
+      .toBe(1);
+    await expect(page.locator(currentAttempt)).toContainText(
+      "Checking saved response",
+    );
+    await expect(
+      page.locator("#tutoring-current-work-response_gen"),
+    ).toContainText("Response in progress");
+    expect((await liveText(page)).includes("Tutor response complete.")).toBe(
+      false,
+    );
+    expect(await page.evaluate(() => window.__miaTutorSse?.closed())).toBe(
+      true,
+    );
+    release();
+    await expect
+      .poll(() => liveText(page))
+      .toContain("Tutor response complete.");
+    await expect(
+      page.locator("#tutoring-current-work-response_gen"),
+    ).not.toContainText("Response in progress");
+    await emitStream(page, "completed", { state: "completed" });
+    expect(
+      (await liveText(page)).match(/Tutor response complete\./gu)?.length,
+    ).toBe(1);
+    expect(
+      control.responseQueries.filter((id) => id === "response_gen").length,
+    ).toBe(1);
+  }),
+);
+
+test(
+  "tutoring failed terminal read never claims completion",
+  protectedJourney(async (page) => {
+    const control = await tutoringBackend(page);
+    await controllableStream(page);
+    control.activeSession = true;
+    control.workGenerating = true;
+    control.workState = "generating";
+    await page.goto(workspace);
+    await ready(page, "Tutoring session");
+    await expect
+      .poll(() => page.evaluate(() => window.__miaTutorSse?.count()))
+      .toBe(1);
+    const reads = control.workReads;
+    await emitStream(page, "snapshot", { state: "generating" });
+    await emitStream(page, "completed", { state: "completed" });
+    await expect.poll(() => control.workReads).toBe(reads + 1);
+    await expect(page.locator(currentAttempt)).toContainText(
+      "Saved response unconfirmed.",
+    );
+    await expect(
+      page.locator("#tutoring-current-work-response_gen"),
+    ).toContainText("Response in progress");
+    expect((await liveText(page)).includes("Tutor response complete.")).toBe(
+      false,
+    );
+    expect(control.streamReads === 0 && control.forbidden === 0).toBe(true);
+  }),
+);
+
+test(
+  "tutoring persisted outcome overrides a differing SSE terminal claim",
+  protectedJourney(async (page) => {
+    const control = await tutoringBackend(page);
+    await controllableStream(page);
+    control.activeSession = true;
+    control.workGenerating = true;
+    control.workState = "generating";
+    control.terminalState = "failed";
+    control.terminalContent = "";
+    await page.goto(workspace);
+    await ready(page, "Tutoring session");
+    await expect
+      .poll(() => page.evaluate(() => window.__miaTutorSse?.count()))
+      .toBe(1);
+    await emitStream(page, "snapshot", { state: "generating" });
+    await emitStream(page, "completed", { state: "completed" });
+    await expect
+      .poll(
+        () =>
+          control.responseQueries.filter((id) => id === "response_gen").length,
+      )
+      .toBe(1);
+    await expect(
+      page.locator("#tutoring-current-work-response_gen"),
+    ).toContainText("Response failed");
+    await expect.poll(() => liveText(page)).toContain("Response failed");
+    expect((await liveText(page)).includes("Tutor response complete.")).toBe(
+      false,
+    );
+    expect(control.forbidden === 0).toBe(true);
+  }),
+);
+
+test(
+  "tutoring native stream reconciles its terminal response without reopening or speaking content",
+  protectedJourney(async (page) => {
+    const control = await tutoringBackend(page);
+    const fixture = routeSecretFixture(page);
+    control.activeSession = true;
+    control.workState = "generating";
+    control.workGenerating = true;
+    control.streamEvents = [
+      {
+        name: "snapshot",
+        data: { state: "generating", content: fixture.teachingText },
+      },
+      { name: "delta", data: { text: " in progress" } },
+      { name: "completed", data: { state: "completed" } },
+    ];
+    control.terminalContent = `**${fixture.teachingText}**`;
+    await page.goto(workspace);
+    await ready(page, "Tutoring session");
+    await expect
+      .poll(
+        () =>
+          control.responseQueries.filter((id) => id === "response_gen").length,
+      )
+      .toBe(1);
+    await expect
+      .poll(async () =>
+        page
+          .locator(
+            '[aria-labelledby="tutoring-current-work-response_gen"] strong',
+          )
+          .count(),
+      )
+      .toBe(1);
+    expect(control.streamReads === 1 && control.forbidden === 0).toBe(true);
+    await expect(
+      page.getByRole("button", { name: "View final response" }),
+    ).toBeVisible();
+    await page.getByRole("button", { name: "View final response" }).click();
+    expect(
+      await page
+        .locator("#tutoring-current-work-response_gen")
+        .evaluate((element) => document.activeElement === element),
+    ).toBe(true);
+    await noScroll(page);
+    const axe = await new AxeBuilder({ page })
+      .withTags(["wcag2a", "wcag2aa", "wcag21aa", "wcag22aa"])
+      .analyze();
+    expect(axe.violations.length === 0).toBe(true);
+  }),
+);
+
+test(
+  "tutoring transport loss closes the stream once and retains focus without automatic recovery",
+  protectedJourney(async (page) => {
+    const control = await tutoringBackend(page);
+    control.activeSession = true;
+    control.workState = "generating";
+    control.workGenerating = true;
+    await page.goto(workspace);
+    await ready(page, "Tutoring session");
+    await expect
+      .poll(
+        async () =>
+          (await page.locator("main").textContent())?.includes(
+            "Connection lost.",
+          ) === true,
+      )
+      .toBe(true);
+    expect(
+      await page
+        .locator("h1")
+        .evaluate((node) => document.activeElement === node),
+    ).toBe(true);
+    await page.waitForTimeout(200);
+    expect(
+      control.streamReads === 1 &&
+        control.responseQueries.every((id) => id === null) &&
+        control.forbidden === 0,
+    ).toBe(true);
+    await noScroll(page);
+  }),
+);
+
 test(
   "tutoring start chooses course and material once and reload resumes through recovery",
   protectedJourney(async (page) => {

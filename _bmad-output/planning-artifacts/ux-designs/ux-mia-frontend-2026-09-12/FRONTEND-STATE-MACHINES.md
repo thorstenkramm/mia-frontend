@@ -224,6 +224,16 @@ Only the last authoritative content remains, and recovery is a fresh authorized 
 IDs are ignored. Presentation pause buffers bounded current-epoch text without cancelling tutor work; Resume installs
 the latest safe accumulated value without replaying announcements.
 
+Story 6.3 no-reconnect slice (owner decision, 2026-10-12): response identity is bound to the stream URL path, and each
+snapshot atomically replaces the response data model; together these satisfy this slice's duplicate/identity fencing.
+The wrong-response, exact-duplicate-event-ID, and
+conflicting-duplicate fencing rules above that presume server event IDs apply fully when the reconnect slice exists
+(Story 6.4); event IDs are deferred until then. In Story 6.3, a transport error closes the connection and fences its
+epoch immediately, with no automatic or manual reconnect in this slice. All other enforceable event-order rules above
+remain in force.
+Owner ruling 2026-10-12: native EventSource cannot observe unknown named events, so they are never applied and are fenced
+by construction in this no-reconnect slice. Every observable protocol violation still fences the current epoch.
+
 ## 4. SSE Reconnect Bound and Online Restoration
 
 | State | Trigger | UI | Permitted action | Authoritative recovery |

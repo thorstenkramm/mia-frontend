@@ -206,6 +206,7 @@ export function tutoringWorkDocument(
     generating = null as unknown,
     queued = null as unknown,
     reconciled = null as unknown,
+    reconciledResponse = null as unknown,
     submit,
     queue,
   }: {
@@ -215,6 +216,7 @@ export function tutoringWorkDocument(
     generating?: unknown;
     queued?: unknown;
     reconciled?: unknown;
+    reconciledResponse?: unknown;
     submit?: boolean | undefined;
     queue?: boolean | undefined;
   } = {},
@@ -232,7 +234,7 @@ export function tutoringWorkDocument(
         queued_work: queued,
         latest_response: forbidden,
         reconciled_message: reconciled,
-        reconciled_response: forbidden,
+        reconciled_response: reconciledResponse,
         actions: {
           submit: submit ?? state === "idle",
           queue: queue ?? state === "generating",

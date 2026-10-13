@@ -24,6 +24,7 @@ import {
   getActiveTutoringSession,
   getTutoringSession,
   getTutoringSessionCurrentWork,
+  getTutoringResponseCurrentWork,
   isHiddenTutoringFailure,
   listSessionTurns,
   toTutoringSessionId,
@@ -38,6 +39,57 @@ const course = toCourseId("course_1");
 const session = toTutoringSessionId("session_1");
 if (session === null) throw new Error("Fixture session identity is invalid.");
 const signal = () => new AbortController().signal;
+
+it("Tutoring terminal reconciliation accepts only the targeted persisted response", async () => {
+  const seed = courseUnitFixture();
+  let selected = "response_gen";
+  let state = "completed";
+  let query = "";
+  server.use(
+    http.get(
+      "/api/v1/tutoring-sessions/session_1/current-work",
+      ({ request }) => {
+        query = new URL(request.url).searchParams.get("response_id") ?? "";
+        return json(
+          tutoringWorkDocument(seed.rawError, {
+            reconciledResponse: tutorResponseResource(
+              seed.rawError,
+              selected,
+              "session_1",
+              "message_gen",
+              state,
+              seed.teachingText,
+            ),
+          }),
+        );
+      },
+    ),
+  );
+  const result = await getTutoringResponseCurrentWork(
+    session,
+    "response_gen",
+    signal(),
+  );
+  expect(
+    query === "response_gen" &&
+      result.response.id === query &&
+      result.response.content === seed.teachingText,
+  ).toBe(true);
+  selected = "response_other";
+  expect(
+    await protocolRejected(
+      getTutoringResponseCurrentWork(session, "response_gen", signal()),
+    ),
+  ).toBe(true);
+  selected = "response_gen";
+  state = "generating";
+  expect(
+    await protocolRejected(
+      getTutoringResponseCurrentWork(session, "response_gen", signal()),
+    ),
+  ).toBe(true);
+  courseUnitCheckpoint("tutoring-targeted-terminal");
+});
 
 // A violated rejection assertion must not print a mistakenly returned protected
 // value. Keep failure identity observable through a boolean, never the value.

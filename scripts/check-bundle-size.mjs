@@ -3,7 +3,10 @@ import { gzipSync } from "node:zlib";
 import { join } from "node:path";
 
 const root = process.cwd();
-const limit = 250 * 1024;
+// Owner decision 2026-10-12 (Story 6.3): 258000 gzip bytes. About 66 KB of
+// non-active locale catalogs remain in the synchronous entry bundle; deferring
+// them without changing first paint for all seven locales is follow-up work.
+const limit = 258_000;
 const manifestPath = join(root, "dist/.vite/manifest.json");
 
 if (!existsSync(manifestPath)) {

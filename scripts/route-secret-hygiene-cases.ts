@@ -497,6 +497,48 @@ export const routeHygieneCases = [
   },
   // Story 6.1/6.2 tutoring session start/intent/workspace
   // (e2e/tutoringSessions.spec.ts).
+  // Story 6.3 keeps every stream reader/reconciliation test in the same
+  // deliberate-failure inventory; each owns a complete-journey checkpoint.
+  ...(
+    [
+      [
+        "tutoring-stream-initial",
+        "tutoring initial generating snapshots stay silent; queued to generating speaks only once",
+      ],
+      [
+        "tutoring-stream-transition",
+        "tutoring queued to generating transition speaks once without speaking deltas",
+      ],
+      [
+        "tutoring-stream-reader",
+        "tutoring reader away preserves earlier focus selection and scroll until unseen action is activated",
+      ],
+      [
+        "tutoring-stream-pause",
+        "tutoring pause buffers transport loss without changing transcript or live region until Resume",
+      ],
+      [
+        "tutoring-stream-terminal-pending",
+        "tutoring terminal remains unconfirmed and silent until persisted targeted truth arrives",
+      ],
+      [
+        "tutoring-stream-terminal-unconfirmed",
+        "tutoring failed terminal read never claims completion",
+      ],
+      [
+        "tutoring-stream-terminal-disagreement",
+        "tutoring persisted outcome overrides a differing SSE terminal claim",
+      ],
+      [
+        "tutoring-stream-terminal",
+        "tutoring native stream reconciles its terminal response without reopening or speaking content",
+      ],
+      [
+        "tutoring-stream-loss",
+        "tutoring transport loss closes the stream once and retains focus without automatic recovery",
+      ],
+    ] as const
+  ).map(([id, title]) => ({ id, title, checkpoints: ["complete"] })),
   {
     id: "tutoring-start",
     title:

@@ -11,6 +11,7 @@ import {
 } from "../../platform/api/tutoringSessions";
 import { useSessionActions } from "../../platform/data/EntryDataProvider";
 import { messages } from "../../platform/i18n/messages";
+import { ModelMarkdown } from "../../platform/markdown/ModelMarkdown";
 import { DiscardChangesDialog } from "../../platform/ui/DiscardChangesDialog";
 import { RouteDepartureLink } from "../../platform/ui/RouteDepartureLink";
 import {
@@ -27,6 +28,8 @@ import {
   tutoringResponseLabels,
 } from "./TutoringCurrentWork";
 import { TutoringEntryNotice } from "./TutoringEntryNotice";
+import { TutoringStreamControls } from "./TutoringStreamControls";
+import { useTutorStream } from "./useTutorStream";
 import type { TutoringLinks } from "./TutoringRouteProps";
 import type { TutoringRouteProps } from "./TutoringRouteProps";
 import { useStudentMessageSend } from "./useStudentMessageSend";
@@ -114,6 +117,10 @@ function Transcript({
   // The draft lives in page memory only, guarded by the send owner's
   // unsaved-input guard; nothing enters storage, URL text or history state.
   const [draft, setDraft] = useState("");
+  const [unseen, setUnseen] = useState(false);
+  const atEnd = useRef(true);
+  const previousScroll = useRef(0);
+  const previousContent = useRef("");
   const inputRef = useRef<HTMLTextAreaElement>(null);
   const collection = useTutoringCollection(unavailable);
   const send = useStudentMessageSend({
@@ -132,6 +139,38 @@ function Transcript({
     hasContent: draft !== "",
   });
   const { status, feedback } = send;
+  const stream = useTutorStream({
+    session: session.id,
+    work: workKnown && !send.finished ? work : null,
+    installWork: (value) => {
+      setWork(value);
+      setWorkKnown(true);
+    },
+    unavailable,
+  });
+  useLayoutEffect(() => {
+    const check = () => {
+      previousScroll.current = window.scrollY;
+      atEnd.current =
+        document.documentElement.scrollHeight -
+          (window.scrollY + window.innerHeight) <
+        24;
+    };
+    check();
+    window.addEventListener("scroll", check, { passive: true });
+    return () => window.removeEventListener("scroll", check);
+  }, []);
+  useLayoutEffect(() => {
+    const value = stream.view.content + (stream.persisted?.content ?? "");
+    if (value === previousContent.current) return;
+    previousContent.current = value;
+    if (atEnd.current && !stream.view.paused)
+      window.scrollTo(0, document.documentElement.scrollHeight);
+    else {
+      window.scrollTo(0, previousScroll.current);
+      setUnseen(true);
+    }
+  }, [stream.view.content, stream.view.paused, stream.persisted]);
   useLayoutEffect(() => {
     if (feedback !== null) status.current?.focus();
   }, [feedback, status]);
@@ -159,6 +198,7 @@ function Transcript({
     if (work.queued !== null) regionIds.add(work.queued.response.id);
   }
   for (const message of sent) regionIds.add(message.response.id);
+  if (stream.persisted !== null) regionIds.add(stream.persisted.id);
   const turns = page.items.filter((turn) => !regionIds.has(turn.id));
   return (
     <>
@@ -201,9 +241,14 @@ function Transcript({
                       </span>
                     )}
                   </p>
-                  <p className="mt-1 text-sm/6 whitespace-pre-line wrap-anywhere text-gray-700">
-                    {turn.responseContent}
-                  </p>
+                  <ModelMarkdown
+                    text={turn.responseContent}
+                    context={intl.formatMessage(messages.tutoringTurnTutor)}
+                    partial={
+                      turn.responseState === "queued" ||
+                      turn.responseState === "generating"
+                    }
+                  />
                 </article>
               </li>
             );
@@ -215,7 +260,24 @@ function Transcript({
         busy={collection.state.kind === "Loading"}
         load={load}
       />
-      <TutoringCurrentWork work={workKnown ? work : null} sent={sent} />
+      <TutoringStreamControls
+        view={stream.view}
+        pause={stream.pause}
+        resume={stream.resume}
+        unseen={unseen}
+        clearUnseen={() => setUnseen(false)}
+        finalChanged={
+          stream.persisted !== null &&
+          stream.view.content !== stream.persisted.content
+        }
+      />
+      <TutoringCurrentWork
+        work={workKnown ? work : null}
+        sent={sent}
+        stream={stream.view}
+        persisted={stream.persisted}
+        pending={stream.pending}
+      />
       <h2
         ref={status}
         tabIndex={-1}

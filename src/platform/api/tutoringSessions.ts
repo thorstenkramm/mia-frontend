@@ -358,7 +358,7 @@ export async function createStudentMessage(
 // reconciles an ambiguous send (a null reconciled message is the authoritative
 // not-committed answer; a malformed parameter is a 422 protocol rejection,
 // never "not committed"). `latest_response`, `reconciled_response` and the
-// stop/retry/reconnect/finish action fields are stripped for 6.3–6.5.
+// stop/retry/reconnect/finish action fields are stripped for 6.4–6.5.
 const workDocument = z.object({
   errors: z.never().optional(),
   data: z.object({
@@ -377,6 +377,7 @@ const workDocument = z.object({
       generating_response: tutorResponseResource.nullable(),
       queued_work: studentMessageResource.nullable(),
       reconciled_message: studentMessageResource.nullable(),
+      reconciled_response: tutorResponseResource.nullable(),
       actions: z.object({
         submit: z.boolean(),
         queue: z.boolean(),
@@ -398,16 +399,22 @@ export type TutoringWork = {
     readonly queue: boolean;
   };
   readonly reconciledMessage: StudentMessageProjection | null;
+  readonly reconciledResponse?: TutorResponseProjection | null;
 };
 export async function getTutoringSessionCurrentWork(
   session: TutoringSessionId,
-  reconcile: { readonly messageRequestId?: string } = {},
+  reconcile: {
+    readonly messageRequestId?: string;
+    readonly responseId?: string;
+  } = {},
   signal: AbortSignal,
 ): Promise<TutoringWork> {
-  const query =
-    reconcile.messageRequestId === undefined
-      ? ""
-      : `?message_request_id=${encodeURIComponent(reconcile.messageRequestId)}`;
+  const params = new URLSearchParams();
+  if (reconcile.messageRequestId !== undefined)
+    params.set("message_request_id", reconcile.messageRequestId);
+  if (reconcile.responseId !== undefined)
+    params.set("response_id", reconcile.responseId);
+  const query = params.size === 0 ? "" : `?${params.toString()}`;
   const { data } = await readJsonApi({
     path: `/api/v1/tutoring-sessions/${encodeURIComponent(session)}/current-work${query}`,
     schema: workDocument,
@@ -426,6 +433,16 @@ export async function getTutoringSessionCurrentWork(
     a.reconciled_message === null
       ? null
       : toMessageProjection(session, a.reconciled_message);
+  const reconciledResponse =
+    reconcile.responseId === undefined || a.reconciled_response === null
+      ? null
+      : toResponseProjection(session, a.reconciled_response);
+  if (
+    reconcile.responseId !== undefined &&
+    reconciledResponse !== null &&
+    reconciledResponse.id !== reconcile.responseId
+  )
+    throw new ApiProtocolError();
   // The state enum is atomic with the one-generating/one-queued invariants; a
   // contradiction is a protocol failure, never a guessed presentation.
   const consistent =
@@ -452,7 +469,36 @@ export async function getTutoringSessionCurrentWork(
     queued,
     actions: { submit: a.actions.submit, queue: a.actions.queue },
     reconciledMessage,
+    ...(reconcile.responseId === undefined ? {} : { reconciledResponse }),
   };
+}
+
+// Terminal event content is unconfirmed until this targeted owner-only read
+// returns the persisted response. The current-work state comes from the same
+// atomic snapshot and remains the only source of action/queue truth.
+export async function getTutoringResponseCurrentWork(
+  session: TutoringSessionId,
+  responseId: string,
+  signal: AbortSignal,
+): Promise<{
+  readonly work: TutoringWork;
+  readonly response: TutorResponseProjection;
+}> {
+  const work = await getTutoringSessionCurrentWork(
+    session,
+    { responseId },
+    signal,
+  );
+  const response = work.reconciledResponse;
+  if (
+    response === null ||
+    response === undefined ||
+    (response.state !== "completed" &&
+      response.state !== "interrupted" &&
+      response.state !== "failed")
+  )
+    throw new ApiProtocolError();
+  return { work, response };
 }
 
 // Existence hiding for tutoring reads: unknown, out-of-scope and throttled

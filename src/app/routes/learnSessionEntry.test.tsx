@@ -10,7 +10,15 @@ import {
 } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
 import { http, HttpResponse } from "msw";
-import { afterAll, afterEach, beforeAll, beforeEach, expect, it } from "vitest";
+import {
+  afterAll,
+  afterEach,
+  beforeAll,
+  beforeEach,
+  expect,
+  it,
+  vi,
+} from "vitest";
 import { server } from "../../../test/server";
 import {
   learnCapabilities,
@@ -51,7 +59,10 @@ afterAll(() => configure({ getElementError: originalError }));
 beforeEach(() => {
   releaseHistory = holdGuardedHistoryTraversals(window);
 });
-afterEach(() => releaseHistory());
+afterEach(() => {
+  releaseHistory();
+  vi.unstubAllGlobals();
+});
 const json = (body: unknown, status = 200) =>
   new HttpResponse(JSON.stringify(body), {
     status,
@@ -1196,6 +1207,22 @@ it("Tutoring workspace renders persisted turns as escaped text with neutral resp
 
 it("Tutoring workspace sends one message and renders the queued work from the follow-up read", async () => {
   const { control, seed } = backend();
+  // jsdom has no native EventSource. The accepted queued response now opens a
+  // stream; hold this non-streaming send assertion on a connected, idle socket
+  // instead of inventing transport loss that overwrites its queued notice.
+  vi.stubGlobal(
+    "EventSource",
+    class extends EventTarget {
+      onmessage: ((event: MessageEvent) => void) | null = null;
+      onerror: ((event: Event) => void) | null = null;
+      constructor(url: string) {
+        super();
+        if (!url.startsWith("/api/v1/tutor-responses/"))
+          throw new Error("Unexpected tutoring stream endpoint.");
+      }
+      close() {}
+    },
+  );
   mount("/learn/sessions/session_1");
   await ready("Tutoring session");
   await screen.findByRole("button", { name: "Send" });
