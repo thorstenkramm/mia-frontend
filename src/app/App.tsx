@@ -1,4 +1,10 @@
-import { lazy, Suspense, useEffect, useSyncExternalStore } from "react";
+import {
+  lazy,
+  Suspense,
+  useEffect,
+  useLayoutEffect,
+  useSyncExternalStore,
+} from "react";
 import { useIntl } from "react-intl";
 import {
   BrowserRouter,
@@ -47,6 +53,7 @@ import { RouteRecoveryBoundary } from "./routes/RouteRecoveryBoundary";
 import { RouteDepartureLink } from "../platform/ui/RouteDepartureLink";
 import { RouteRecoveryPanel } from "../platform/ui/RouteRecoveryPanel";
 import { LogoutRecovery } from "../features/auth/LogoutRecovery";
+import { tutoringRetention } from "../features/tutoring/tutoringRetention";
 
 type AppProps = {
   initialTextSize: TextSize;
@@ -97,6 +104,7 @@ export function App({
   invitationLink,
   queryClient,
 }: AppProps) {
+  useEffect(() => () => tutoringRetention.destroy(), []);
   return (
     <EntryDataProvider
       // A link captured at bootstrap shows its interstitial from stage discovery
@@ -242,6 +250,11 @@ function CanonicalEntry({
     joinedCourseIds: access?.joinedCourseIds ?? [],
   };
   const authenticated = authenticatedRoute(location.pathname, routeAccess);
+  // Story 6.4: mask the feature-owned page memory before the protected route
+  // unmounts on lifecycle cover; destroy it on route/account/scope departure.
+  useLayoutEffect(() => {
+    tutoringRetention.observe(state, location.pathname, access);
+  }, [state, location.pathname, access]);
   const key = routeKey(
     state,
     location.pathname,

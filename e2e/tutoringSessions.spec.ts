@@ -123,6 +123,532 @@ async function emitStream(page: Page, name: string, payload: unknown) {
 }
 
 const currentAttempt = '[aria-labelledby="tutoring-current-work-response_gen"]';
+test(
+  "tutoring lifecycle return keeps a page-local draft and reconnects only after explicit Try now",
+  protectedJourney(async (page) => {
+    const control = await tutoringBackend(page);
+    const fixture = routeSecretFixture(page);
+    await controllableStream(page);
+    control.activeSession = true;
+    control.workState = "generating";
+    control.workGenerating = true;
+    await page.goto(workspace);
+    await ready(page, "Tutoring session");
+    await expect
+      .poll(() => page.evaluate(() => window.__miaTutorSse?.count()))
+      .toBe(1);
+    await emitStream(page, "snapshot", {
+      state: "generating",
+      content: fixture.teachingText,
+    });
+    await page
+      .getByLabel("Your message to the tutor")
+      .fill("synthetic unsent draft");
+    const reads = control.workReads;
+    await page.evaluate(() => window.dispatchEvent(new Event("focus")));
+    await expect(
+      page.getByRole("button", { name: "Refresh", exact: true }),
+    ).toBeVisible();
+    expect(
+      control.workReads === reads &&
+        (await page.evaluate(() => window.__miaTutorSse?.closed())),
+    ).toBe(true);
+    await routeHygieneCheckpoint(page, "tutoring-lifecycle");
+    await page.getByRole("button", { name: "Refresh", exact: true }).click();
+    await ready(page, "Tutoring session");
+    expect(
+      (await page.getByLabel("Your message to the tutor").inputValue()) ===
+        "synthetic unsent draft",
+    ).toBe(true);
+    expect(
+      control.workReads > reads &&
+        (await page.evaluate(() => window.__miaTutorSse?.count())) === 1,
+    ).toBe(true);
+    await page.getByRole("button", { name: "Try now" }).click();
+    await expect
+      .poll(() => page.evaluate(() => window.__miaTutorSse?.count()))
+      .toBe(2);
+    await page.getByRole("button", { name: "Stop waiting" }).click();
+    await expect
+      .poll(() => page.evaluate(() => window.__miaTutorSse?.closed()))
+      .toBe(true);
+    await page.getByRole("button", { name: "Resume retries" }).click();
+    expect(await page.evaluate(() => window.__miaTutorSse?.count())).toBe(2);
+    await page.getByRole("button", { name: "Try now" }).click();
+    await expect
+      .poll(() => page.evaluate(() => window.__miaTutorSse?.count()))
+      .toBe(3);
+    await emitStream(page, "snapshot", {
+      state: "generating",
+      content: "fresh",
+    });
+    await expect(page.locator(currentAttempt)).toContainText("fresh");
+    expect(
+      (await page.locator(currentAttempt).textContent())?.includes(
+        fixture.teachingText,
+      ),
+    ).toBe(false);
+    await minimized(page);
+  }),
+);
+test(
+  "tutoring addressed denial destroys retained draft while a failed check keeps it covered",
+  protectedJourney(async (page) => {
+    const control = await tutoringBackend(page);
+    const fixture = routeSecretFixture(page);
+    await controllableStream(page);
+    control.activeSession = true;
+    await page.goto(workspace);
+    await ready(page, "Tutoring session");
+    await page
+      .getByLabel("Your message to the tutor")
+      .fill(fixture.teachingText);
+    await page.evaluate(() => window.dispatchEvent(new Event("focus")));
+    await expect(
+      page.getByRole("button", { name: "Refresh", exact: true }),
+    ).toBeVisible();
+    control.denySession = 503;
+    await page.getByRole("button", { name: "Refresh", exact: true }).click();
+    await expect(
+      page.getByText(
+        "The tutoring check could not be completed. This is not an empty result.",
+      ),
+    ).toBeVisible();
+    control.denySession = 0;
+    await page.getByRole("button", { name: "Check again" }).click();
+    await ready(page, "Tutoring session");
+    expect(
+      (await page.getByLabel("Your message to the tutor").inputValue()) ===
+        fixture.teachingText,
+    ).toBe(true);
+    await routeHygieneCheckpoint(page, "tutoring-resource-recoverable");
+    await page.evaluate(() => window.dispatchEvent(new Event("focus")));
+    await expect(
+      page.getByRole("button", { name: "Refresh", exact: true }),
+    ).toBeVisible();
+    control.denySession = 404;
+    const workReads = control.workReads;
+    await page.getByRole("button", { name: "Refresh", exact: true }).click();
+    await ready(page, "Tutoring access unavailable");
+    expect(
+      control.workReads === workReads &&
+        !(await page.locator("main").textContent())?.includes(
+          fixture.teachingText,
+        ),
+    ).toBe(true);
+    await routeHygieneCheckpoint(page, "tutoring-resource-denied");
+  }),
+);
+test(
+  "tutoring Stop accepts only definitive interrupted truth and keeps the targeted article",
+  protectedJourney(async (page) => {
+    const control = await tutoringBackend(page);
+    await controllableStream(page);
+    control.activeSession = true;
+    control.workState = "generating";
+    control.workGenerating = true;
+    control.workQueued = true;
+    control.workState = "generating_and_queued";
+    await page.goto(workspace);
+    await ready(page, "Tutoring session");
+    await expect(
+      page.getByRole("button", {
+        name: "Stop response · Response queued · Attempt 1",
+      }),
+    ).toBeVisible();
+    await page
+      .getByRole("button", {
+        name: "Stop response · Response in progress · Attempt 1",
+      })
+      .click();
+    await expect.poll(() => control.stopPosts).toBe(1);
+    await expect(page.locator(currentAttempt)).toContainText(
+      "Response interrupted",
+    );
+    expect(control.forbidden).toBe(0);
+    await routeHygieneCheckpoint(page, "tutoring-stop");
+  }),
+);
+
+test(
+  "tutoring Stop conflict requires an explicit fresh reconciliation",
+  protectedJourney(async (page) => {
+    const control = await tutoringBackend(page);
+    await controllableStream(page);
+    control.activeSession = true;
+    control.workState = "generating";
+    control.workGenerating = true;
+    control.stopOutcome = "conflict";
+    await page.goto(workspace);
+    await ready(page, "Tutoring session");
+    await page.getByRole("button", { name: "Stop response" }).click();
+    await expect(
+      page
+        .locator("main p")
+        .getByText("The response action was not accepted. Check current work."),
+    ).toBeVisible();
+    expect(control.stopPosts).toBe(1);
+    control.workGenerating = false;
+    control.workState = "idle";
+    control.terminalContent = routeSecretFixture(page).teachingText;
+    await page
+      .getByRole("button", { name: "Refresh", exact: true })
+      .first()
+      .click();
+    await expect
+      .poll(async () =>
+        (await page.locator(currentAttempt).textContent())?.includes(
+          routeSecretFixture(page).teachingText,
+        ),
+      )
+      .toBe(true);
+    await expect(page.locator(currentAttempt)).not.toContainText(
+      "Response in progress",
+    );
+    expect(control.stopPosts).toBe(1);
+    await routeHygieneCheckpoint(page, "tutoring-stop-conflict");
+  }),
+);
+
+test(
+  "tutoring lost Stop stays unknown until targeted current work proves outcome",
+  protectedJourney(async (page) => {
+    const control = await tutoringBackend(page);
+    await controllableStream(page);
+    control.activeSession = true;
+    control.workState = "generating";
+    control.workGenerating = true;
+    control.stopOutcome = "lose";
+    await page.goto(workspace);
+    await ready(page, "Tutoring session");
+    await page.getByRole("button", { name: "Stop response" }).click();
+    await expect(
+      page
+        .locator("main p")
+        .getByText(
+          "Stop outcome unknown. Check the saved response before acting again.",
+        ),
+    ).toBeVisible();
+    expect(control.stopPosts).toBe(1);
+    await page.evaluate(() => window.dispatchEvent(new Event("focus")));
+    await expect(
+      page.getByRole("button", { name: "Refresh", exact: true }),
+    ).toBeVisible();
+    await page.getByRole("button", { name: "Refresh", exact: true }).click();
+    await ready(page, "Tutoring session");
+    await expect(
+      page
+        .locator("main p")
+        .getByText(
+          "Stop outcome unknown. Check the saved response before acting again.",
+        ),
+    ).toBeVisible();
+    expect(control.stopPosts).toBe(1);
+    await page
+      .getByRole("button", { name: "Refresh", exact: true })
+      .first()
+      .click();
+    await expect(page.locator(currentAttempt)).toContainText(
+      "Response interrupted",
+    );
+    expect(control.stopPosts).toBe(1);
+    await routeHygieneCheckpoint(page, "tutoring-stop-loss");
+  }),
+);
+
+for (const outcome of ["created", "replay", "conflict", "lose"] as const) {
+  test(
+    `tutoring explicit linked retry ${outcome} preserves the earlier attempt without automatic POST replay`,
+    protectedJourney(async (page) => {
+      const control = await tutoringBackend(page);
+      await controllableStream(page);
+      control.activeSession = true;
+      control.stopped = true;
+      control.retryOutcome = outcome;
+      if (outcome === "created") control.failRetryFollowUp = true;
+      if (outcome === "replay") control.retryTerminalBeforeFollowUp = true;
+      await page.goto(workspace);
+      await ready(page, "Tutoring session");
+      await page
+        .getByRole("button", { name: "Retry exact attempt", exact: true })
+        .click();
+      await expect.poll(() => control.retryPosts).toBe(1);
+      if (outcome === "created" || outcome === "replay") {
+        await expect(
+          page.locator(
+            '[aria-labelledby="tutoring-current-work-response_retry"]',
+          ),
+        ).toBeVisible();
+        await expect(page.locator(currentAttempt)).toContainText(
+          "Response interrupted",
+        );
+        if (outcome === "created") {
+          await expect(
+            page
+              .locator("main p")
+              .getByText(
+                "The tutoring check could not be completed. This is not an empty result.",
+              ),
+          ).toBeVisible();
+          await expect(
+            page.getByRole("button", { name: "Send", exact: true }),
+          ).toBeDisabled();
+          await page
+            .getByRole("button", { name: "Refresh", exact: true })
+            .first()
+            .click();
+          await expect(
+            page
+              .locator("main p")
+              .getByText(
+                "The tutoring check could not be completed. This is not an empty result.",
+              ),
+          ).toHaveCount(0);
+          expect(control.retryPosts).toBe(1);
+        }
+        if (outcome === "replay") {
+          await expect(
+            page.locator(
+              '[aria-labelledby="tutoring-current-work-response_retry"]',
+            ),
+          ).not.toContainText("Response queued");
+          expect(
+            (
+              await page
+                .locator(
+                  '[aria-labelledby="tutoring-current-work-response_retry"]',
+                )
+                .textContent()
+            )?.includes(routeSecretFixture(page).teachingText),
+          ).toBe(true);
+        }
+      } else if (outcome === "conflict") {
+        await expect(
+          page
+            .locator("main p")
+            .getByText(
+              "The response action was not accepted. Check current work.",
+            ),
+        ).toBeVisible();
+      } else {
+        await expect(
+          page
+            .locator("main p")
+            .getByText(
+              "Retry outcome unknown. Check current work; only an explicit exact re-retry sends again.",
+            ),
+        ).toBeVisible();
+        const unknownPosts = control.retryPosts;
+        await page.evaluate(() => window.dispatchEvent(new Event("focus")));
+        await expect(
+          page.getByRole("button", { name: "Refresh", exact: true }),
+        ).toBeVisible();
+        expect(control.retryPosts).toBe(unknownPosts);
+        await page
+          .getByRole("button", { name: "Refresh", exact: true })
+          .click();
+        await ready(page, "Tutoring session");
+        await expect(
+          page
+            .locator("main p")
+            .getByText(
+              "Retry outcome unknown. Check current work; only an explicit exact re-retry sends again.",
+            ),
+        ).toBeVisible();
+        await page
+          .getByRole("button", { name: "Refresh", exact: true })
+          .first()
+          .click();
+        await expect(
+          page
+            .locator("main p")
+            .getByText(
+              "Retry outcome unknown. Check current work; only an explicit exact re-retry sends again.",
+            ),
+        ).toBeVisible();
+        expect(control.retryPosts).toBe(1);
+        control.retryOutcome = "replay";
+        await page
+          .getByRole("button", { name: "Retry exact attempt", exact: true })
+          .click();
+        await expect.poll(() => control.retryPosts).toBe(2);
+        expect(
+          control.retryRequestIds[0] === control.retryRequestIds[1] &&
+            requestIdPattern.test(control.retryRequestIds[0] ?? ""),
+        ).toBe(true);
+      }
+      expect(control.forbidden).toBe(0);
+      await routeHygieneCheckpoint(page, `tutoring-retry-${outcome}`);
+    }),
+  );
+}
+test(
+  "tutoring two tabs reconcile stale Stop without retrying the destructive request",
+  protectedJourney(async (page) => {
+    const first = await tutoringBackend(page);
+    await controllableStream(page);
+    first.activeSession = true;
+    first.workState = "generating";
+    first.workGenerating = true;
+    const secondPage = await page.context().newPage();
+    try {
+      const second = await tutoringBackend(secondPage);
+      await controllableStream(secondPage);
+      second.activeSession = true;
+      second.workState = "generating";
+      second.workGenerating = true;
+      await page.goto(workspace);
+      await secondPage.goto(workspace);
+      await ready(page, "Tutoring session");
+      await ready(secondPage, "Tutoring session");
+      await page.getByRole("button", { name: "Stop response" }).click();
+      await expect(page.locator(currentAttempt)).toContainText(
+        "Response interrupted",
+      );
+      second.stopOutcome = "conflict";
+      await secondPage.getByRole("button", { name: "Stop response" }).click();
+      await expect(
+        secondPage
+          .locator("main p")
+          .getByText(
+            "The response action was not accepted. Check current work.",
+          ),
+      ).toBeVisible();
+      second.stopped = true;
+      second.workGenerating = false;
+      second.workState = "idle";
+      await secondPage
+        .getByRole("button", { name: "Refresh", exact: true })
+        .first()
+        .click();
+      await expect(secondPage.locator(currentAttempt)).toContainText(
+        "Response interrupted",
+      );
+      expect(
+        first.stopPosts === 1 &&
+          second.stopPosts === 1 &&
+          second.forbidden === 0,
+      ).toBe(true);
+      // Both tabs now see retry eligibility. The first tab receives a linked
+      // response; the second receives the server's stale-work conflict. No
+      // client replays either request or infers which tab owns the outcome.
+      await page.getByRole("button", { name: "Retry exact attempt" }).click();
+      await expect.poll(() => first.retryPosts).toBe(1);
+      await expect(
+        page.locator(
+          '[aria-labelledby="tutoring-current-work-response_retry"]',
+        ),
+      ).toBeVisible();
+      second.retryOutcome = "conflict";
+      await secondPage
+        .getByRole("button", { name: "Retry exact attempt" })
+        .click();
+      await expect(
+        secondPage
+          .locator("main p")
+          .getByText(
+            "The response action was not accepted. Check current work.",
+          ),
+      ).toBeVisible();
+      second.retryCommitted = true;
+      await secondPage
+        .getByRole("button", { name: "Refresh", exact: true })
+        .first()
+        .click();
+      await expect(
+        secondPage.locator(
+          '[aria-labelledby="tutoring-current-work-response_retry"]',
+        ),
+      ).toBeVisible();
+      expect(
+        first.retryPosts === 1 &&
+          second.retryPosts === 1 &&
+          second.forbidden === 0,
+      ).toBe(true);
+    } finally {
+      await secondPage.close();
+    }
+    await routeHygieneCheckpoint(page, "tutoring-two-tab");
+  }),
+);
+test(
+  "tutoring queued Stop fences an older terminal work read without losing its targeted article",
+  protectedJourney(async (page) => {
+    const control = await tutoringBackend(page);
+    const fixture = routeSecretFixture(page);
+    await controllableStream(page);
+    control.activeSession = true;
+    control.workState = "generating_and_queued";
+    control.workGenerating = true;
+    control.workQueued = true;
+    const terminalContent = `${fixture.teachingText} persisted terminal`;
+    control.terminalContent = terminalContent;
+    control.snapshotTerminalBeforeHold = true;
+    let release = () => {};
+    control.holdTerminal = new Promise<void>((resolve) => {
+      release = resolve;
+    });
+    try {
+      await page.goto(workspace);
+      await ready(page, "Tutoring session");
+      await expect
+        .poll(() => page.evaluate(() => window.__miaTutorSse?.count()))
+        .toBe(1);
+      await emitStream(page, "snapshot", {
+        state: "generating",
+        content: fixture.teachingText,
+      });
+      await emitStream(page, "completed", { state: "completed" });
+      await expect
+        .poll(() => control.responseQueries.includes("response_gen"))
+        .toBe(true);
+      await page
+        .getByRole("button", {
+          name: "Stop response · Response queued · Attempt 1",
+        })
+        .click();
+      await expect(
+        page.locator('[aria-labelledby="tutoring-current-work-response_q"]'),
+      ).toContainText("Response interrupted");
+      expect(control.stopPosts).toBe(1);
+      expect(
+        (
+          await page
+            .locator('[aria-labelledby="tutoring-current-work-response_gen"]')
+            .allTextContents()
+        ).some((text) => text.includes(terminalContent)),
+      ).toBe(false);
+      release();
+      await expect.poll(() => control.workReads).toBeGreaterThanOrEqual(2);
+      await expect
+        .poll(
+          async () =>
+            (
+              await page
+                .locator(
+                  '[aria-labelledby="tutoring-current-work-response_gen"]',
+                )
+                .textContent()
+            )?.includes(terminalContent) === true,
+        )
+        .toBe(true);
+      await expect(
+        page.locator('[aria-labelledby="tutoring-current-work-response_gen"]'),
+      ).not.toContainText("Response in progress");
+      await expect(
+        page.locator('[aria-labelledby="tutoring-current-work-response_q"]'),
+      ).toContainText("Response interrupted");
+      await expect(
+        page.getByRole("button", {
+          name: "Stop response · Response queued · Attempt 1",
+        }),
+      ).toHaveCount(0);
+      await routeHygieneCheckpoint(page, "tutoring-stop-terminal-race");
+    } finally {
+      release();
+    }
+  }),
+);
 async function liveText(page: Page) {
   return (await page.locator("[aria-live]").allTextContents()).join(" ");
 }
@@ -286,10 +812,10 @@ test(
     await page
       .getByRole("button", { name: "Resume transcript updates" })
       .click();
-    await expect(page.locator(currentAttempt)).toContainText(
-      "Connection lost.",
-    );
-    await expect.poll(() => liveText(page)).toContain("Connection lost.");
+    await expect(
+      page.getByRole("button", { name: "Refresh", exact: true }),
+    ).toBeVisible();
+    await expect(page.locator(currentAttempt)).toHaveCount(0);
     expect(control.streamReads === 0 && control.forbidden === 0).toBe(true);
   }),
 );
@@ -478,19 +1004,10 @@ test(
     control.workGenerating = true;
     await page.goto(workspace);
     await ready(page, "Tutoring session");
-    await expect
-      .poll(
-        async () =>
-          (await page.locator("main").textContent())?.includes(
-            "Connection lost.",
-          ) === true,
-      )
-      .toBe(true);
-    expect(
-      await page
-        .locator("h1")
-        .evaluate((node) => document.activeElement === node),
-    ).toBe(true);
+    await expect(
+      page.getByRole("button", { name: "Refresh", exact: true }),
+    ).toBeVisible();
+    await expect(page.locator(currentAttempt)).toHaveCount(0);
     await page.waitForTimeout(200);
     expect(
       control.streamReads === 1 &&
@@ -504,6 +1021,7 @@ test(
 test(
   "tutoring start chooses course and material once and reload resumes through recovery",
   protectedJourney(async (page) => {
+    await controllableStream(page);
     const control = await tutoringBackend(page);
     const fixture = routeSecretFixture(page);
     await page.goto(start);
@@ -631,6 +1149,7 @@ test(
 test(
   "tutoring reconciled unknown retries only the exact retained request identity",
   protectedJourney(async (page) => {
+    await controllableStream(page);
     const control = await tutoringBackend(page);
     control.outcome = "lose";
     await page.goto(intent);
@@ -739,6 +1258,7 @@ test(
 test(
   "tutoring workspace queues one message during an answer and keeps the draft when the queue is full",
   protectedJourney(async (page) => {
+    await controllableStream(page);
     const control = await tutoringBackend(page);
     const fixture = routeSecretFixture(page);
     control.workState = "generating";
@@ -780,6 +1300,7 @@ test(
 test(
   "tutoring lost workspace send reconciles through the current work read and retries only the exact attempt",
   protectedJourney(async (page) => {
+    await controllableStream(page);
     const control = await tutoringBackend(page);
     const fixture = routeSecretFixture(page);
     control.sendOutcome = "lose";
@@ -884,6 +1405,7 @@ test(
   protectedJourney(async (page) => {
     test.setTimeout(180_000);
     const control = await tutoringBackend(page);
+    await controllableStream(page);
     control.sessionState = "active";
     await page.setViewportSize({ width: 320, height: 900 });
     for (const locale of [
@@ -904,6 +1426,9 @@ test(
           [locale, size],
         );
         for (const route of [start, recovery, intent, workspace]) {
+          control.activeSession = route === workspace;
+          control.workState = route === workspace ? "generating" : "idle";
+          control.workGenerating = route === workspace;
           await page.goto(route);
           await expect
             .poll(async () => (await page.locator("main h1").count()) === 1)
@@ -923,13 +1448,18 @@ test(
           ).toBe(true);
           await noScroll(page);
           await minimized(page);
+          if (route === workspace) {
+            await expect
+              .poll(() => page.locator("main button").count())
+              .toBeGreaterThan(2);
+          }
         }
       }
     }
     expect(control.forbidden === 0 && control.starts === 0).toBe(true);
     // The workspace transcript read settles before the content checkpoint.
     await expect
-      .poll(async () => (await page.locator("main article").count()) === 1)
+      .poll(async () => (await page.locator("main article").count()) >= 1)
       .toBe(true);
     await routeHygieneCheckpoint(page, "tutoring-content");
   }),
@@ -939,7 +1469,8 @@ test("tutoring surfaces preserve keyboard structure and pass axe at actual 200 p
   test.setTimeout(180_000);
   for (const size of ["standard", "large", "extra-large"]) {
     await atBrowserZoom(2, async (page) => {
-      await tutoringBackend(page);
+      const control = await tutoringBackend(page);
+      await controllableStream(page);
       await page.addInitScript(
         (textSize) => localStorage.setItem("mia.interface.text-size", textSize),
         size,
@@ -961,10 +1492,18 @@ test("tutoring surfaces preserve keyboard structure and pass axe at actual 200 p
         expect(axe.violations.length === 0).toBe(true);
       }
       // Keyboard: the workspace Home exit focuses and activates.
+      control.activeSession = true;
+      control.workState = "generating";
+      control.workGenerating = true;
       await page.goto(workspace);
       await expect
-        .poll(async () => (await page.locator("main article").count()) === 1)
+        .poll(async () => (await page.locator("main article").count()) >= 2)
         .toBe(true);
+      await noScroll(page);
+      const stop = page.getByRole("button", { name: "Stop response" });
+      await stop.focus();
+      await expect(stop).toBeFocused();
+      await expect(stop).toBeInViewport();
       await page.locator("main a[href='/']").focus();
       await page.keyboard.press("Enter");
       await ready(page, "Home");

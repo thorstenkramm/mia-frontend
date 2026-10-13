@@ -499,6 +499,54 @@ export const routeHygieneCases = [
   // (e2e/tutoringSessions.spec.ts).
   // Story 6.3 keeps every stream reader/reconciliation test in the same
   // deliberate-failure inventory; each owns a complete-journey checkpoint.
+  // Story 6.4's new lifecycle/Stop/retry protocol cases have the same
+  // protected page-memory boundary and explicit completion checkpoint.
+  ...(
+    [
+      [
+        "tutoring-lifecycle",
+        "tutoring lifecycle return keeps a page-local draft and reconnects only after explicit Try now",
+      ],
+      [
+        "tutoring-resource-denied",
+        "tutoring addressed denial destroys retained draft while a failed check keeps it covered",
+      ],
+      [
+        "tutoring-stop",
+        "tutoring Stop accepts only definitive interrupted truth and keeps the targeted article",
+      ],
+      [
+        "tutoring-stop-conflict",
+        "tutoring Stop conflict requires an explicit fresh reconciliation",
+      ],
+      [
+        "tutoring-stop-loss",
+        "tutoring lost Stop stays unknown until targeted current work proves outcome",
+      ],
+      [
+        "tutoring-two-tab",
+        "tutoring two tabs reconcile stale Stop without retrying the destructive request",
+      ],
+      [
+        "tutoring-stop-terminal-race",
+        "tutoring queued Stop fences an older terminal work read without losing its targeted article",
+      ],
+      ...(["created", "replay", "conflict", "lose"] as const).map(
+        (outcome) =>
+          [
+            `tutoring-retry-${outcome}`,
+            `tutoring explicit linked retry ${outcome} preserves the earlier attempt without automatic POST replay`,
+          ] as const,
+      ),
+    ] as const
+  ).map(([id, title]) => ({
+    id,
+    title,
+    checkpoints:
+      id === "tutoring-resource-denied"
+        ? ["tutoring-resource-recoverable", id, "complete"]
+        : [id, "complete"],
+  })),
   ...(
     [
       [

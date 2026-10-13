@@ -22,6 +22,9 @@ export type StreamView = {
   readonly state:
     "queued" | "generating" | "completed" | "interrupted" | "failed" | null;
   readonly paused: boolean;
+  readonly retry:
+    "none" | "waiting" | "ready" | "opening" | "paused" | "exhausted";
+  readonly retryAttempt: number;
 };
 
 const content = z
@@ -80,6 +83,8 @@ const initial: StreamView = {
   content: "",
   state: null,
   paused: false,
+  retry: "none",
+  retryAttempt: 0,
 };
 
 export class TutorStreamController {
@@ -91,6 +96,9 @@ export class TutorStreamController {
   private deferredFailure: "Transport lost" | "Protocol error" | null = null;
   private flushTimer: ReturnType<typeof setTimeout> | null = null;
   private lastPaint = -Infinity;
+  private availabilityTimer: ReturnType<typeof setTimeout> | null = null;
+  private retryAttempt = 0;
+  private retryState: StreamView["retry"] = "none";
   private readonly listeners = new Set<() => void>();
   private onTerminal: ((id: string, epoch: number) => void) | null = null;
 
@@ -108,6 +116,96 @@ export class TutorStreamController {
     factory: (url: string) => Source = (url) => new EventSource(url),
   ) {
     this.close();
+    this.connect(responseId, onTerminal, factory);
+  }
+
+  // An initial loss makes the first opening available after one second.
+  // Neither this timer nor later timers construct an EventSource.
+  private waitForAttempt() {
+    if (this.retryAttempt >= 3) {
+      this.setRetry("exhausted");
+      return;
+    }
+    this.clearAvailability();
+    this.setRetry("waiting");
+    this.availabilityTimer = setTimeout(() => {
+      this.availabilityTimer = null;
+      if (this.retryState === "waiting") this.setRetry("ready");
+    }, [1000, 2000, 4000][this.retryAttempt]);
+  }
+  // Try now may consume a pending delay; access checks happen outside the
+  // controller. It can never open by itself.
+  tryNow(): boolean {
+    if (this.retryState !== "waiting" && this.retryState !== "ready")
+      return false;
+    this.clearAvailability();
+    this.retryAttempt++;
+    this.setRetry("opening");
+    return true;
+  }
+  reopen(
+    responseId: string,
+    onTerminal: (id: string, epoch: number) => void,
+    factory: (url: string) => Source = (url) => new EventSource(url),
+  ): boolean {
+    if (this.retryState !== "opening") return false;
+    this.fence();
+    this.connect(responseId, onTerminal, factory);
+    return true;
+  }
+  checkFailed() {
+    if (this.retryState === "opening") this.waitForAttempt();
+  }
+  stopWaiting() {
+    if (this.retryState === "none" || this.retryState === "exhausted") return;
+    this.clearAvailability();
+    this.fence();
+    this.setRetry("paused");
+  }
+  // A lifecycle shield is neither a user Stop waiting nor a new opening.
+  // Close immediately without destroying the page-local reconnect bound.
+  suspend() {
+    this.clearAvailability();
+    this.fence();
+    this.accumulated = "";
+    this.currentState = null;
+    this.deferredFailure = null;
+    this.publish({
+      ...this.view,
+      kind: "Disconnected",
+      content: "",
+      state: null,
+      paused: false,
+    });
+    if (this.retryState !== "opening" && this.retryState !== "exhausted")
+      this.setRetry("paused");
+  }
+  resumeRetries() {
+    if (this.retryState === "paused") this.waitForAttempt();
+  }
+  newBound() {
+    if (this.retryState !== "exhausted") return;
+    this.retryAttempt = 0;
+    this.waitForAttempt();
+  }
+  private setRetry(next: StreamView["retry"]) {
+    this.retryState = next;
+    if (!this.view.paused)
+      this.publish({
+        ...this.view,
+        retry: next,
+        retryAttempt: this.retryAttempt,
+      });
+  }
+  private clearAvailability() {
+    if (this.availabilityTimer !== null) clearTimeout(this.availabilityTimer);
+    this.availabilityTimer = null;
+  }
+  private connect(
+    responseId: string,
+    onTerminal: (id: string, epoch: number) => void,
+    factory: (url: string) => Source,
+  ) {
     const epoch = this.epoch;
     this.accumulated = "";
     this.currentState = null;
@@ -119,6 +217,8 @@ export class TutorStreamController {
       content: "",
       state: null,
       paused: false,
+      retry: this.retryState,
+      retryAttempt: this.retryAttempt,
     });
     let source: Source;
     try {
@@ -179,6 +279,9 @@ export class TutorStreamController {
       }
       this.accumulated = result.content ?? "";
       this.currentState = result.state;
+      this.retryAttempt = 0;
+      this.clearAvailability();
+      this.retryState = "none";
       const terminal = this.terminal(result.state);
       if (!this.view.paused)
         this.publish({
@@ -186,6 +289,8 @@ export class TutorStreamController {
           kind: terminal ? "Terminal known" : "Snapshot installed",
           state: result.state,
           content: this.accumulated,
+          retry: "none",
+          retryAttempt: 0,
         });
       if (terminal) this.finish(epoch);
       return;
@@ -279,6 +384,8 @@ export class TutorStreamController {
     this.publish({
       ...this.view,
       paused: false,
+      retry: this.retryState,
+      retryAttempt: this.retryAttempt,
       content: this.accumulated,
       state: this.currentState,
       kind:
@@ -299,6 +406,7 @@ export class TutorStreamController {
   private fail(kind: "Transport lost" | "Protocol error", epoch: number) {
     if (epoch !== this.epoch || this.view.kind === "Terminal known") return;
     this.fence();
+    this.waitForAttempt();
     if (this.view.paused) {
       // Fence and close immediately, but do not change the paused transcript
       // or emit a non-privacy stream announcement before explicit Resume.
@@ -323,7 +431,10 @@ export class TutorStreamController {
     this.onTerminal = null;
   }
   close() {
+    this.clearAvailability();
     this.fence();
+    this.retryAttempt = 0;
+    this.retryState = "none";
     this.accumulated = "";
     this.currentState = null;
     this.deferredFailure = null;

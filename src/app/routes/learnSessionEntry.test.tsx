@@ -41,6 +41,7 @@ import {
   courseUnitFixture,
 } from "../../../scripts/secret-hygiene-evidence";
 import { App } from "../App";
+import { tutoringRetention } from "../../features/tutoring/tutoringRetention";
 import { AnnouncementProvider } from "../../platform/announcer/AnnouncementRegion";
 import { MiaIntlProvider } from "../../platform/i18n/MiaIntlProvider";
 import { InvitationLink } from "../../platform/session/invitationLink";
@@ -58,6 +59,15 @@ beforeAll(() =>
 afterAll(() => configure({ getElementError: originalError }));
 beforeEach(() => {
   releaseHistory = holdGuardedHistoryTraversals(window);
+  // jsdom has no native EventSource. A connected idle protocol fake prevents
+  // unrelated send/route cases from treating constructor absence as a real
+  // tutoring transport loss and installing the 6.4 privacy shield.
+  class IdleSource extends EventTarget {
+    onerror: ((event: Event) => void) | null = null;
+    onmessage: ((event: MessageEvent) => void) | null = null;
+    close() {}
+  }
+  vi.stubGlobal("EventSource", IdleSource);
 });
 afterEach(() => {
   releaseHistory();
@@ -1102,6 +1112,279 @@ it("Tutoring hidden causes share one neutral presentation on the start and works
     view.unmount();
   }
   courseUnitCheckpoint("tutoring-route-hidden");
+});
+
+it("Tutoring addressed denial destroys retained page memory but a failed check preserves it", async () => {
+  const { control, seed } = backend();
+  const view = mount("/learn/sessions/session_1");
+  const destroy = vi.spyOn(tutoringRetention, "destroy");
+  try {
+    await ready("Tutoring session");
+    fireEvent.change(
+      await screen.findByLabelText("Your message to the tutor"),
+      {
+        target: { value: seed.teachingText },
+      },
+    );
+    act(() => {
+      window.dispatchEvent(new Event("focus"));
+    });
+    control.denySession = 503;
+    await userEvent
+      .setup()
+      .click(await screen.findByRole("button", { name: "Refresh" }));
+    await screen.findByText(
+      "The tutoring check could not be completed. This is not an empty result.",
+    );
+    expect(destroy).not.toHaveBeenCalled();
+    control.denySession = 0;
+    await userEvent
+      .setup()
+      .click(screen.getByRole("button", { name: "Check again" }));
+    await ready("Tutoring session");
+    expect(
+      (
+        (await screen.findByLabelText(
+          "Your message to the tutor",
+        )) as HTMLTextAreaElement
+      ).value === seed.teachingText,
+    ).toBe(true);
+    act(() => {
+      window.dispatchEvent(new Event("focus"));
+    });
+    control.denySession = 404;
+    await userEvent
+      .setup()
+      .click(await screen.findByRole("button", { name: "Refresh" }));
+    await ready("Tutoring access unavailable");
+    expect(destroy).toHaveBeenCalledTimes(1);
+    expect(document.body.textContent?.includes(seed.teachingText)).toBe(false);
+    courseUnitCheckpoint("tutoring-addressed-denial");
+  } finally {
+    destroy.mockRestore();
+    view.unmount();
+  }
+});
+
+it("Tutoring linked retry replaces a queued POST article with fast terminal work truth", async () => {
+  const { seed } = backend();
+  const parent = tutorResponseResource(
+    seed.rawError,
+    "response_gen",
+    "session_1",
+    "message_gen",
+    "interrupted",
+    seed.teachingText,
+  );
+  const queued = tutorResponseResource(
+    seed.rawError,
+    "response_retry",
+    "session_1",
+    "message_gen",
+    "queued",
+    "",
+    2,
+    "response_gen",
+  );
+  const terminal = tutorResponseResource(
+    seed.rawError,
+    "response_retry",
+    "session_1",
+    "message_gen",
+    "completed",
+    seed.teachingText,
+    2,
+    "response_gen",
+  );
+  server.use(
+    http.get("/api/v1/tutoring-sessions/:id/current-work", ({ request }) => {
+      const target = new URL(request.url).searchParams.get("response_id");
+      return json(
+        tutoringWorkDocument(seed.rawError, {
+          state: "idle",
+          latest: target === "response_retry" ? terminal : parent,
+          retryId: target === "response_retry" ? null : "response_gen",
+          reconciledResponse: target === "response_retry" ? terminal : parent,
+        }),
+      );
+    }),
+    http.post("/api/v1/student-messages/message_gen/response-retries", () =>
+      json({ data: queued }, 200),
+    ),
+  );
+  const view = mount("/learn/sessions/session_1");
+  try {
+    await ready("Tutoring session");
+    await userEvent
+      .setup()
+      .click(
+        await screen.findByRole("button", { name: "Retry exact attempt" }),
+      );
+    await waitFor(() => {
+      const article = document.querySelector(
+        '[aria-labelledby="tutoring-current-work-response_retry"]',
+      );
+      expect(
+        article !== null &&
+          !article.textContent?.includes("Response queued") &&
+          article.textContent?.includes(seed.teachingText) === true,
+      ).toBe(true);
+    });
+    courseUnitCheckpoint("tutoring-fast-terminal-retry");
+  } finally {
+    view.unmount();
+  }
+});
+
+it("Tutoring queued Stop fences an older terminal GET while retaining both targeted articles", async () => {
+  const { seed } = backend();
+  const scroll = vi.spyOn(window, "scrollTo").mockImplementation(() => {});
+  const terminalContent = `${seed.teachingText} persisted terminal`;
+  const generating = tutorResponseResource(
+    seed.rawError,
+    "response_gen",
+    "session_1",
+    "message_gen",
+    "generating",
+    seed.teachingText,
+  );
+  const completed = tutorResponseResource(
+    seed.rawError,
+    "response_gen",
+    "session_1",
+    "message_gen",
+    "completed",
+    terminalContent,
+  );
+  const queued = studentMessageResource(
+    seed.rawError,
+    "message_q",
+    "session_1",
+    seed.name,
+    "response_q",
+    "queued",
+  );
+  const interrupted = tutorResponseResource(
+    seed.rawError,
+    "response_q",
+    "session_1",
+    "message_q",
+    "interrupted",
+    seed.teachingText,
+  );
+  const initial = tutoringWorkDocument(seed.rawError, {
+    state: "generating_and_queued",
+    generating,
+    queued,
+  });
+  const stale = tutoringWorkDocument(seed.rawError, {
+    state: "queued",
+    queued,
+    reconciledResponse: completed,
+  });
+  const stopped = tutoringWorkDocument(seed.rawError, {
+    state: "idle",
+    latest: interrupted,
+    retryId: "response_q",
+    reconciledResponse: interrupted,
+  });
+  const sources: EventTarget[] = [];
+  class ControlledSource extends EventTarget {
+    onerror: ((event: Event) => void) | null = null;
+    onmessage: ((event: MessageEvent) => void) | null = null;
+    close() {}
+    constructor() {
+      super();
+      sources.push(this);
+    }
+  }
+  vi.stubGlobal("EventSource", ControlledSource);
+  let release = () => {};
+  const held = new Promise<void>((resolve) => {
+    release = resolve;
+  });
+  let terminalRead = false;
+  server.use(
+    http.get(
+      "/api/v1/tutoring-sessions/:id/current-work",
+      async ({ request }) => {
+        if (
+          new URL(request.url).searchParams.get("response_id") !==
+          "response_gen"
+        )
+          return json(initial);
+        terminalRead = true;
+        await held;
+        return json(stale);
+      },
+    ),
+    http.post("/api/v1/tutor-responses/response_q/interruptions", () =>
+      json(stopped),
+    ),
+  );
+  const view = mount("/learn/sessions/session_1");
+  try {
+    await ready("Tutoring session");
+    await waitFor(() => expect(sources.length).toBe(1));
+    act(() => {
+      sources[0]?.dispatchEvent(
+        new MessageEvent("snapshot", {
+          data: JSON.stringify({
+            state: "generating",
+            content: seed.teachingText,
+          }),
+        }),
+      );
+      sources[0]?.dispatchEvent(
+        new MessageEvent("completed", {
+          data: JSON.stringify({ state: "completed" }),
+        }),
+      );
+    });
+    await waitFor(() => expect(terminalRead).toBe(true));
+    await userEvent.setup().click(
+      screen.getByRole("button", {
+        name: "Stop response · Response queued · Attempt 1",
+      }),
+    );
+    await waitFor(() =>
+      expect(
+        document
+          .querySelector('[aria-labelledby="tutoring-current-work-response_q"]')
+          ?.textContent?.includes("Response interrupted"),
+      ).toBe(true),
+    );
+    expect(
+      document
+        .querySelector('[aria-labelledby="tutoring-current-work-response_gen"]')
+        ?.textContent?.includes(terminalContent),
+    ).not.toBe(true);
+    release();
+    await waitFor(() =>
+      expect(
+        document
+          .querySelector(
+            '[aria-labelledby="tutoring-current-work-response_gen"]',
+          )
+          ?.textContent?.includes(terminalContent),
+      ).toBe(true),
+    );
+    expect(
+      document
+        .querySelector('[aria-labelledby="tutoring-current-work-response_q"]')
+        ?.textContent?.includes("Response interrupted"),
+    ).toBe(true);
+    expect(
+      screen.queryByRole("button", {
+        name: "Stop response · Response queued · Attempt 1",
+      }),
+    ).toBeNull();
+    courseUnitCheckpoint("tutoring-stale-terminal-work");
+  } finally {
+    release();
+    view.unmount();
+    scroll.mockRestore();
+  }
 });
 
 it("Tutoring recovery replaces a found session with the workspace and offers fixed exits when none", async () => {

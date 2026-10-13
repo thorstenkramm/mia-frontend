@@ -154,6 +154,18 @@ The 2026-09-27 backend correction at `b83102114802b981a022c237c0746023c0aa6b79` 
 declared duplicate-cookie `403` responses, conditionally requires the MFA challenge identity, and supplies all four
 session examples. Those corrections authorize only the partial cold-entry slice above.
 
+#### BCG-001 Story 6.4 scoped reconnect-sequence decision — 2026-10-13
+
+The owner authorizes the Story 6.4 frontend reconnect slice under maintained non-refreshing ordinary-access behavior.
+`FRONTEND-STATE-MACHINES.md` §4 owns the client sequence: explicit Try now starts fresh ordered non-refreshing session,
+capability/scope, route-resource, then current-work checks; only after they pass may it open at most one replacement
+EventSource. Explicit Refresh follows the same ordered recovery gate. Continue working remains its single deliberate
+activity-refresh operation before non-refreshing dependent checks. Lifecycle and transport-loss signals only mark
+revalidation needed; availability timers never issue authenticated requests, reopen streams, or renew sign-in.
+No backend/OpenAPI publication of the operation-level non-refreshing reconnect guarantee is claimed by this scoped
+client decision. The broader transport-documentation and composite release-evidence obligations above remain open;
+BCG-001 is **not** globally closed.
+
 #### BCG-001 acceptance evidence assessment
 
 - **Inspected backend coverage:** `mia/internal/auth/auth_test.go` contains

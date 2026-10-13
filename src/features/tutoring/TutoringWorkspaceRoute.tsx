@@ -8,6 +8,7 @@ import {
   type StudentMessageProjection,
   type TutoringSession,
   type TutoringWork,
+  type TutorResponseProjection,
 } from "../../platform/api/tutoringSessions";
 import { useSessionActions } from "../../platform/data/EntryDataProvider";
 import { messages } from "../../platform/i18n/messages";
@@ -33,6 +34,11 @@ import { useTutorStream } from "./useTutorStream";
 import type { TutoringLinks } from "./TutoringRouteProps";
 import type { TutoringRouteProps } from "./TutoringRouteProps";
 import { useStudentMessageSend } from "./useStudentMessageSend";
+import { tutoringRetention } from "./tutoringRetention";
+import { TutorStreamController } from "./tutorStreamController";
+import { useTutorResponseActions } from "./useTutorResponseActions";
+import { useAuthenticatedAccess } from "../../platform/data/EntryDataProvider";
+import { useLocation } from "react-router";
 
 // ROUTE-INVENTORY.md §Tutoring Workspace, D3/D4: fixed identity, no course
 // re-read. A non-active addressed session (or one whose authoritative work
@@ -102,6 +108,21 @@ function Transcript({
   readonly unavailable: (failure: EntryApiFailure | null) => void;
 }) {
   const intl = useIntl();
+  const access = useAuthenticatedAccess();
+  const location = useLocation();
+  if (access === null)
+    throw new Error("Tutoring workspace requires admitted access.");
+  const retention = tutoringRetention.claim(
+    location.pathname,
+    access.accountId,
+    access.epoch,
+    session.id,
+    () => new TutorStreamController(),
+  );
+  const hide = (failure: EntryApiFailure | null) => {
+    tutoringRetention.destroy();
+    unavailable(failure);
+  };
   const { checkRouteAdmission } = useSessionActions();
   const [page, setPage] = useState(initial);
   const [checkedAt, setCheckedAt] = useState(Date.now);
@@ -114,15 +135,20 @@ function Transcript({
   // Definitively sent this page lifetime; rendered from the mutation document
   // until an authoritative work read carries the same response ID (D5).
   const [sent, setSent] = useState<readonly StudentMessageProjection[]>([]);
+  const [linked, setLinked] = useState<readonly TutorResponseProjection[]>([]);
   // The draft lives in page memory only, guarded by the send owner's
   // unsaved-input guard; nothing enters storage, URL text or history state.
-  const [draft, setDraft] = useState("");
+  const [draft, setDraft] = useState(() => retention.draft);
+  const changeDraft = (value: string) => {
+    retention.draft = value;
+    setDraft(value);
+  };
   const [unseen, setUnseen] = useState(false);
   const atEnd = useRef(true);
   const previousScroll = useRef(0);
   const previousContent = useRef("");
   const inputRef = useRef<HTMLTextAreaElement>(null);
-  const collection = useTutoringCollection(unavailable);
+  const collection = useTutoringCollection(hide);
   const send = useStudentMessageSend({
     session: session.id,
     work,
@@ -132,10 +158,10 @@ function Transcript({
         setWorkKnown(true);
       } else if (update.kind === "committed") {
         setSent((current) => [...current, update.message]);
-        setDraft("");
+        changeDraft("");
       } else setWorkKnown(false);
     },
-    unavailable,
+    unavailable: hide,
     hasContent: draft !== "",
   });
   const { status, feedback } = send;
@@ -146,7 +172,33 @@ function Transcript({
       setWork(value);
       setWorkKnown(true);
     },
-    unavailable,
+    unavailable: hide,
+    retention,
+  });
+  const actions = useTutorResponseActions({
+    session: session.id,
+    work,
+    install: (next, response) => {
+      stream.fenceWork();
+      if (response !== undefined) {
+        if (stream.view.responseId === response.id)
+          stream.recordTerminal(response);
+        else
+          setLinked((previous) => [
+            ...previous.filter((item) => item.id !== response.id),
+            response,
+          ]);
+      }
+      setWork(next);
+      setWorkKnown(true);
+    },
+    unavailable: hide,
+    retention,
+    linked: (response) =>
+      setLinked((previous) => [
+        ...previous.filter((item) => item.id !== response.id),
+        response,
+      ]),
   });
   useLayoutEffect(() => {
     const check = () => {
@@ -189,7 +241,8 @@ function Transcript({
     send.state.kind === "Sending" ||
     send.state.kind === "Checking" ||
     send.state.kind === "Reconciling";
-  const locked = waiting || send.unknown || send.pending;
+  const locked =
+    waiting || send.unknown || send.pending || actions.state.kind !== "ready";
   // D5: one rendered identity per attempt — response IDs the current work (or
   // a definitive send) already renders leave the paginated transcript.
   const regionIds = new Set<string>();
@@ -199,6 +252,9 @@ function Transcript({
   }
   for (const message of sent) regionIds.add(message.response.id);
   if (stream.persisted !== null) regionIds.add(stream.persisted.id);
+  for (const response of linked) regionIds.add(response.id);
+  if (work.latest !== null && work.actions.retryResponseId === work.latest.id)
+    regionIds.add(work.latest.id);
   const turns = page.items.filter((turn) => !regionIds.has(turn.id));
   return (
     <>
@@ -270,10 +326,92 @@ function Transcript({
           stream.persisted !== null &&
           stream.view.content !== stream.persisted.content
         }
+        retry={stream.tryNow}
+        stopRetryWaiting={stream.stopWaiting}
+        resumeRetries={stream.resumeRetries}
+        newBound={stream.newBound}
+        stopTargets={
+          workKnown && actions.state.kind === "ready"
+            ? work.actions.stopResponseIds.map((id) => {
+                if (work.generating?.id === id)
+                  return {
+                    id,
+                    state: "generating" as const,
+                    attempt: work.generating.attempt,
+                  };
+                if (work.queued?.response.id === id)
+                  return {
+                    id,
+                    state: "queued" as const,
+                    attempt: work.queued.response.attempt,
+                  };
+                throw new Error(
+                  "An eligible Stop target requires current work.",
+                );
+              })
+            : []
+        }
+        stopResponse={actions.stop}
+        retryResponse={
+          workKnown && actions.state.kind === "ready" ? work.latest : null
+        }
+        retryResponseId={workKnown ? work.actions.retryResponseId : null}
+        runRetry={actions.retry}
       />
+      {actions.state.kind === "stopping" ||
+      actions.state.kind === "retrying" ? (
+        <button
+          type="button"
+          className={tutoringActionClass}
+          onClick={actions.stopWaiting}
+        >
+          {intl.formatMessage(messages.lifecycleStopWaiting)}
+        </button>
+      ) : null}
+      {actions.state.kind === "stop unknown" ||
+      actions.state.kind === "retry unknown" ||
+      actions.state.kind === "rejected" ||
+      actions.state.kind === "work unknown" ? (
+        <div className="mt-4 flex flex-wrap gap-3">
+          <p className="w-full text-sm/6 text-gray-700">
+            {intl.formatMessage(
+              actions.state.kind === "stop unknown"
+                ? messages.tutoringStopUnknown
+                : actions.state.kind === "retry unknown"
+                  ? messages.tutoringResponseRetryUnknown
+                  : actions.state.kind === "work unknown"
+                    ? messages.tutoringCheckFailed
+                    : messages.tutoringActionRejected,
+            )}
+          </p>
+          <button
+            type="button"
+            className={tutoringActionClass}
+            onClick={() => void actions.reconcile()}
+          >
+            {intl.formatMessage(messages.invitationsRefresh)}
+          </button>
+          {actions.state.kind === "retry unknown" &&
+          actions.retryBound !== null ? (
+            <button
+              type="button"
+              className={tutoringActionClass}
+              onClick={() =>
+                void actions.retry(
+                  actions.retryBound!.messageId,
+                  actions.retryBound!.parentId,
+                )
+              }
+            >
+              {intl.formatMessage(messages.tutoringRetry)}
+            </button>
+          ) : null}
+        </div>
+      ) : null}
       <TutoringCurrentWork
         work={workKnown ? work : null}
         sent={sent}
+        linked={linked}
         stream={stream.view}
         persisted={stream.persisted}
         pending={stream.pending}
@@ -305,8 +443,10 @@ function Transcript({
             ? messages.tutoringQueueMessage
             : messages.tutoringSend,
         )}
-        submitEnabled={workKnown && send.enabled}
-        onDraft={setDraft}
+        submitEnabled={
+          workKnown && actions.state.kind === "ready" && send.enabled
+        }
+        onDraft={changeDraft}
         action={send.action}
         guardSubmit={send.guardSubmit}
         inputRef={inputRef}

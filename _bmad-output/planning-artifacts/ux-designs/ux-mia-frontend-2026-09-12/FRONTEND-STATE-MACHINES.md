@@ -226,13 +226,21 @@ the latest safe accumulated value without replaying announcements.
 
 Story 6.3 no-reconnect slice (owner decision, 2026-10-12): response identity is bound to the stream URL path, and each
 snapshot atomically replaces the response data model; together these satisfy this slice's duplicate/identity fencing.
-The wrong-response, exact-duplicate-event-ID, and
-conflicting-duplicate fencing rules above that presume server event IDs apply fully when the reconnect slice exists
-(Story 6.4); event IDs are deferred until then. In Story 6.3, a transport error closes the connection and fences its
-epoch immediately, with no automatic or manual reconnect in this slice. All other enforceable event-order rules above
-remain in force.
+Server event IDs and per-event response IDs are absent. In Story 6.3, a transport error closes the connection and
+fences its epoch immediately, with no automatic or manual reconnect in this slice. All other enforceable event-order
+rules above remain in force.
 Owner ruling 2026-10-12: native EventSource cannot observe unknown named events, so they are never applied and are fenced
 by construction in this no-reconnect slice. Every observable protocol violation still fences the current epoch.
+
+Story 6.4 reconnect slice (owner decision, 2026-10-13): extend the scoped 6.3 identity exception to user-activated
+reconnect. Bind response identity to the authorized stream URL path and fence old epochs and callbacks. Every replacement
+connection starts from its own valid snapshot, which atomically replaces the response model; never resume mid-stream or
+send `Last-Event-ID`. No server event ID or per-event response ID exists, so the wrong-response, exact-duplicate-ID, and
+conflicting-duplicate rules above that require those IDs cannot be enforced in this slice. In particular, repeated valid
+deltas within one epoch cannot be distinguished from two intended equal deltas: apply each delivered valid delta once,
+without claiming same-epoch replay detection or deduplicating by text. All observable malformed, out-of-order, or
+regressive events still fence the epoch, and terminal targeted reads still verify response and session identity. This
+does not waive the general rules for a later transport with event identities.
 
 ## 4. SSE Reconnect Bound and Online Restoration
 
@@ -275,8 +283,13 @@ replacement through non-refreshing dependent reads. Reset occurs only after a va
 `online`, visibility, focus, and pageshow coalesce only as revalidation-needed signals and issue no authenticated
 request. Explicit Refresh or Try now starts the order: non-refreshing auth session, account capability/scope, route
 resource, tutoring work state, page-local draft reveal, then at most one SSE epoch. Continue working starts with its
-single activity-refresh response, then uses the same non-refreshing dependent order. These transports remain blocked on
-BCG-001; when unavailable, remain shielded.
+single activity-refresh response, then uses the same non-refreshing dependent order. BCG-001's broader transport
+publication and release evidence remain open; when the required checks are unavailable, remain shielded.
+
+Story 6.4 scoped sequence (owner decision, 2026-10-13; `BACKEND-CONTRACT-GAPS.md` §BCG-001): this section owns the
+client-side, non-refreshing Try now/Refresh cycle above and permits at most one replacement EventSource after it passes.
+An availability timer or lifecycle signal never starts the cycle, opens a stream, or renews sign-in. This is not a claim
+that the backend has published the missing operation-level reconnect guarantee or that BCG-001 is globally closed.
 
 ## 5. Composer Send, Queue, and Authoritative Work State
 
@@ -330,16 +343,24 @@ This machine is `BLOCKED` with machine 5 on `BCG-012: Authoritative tutoring wor
 | --- | --- | --- | --- | --- |
 | Stoppable | Work state names queued/generating ID | `Stop response` | Submit once | Interruption POST |
 | Stop submitting | POST dispatched | Stopping; Stop disabled | Stop waiting | Response or unknown |
-| Stop outcome unknown | `204` lost | Interruption unknown | Reconcile only | Target turn plus current work |
+| Stop outcome unknown | `200` lost | Interruption unknown | Reconcile only | Target turn plus current work |
 | Still stoppable | Server says active | Stop not confirmed | Explicit Stop retry | New interruption POST |
 | Interrupted | Server confirms it | Incomplete attempt kept | Continue or retry | Response state |
 | Too late | Server says terminal | Current terminal state | Continue or retry | Transcript turn |
 | Stop denied | Auth or scope loss | No interruption claim | Sign in or safe exit | Terminal teardown |
 
-Stop is never replayed automatically. A lost `204` does not imply cancellation. Reconciliation and explicit retry are
-`BLOCKED` on `BCG-012: Authoritative tutoring work and action eligibility`. Reconciliation resolves the targeted
-response as interrupted, completed, failed, or still stoppable independently of any queued response that has since
-started. Current work controls queue and composer state; it never supplies the stopped response's outcome.
+Stop is never replayed automatically. A lost `200` `TutoringStopDocument` does not imply cancellation. Reconciliation
+and explicit retry are `BLOCKED` on `BCG-012: Authoritative tutoring work and action eligibility`. Reconciliation
+resolves the targeted response as interrupted, completed, failed, or still stoppable independently of any queued
+response that has since started. Current work controls queue and composer state; it never supplies the stopped
+response's outcome.
+
+Story 6.4 scoped status correction (owner decision, 2026-10-13): the implemented Stop operation returns `200` with
+`TutoringStopDocument`, not `204`. Only the stale status wording above changes; no-replay, unknown-outcome and targeted
+reconciliation semantics are unchanged. For this slice, the atomic `current-work?response_id=` read supplies both the
+targeted response outcome and independent current work; server-authored actions gate subsequent Stop or response retry.
+The historical BCG-012 blocked statement above does not bar this implemented-contract slice. BCG-012's global release
+evidence and Finish obligations remain open.
 
 ## 8. Finish-Session Race and Prevalidation
 

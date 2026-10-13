@@ -77,6 +77,19 @@ export async function tutoringResources(page: Page) {
     materialsSent: [] as string[],
     holdPost: null as Promise<void> | null,
     holdSend: null as Promise<void> | null,
+    stopOutcome: "success" as "success" | "conflict" | "lose",
+    retryOutcome: "created" as "created" | "replay" | "conflict" | "lose",
+    stopped: false,
+    retryCommitted: false,
+    retryTerminalBeforeFollowUp: false,
+    failRetryFollowUp: false,
+    stoppedResponseId: "response_gen",
+    snapshotTerminalBeforeHold: false,
+    stopPosts: 0,
+    retryPosts: 0,
+    retryRequestIds: [] as string[],
+    holdStop: null as Promise<void> | null,
+    holdRetry: null as Promise<void> | null,
   };
   const fail = (route: Route, status: number, code: string) =>
     json(
@@ -84,22 +97,88 @@ export async function tutoringResources(page: Page) {
       { errors: [{ status: String(status), code, detail: fixture.rawError }] },
       status,
     );
-  const workDocument = (sessionId: string, reconcile: string | null) => {
+  const workDocument = (
+    sessionId: string,
+    reconcile: string | null,
+    responseQuery: string | null = null,
+  ) => {
+    const retried =
+      control.retryCommitted && !control.retryTerminalBeforeFollowUp
+        ? studentMessageResource(
+            fixture.rawError,
+            "message_gen",
+            sessionId,
+            fixture.courseName,
+            "response_retry",
+          )
+        : null;
+    if (retried !== null)
+      retried.attributes.response = tutorResponseResource(
+        fixture.rawError,
+        "response_retry",
+        sessionId,
+        "message_gen",
+        "queued",
+        "",
+        2,
+        "response_gen",
+      );
+    const terminalRetry =
+      control.retryCommitted && control.retryTerminalBeforeFollowUp
+        ? tutorResponseResource(
+            fixture.rawError,
+            "response_retry",
+            sessionId,
+            "message_gen",
+            "completed",
+            fixture.teachingText,
+            2,
+            "response_gen",
+          )
+        : null;
     const response =
-      control.terminalContent === null
+      control.terminalContent === null &&
+      (!control.stopped || control.stoppedResponseId !== "response_gen")
         ? null
         : tutorResponseResource(
             fixture.rawError,
             "response_gen",
             sessionId,
             "message_gen",
-            control.terminalState,
-            control.terminalContent,
+            control.stopped && control.stoppedResponseId === "response_gen"
+              ? "interrupted"
+              : control.terminalState,
+            control.terminalContent ?? fixture.teachingText,
           );
+    const stoppedQueued =
+      control.stopped && control.stoppedResponseId === "response_q"
+        ? tutorResponseResource(
+            fixture.rawError,
+            "response_q",
+            sessionId,
+            "message_q",
+            "interrupted",
+            fixture.teachingText,
+          )
+        : null;
     const withResponse = (value: ReturnType<typeof tutoringWorkDocument>) => {
-      if (control.terminalContent !== null) {
+      if (
+        responseQuery === "response_retry" &&
+        (retried !== null || terminalRetry !== null)
+      ) {
+        value.data.attributes.reconciled_response =
+          terminalRetry ?? retried?.attributes.response ?? null;
+      } else if (responseQuery === "response_q" && stoppedQueued !== null) {
+        value.data.attributes.reconciled_response = stoppedQueued;
+      } else if (control.terminalContent !== null) {
         value.data.attributes.reconciled_response = response;
       }
+      if (
+        control.stopped &&
+        control.terminalContent === null &&
+        responseQuery !== "response_retry"
+      )
+        value.data.attributes.reconciled_response = stoppedQueued ?? response;
       return value;
     };
     const sentMessage = () =>
@@ -134,7 +213,11 @@ export async function tutoringResources(page: Page) {
       tutoringWorkDocument(fixture.rawError, {
         session: sessionId,
         sessionState: control.sessionState,
-        state: control.workState,
+        state: control.retryCommitted
+          ? terminalRetry === null
+            ? "queued"
+            : "idle"
+          : control.workState,
         generating: control.workGenerating
           ? tutorResponseResource(
               fixture.rawError,
@@ -145,19 +228,28 @@ export async function tutoringResources(page: Page) {
               fixture.teachingText,
             )
           : null,
-        queued: control.workQueued
-          ? studentMessageResource(
-              fixture.rawError,
-              "message_q",
-              sessionId,
-              fixture.courseName,
-              "response_q",
-              "queued",
-            )
-          : null,
+        queued:
+          retried ??
+          (control.workQueued
+            ? studentMessageResource(
+                fixture.rawError,
+                "message_q",
+                sessionId,
+                fixture.courseName,
+                "response_q",
+                "queued",
+              )
+            : null),
         submit: control.workSubmit,
         queue: control.workQueue,
         reconciled,
+        retryId:
+          control.stopped && !control.retryCommitted
+            ? control.stoppedResponseId
+            : null,
+        latest:
+          terminalRetry ??
+          (control.stopped ? (stoppedQueued ?? response) : null),
       }),
     );
   };
@@ -256,16 +348,93 @@ export async function tutoringResources(page: Page) {
         "response_id",
       );
       control.responseQueries.push(responseQuery);
+      if (responseQuery === "response_retry" && control.failRetryFollowUp) {
+        control.failRetryFollowUp = false;
+        return fail(route, 503, "unavailable");
+      }
+      if (
+        responseQuery !== null &&
+        control.holdTerminal !== null &&
+        control.snapshotTerminalBeforeHold
+      ) {
+        if (control.terminalContent !== null) {
+          control.workGenerating = false;
+          control.workState = control.workQueued ? "queued" : "idle";
+        }
+        const sessionId =
+          new URL(route.request().url()).pathname.split("/").at(-2) ??
+          "session_1";
+        const snapshot = workDocument(sessionId, reconcile, responseQuery);
+        await control.holdTerminal;
+        return json(route, snapshot);
+      }
       if (responseQuery !== null && control.holdTerminal !== null)
         await control.holdTerminal;
-      if (responseQuery !== null && control.terminalContent !== null) {
+      if (
+        responseQuery !== null &&
+        (control.terminalContent !== null || control.stopped)
+      ) {
         control.workGenerating = false;
         control.workState = "idle";
       }
       const sessionId =
         new URL(route.request().url()).pathname.split("/").at(-2) ??
         "session_1";
-      return json(route, workDocument(sessionId, reconcile));
+      return json(route, workDocument(sessionId, reconcile, responseQuery));
+    },
+  );
+  await page.route(
+    /\/api\/v1\/tutor-responses\/[^/?]+\/interruptions$/u,
+    async (route) => {
+      control.stopPosts++;
+      if (control.holdStop !== null) await control.holdStop;
+      if (control.stopOutcome === "conflict")
+        return fail(route, 409, "tutoring_invalid_state");
+      control.stopped = true;
+      control.stoppedResponseId =
+        new URL(route.request().url()).pathname.split("/").at(-2) ??
+        "response_gen";
+      control.workGenerating = false;
+      control.workQueued = false;
+      control.workState = "idle";
+      if (control.stopOutcome === "lose") return route.abort("failed");
+      return json(
+        route,
+        workDocument("session_1", null, control.stoppedResponseId),
+      );
+    },
+  );
+  await page.route(
+    /\/api\/v1\/student-messages\/[^/?]+\/response-retries$/u,
+    async (route) => {
+      control.retryPosts++;
+      const body = JSON.parse(route.request().postData() ?? "{}") as {
+        data?: { attributes?: { client_request_id?: string } };
+      };
+      control.retryRequestIds.push(
+        String(body.data?.attributes?.client_request_id ?? ""),
+      );
+      if (control.holdRetry !== null) await control.holdRetry;
+      if (control.retryOutcome === "conflict")
+        return fail(route, 409, "tutoring_work_busy");
+      control.retryCommitted = true;
+      if (control.retryOutcome === "lose") return route.abort("failed");
+      return json(
+        route,
+        {
+          data: tutorResponseResource(
+            fixture.rawError,
+            "response_retry",
+            "session_1",
+            "message_gen",
+            "queued",
+            "",
+            2,
+            "response_gen",
+          ),
+        },
+        control.retryOutcome === "replay" ? 200 : 201,
+      );
     },
   );
   await page.route(/\/api\/v1\/tutor-responses\/[^/?]+\/events$/u, (route) => {
@@ -378,7 +547,9 @@ export async function tutoringResources(page: Page) {
     const allowedPost =
       request.method() === "POST" &&
       (/^\/api\/v1\/courses\/[^/]+\/tutoring-sessions$/u.test(path) ||
-        /^\/api\/v1\/tutoring-sessions\/[^/]+\/messages$/u.test(path));
+        /^\/api\/v1\/tutoring-sessions\/[^/]+\/messages$/u.test(path) ||
+        /^\/api\/v1\/tutor-responses\/[^/]+\/interruptions$/u.test(path) ||
+        /^\/api\/v1\/student-messages\/[^/]+\/response-retries$/u.test(path));
     if (
       path.startsWith("/api/") &&
       !allowedPost &&

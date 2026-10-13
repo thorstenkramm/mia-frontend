@@ -1,3 +1,4 @@
+import { useLayoutEffect } from "react";
 import { useIntl } from "react-intl";
 import { useLocation } from "react-router";
 import {
@@ -18,6 +19,7 @@ import { useAuthenticatedAccess } from "../../platform/data/EntryDataProvider";
 import { messages } from "../../platform/i18n/messages";
 import { RouteDepartureLink } from "../../platform/ui/RouteDepartureLink";
 import type { TutoringResource } from "../../features/tutoring/TutoringRouteProps";
+import { tutoringRetention } from "../../features/tutoring/tutoringRetention";
 import {
   CourseAdmissionSurface,
   useCourseResourceAdmission,
@@ -147,6 +149,13 @@ export default function LearnSessionRoute({
     },
     isHiddenTutoringFailure,
   );
+  // Admission has the authoritative addressed-resource result. A denied
+  // workspace must discard page memory even when account/scope/route keys
+  // remain identical; a nondefinitive check failure keeps it covered.
+  useLayoutEffect(() => {
+    if (route.resource === "workspace" && state.kind === "Unavailable")
+      tutoringRetention.destroy();
+  }, [route.resource, state.kind]);
   // Fixed safe exit, never a cached or potentially revoked resource parent.
   const exit = (
     <RouteDepartureLink

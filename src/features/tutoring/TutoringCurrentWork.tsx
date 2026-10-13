@@ -46,12 +46,14 @@ type WorkArticle = {
 export function TutoringCurrentWork({
   work,
   sent,
+  linked,
   stream,
   persisted,
   pending,
 }: {
   readonly work: TutoringWork | null;
   readonly sent: readonly StudentMessageProjection[];
+  readonly linked: readonly TutorResponseProjection[];
   readonly stream: StreamView;
   readonly persisted: TutorResponseProjection | null;
   readonly pending: boolean;
@@ -117,6 +119,28 @@ export function TutoringCurrentWork({
     };
     if (index === -1) articles.push(article);
     else articles[index] = article;
+  }
+  const retryParent =
+    work !== null &&
+    work.latest !== null &&
+    work.actions.retryResponseId === work.latest.id
+      ? work.latest
+      : null;
+  for (const response of [
+    ...(retryParent === null ? [] : [retryParent]),
+    ...linked,
+  ]) {
+    if (articles.some((article) => article.responseId === response.id))
+      continue;
+    articles.push({
+      responseId: response.id,
+      speaker: messages.tutoringTurnTutor,
+      attempt: response.attempt,
+      state: response.state,
+      text: response.content,
+      tutor: true,
+      partial: response.state === "queued" || response.state === "generating",
+    });
   }
   const known = new Set(articles.map((article) => article.responseId));
   for (const message of sent) {

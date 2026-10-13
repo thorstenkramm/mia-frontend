@@ -25,6 +25,8 @@ import {
   getTutoringSession,
   getTutoringSessionCurrentWork,
   getTutoringResponseCurrentWork,
+  retryTutorResponse,
+  stopTutorResponse,
   isHiddenTutoringFailure,
   listSessionTurns,
   toTutoringSessionId,
@@ -89,6 +91,174 @@ it("Tutoring terminal reconciliation accepts only the targeted persisted respons
     ),
   ).toBe(true);
   courseUnitCheckpoint("tutoring-targeted-terminal");
+});
+
+it("Tutoring Stop accepts only 200 with a targeted interrupted response and independent current work", async () => {
+  const seed = courseUnitFixture();
+  const targeted = tutorResponseResource(
+    seed.rawError,
+    "response_gen",
+    "session_1",
+    "message_gen",
+    "interrupted",
+    seed.teachingText,
+  );
+  let status = 200;
+  let target: unknown = targeted;
+  let wire = false;
+  server.use(
+    http.post(
+      "/api/v1/tutor-responses/response_gen/interruptions",
+      ({ request }) => {
+        wire = request.headers.get("X-CSRF-Token") === seed.csrf;
+        return json(
+          tutoringWorkDocument(seed.rawError, {
+            state: "generating",
+            generating: tutorResponseResource(
+              seed.rawError,
+              "response_other",
+              "session_1",
+              "message_other",
+              "generating",
+            ),
+            reconciledResponse: target,
+          }),
+          status,
+        );
+      },
+    ),
+  );
+  const result = await stopTutorResponse(session, "response_gen", seed.csrf);
+  expect(
+    wire &&
+      result.response.id === "response_gen" &&
+      result.response.content === seed.teachingText &&
+      result.work.generating?.id === "response_other" &&
+      !JSON.stringify(result).includes(seed.rawError),
+  ).toBe(true);
+  target = tutorResponseResource(
+    seed.rawError,
+    "response_other",
+    "session_1",
+    "message_gen",
+    "interrupted",
+  );
+  expect(
+    await protocolRejected(
+      stopTutorResponse(session, "response_gen", seed.csrf),
+    ),
+  ).toBe(true);
+  target = tutorResponseResource(
+    seed.rawError,
+    "response_gen",
+    "session_1",
+    "message_gen",
+    "completed",
+  );
+  expect(
+    await protocolRejected(
+      stopTutorResponse(session, "response_gen", seed.csrf),
+    ),
+  ).toBe(true);
+  target = targeted;
+  status = 204;
+  expect(
+    await protocolRejected(
+      stopTutorResponse(session, "response_gen", seed.csrf),
+    ),
+  ).toBe(true);
+  courseUnitCheckpoint("tutoring-stop-document");
+});
+
+it("Tutoring response retry accepts linked 201/200 but rejects wrong lineage and status", async () => {
+  const seed = courseUnitFixture();
+  let status = 201;
+  let parent: string | null = "response_gen";
+  let wire: unknown = null;
+  server.use(
+    http.post(
+      "/api/v1/student-messages/message_gen/response-retries",
+      async ({ request }) => {
+        wire =
+          request.headers.get("X-CSRF-Token") === seed.csrf
+            ? await request.json()
+            : null;
+        return json(
+          {
+            data: tutorResponseResource(
+              seed.rawError,
+              "response_retry",
+              "session_1",
+              "message_gen",
+              "queued",
+              "",
+              2,
+              parent,
+            ),
+          },
+          status,
+        );
+      },
+    ),
+  );
+  const requestId = "0f3b4d2c-0000-4000-8000-0123456789ab";
+  const first = await retryTutorResponse(
+    session,
+    "message_gen",
+    "response_gen",
+    requestId,
+    seed.csrf,
+  );
+  expect(
+    first.retryOfId === "response_gen" &&
+      first.attempt === 2 &&
+      JSON.stringify(wire) ===
+        JSON.stringify({
+          data: {
+            type: "tutor-response-retries",
+            attributes: { client_request_id: requestId },
+          },
+        }) &&
+      !JSON.stringify(first).includes(seed.rawError),
+  ).toBe(true);
+  status = 200;
+  expect(
+    (
+      await retryTutorResponse(
+        session,
+        "message_gen",
+        "response_gen",
+        requestId,
+        seed.csrf,
+      )
+    ).id === first.id,
+  ).toBe(true);
+  parent = "response_other";
+  expect(
+    await protocolRejected(
+      retryTutorResponse(
+        session,
+        "message_gen",
+        "response_gen",
+        requestId,
+        seed.csrf,
+      ),
+    ),
+  ).toBe(true);
+  parent = "response_gen";
+  status = 202;
+  expect(
+    await protocolRejected(
+      retryTutorResponse(
+        session,
+        "message_gen",
+        "response_gen",
+        requestId,
+        seed.csrf,
+      ),
+    ),
+  ).toBe(true);
+  courseUnitCheckpoint("tutoring-retry-document");
 });
 
 // A violated rejection assertion must not print a mistakenly returned protected
@@ -397,7 +567,7 @@ it("Tutoring message send binds the request ID and exact bytes in one payload", 
       Object.keys(sent).sort().join() ===
         "content,createdAt,id,response,sequence" &&
       Object.keys(sent.response).sort().join() ===
-        "attempt,content,id,messageId,state" &&
+        "attempt,content,id,messageId,retryOfId,state" &&
       !JSON.stringify(sent).includes(seed.rawError),
   ).toBe(true);
   courseUnitCheckpoint("tutoring-message-send");
@@ -494,8 +664,9 @@ it("Tutoring current work parses every state and strips unused projections", asy
       idle.actions.submit === true &&
       idle.actions.queue === false &&
       Object.keys(idle).sort().join() ===
-        "actions,generating,queued,reconciledMessage,remainingQueueCapacity,sessionState,state" &&
-      Object.keys(idle.actions).sort().join() === "queue,submit" &&
+        "actions,generating,latest,queued,reconciledMessage,remainingQueueCapacity,sessionState,state" &&
+      Object.keys(idle.actions).sort().join() ===
+        "queue,reconnectResponseId,retryResponseId,stopResponseIds,submit" &&
       !JSON.stringify(idle).includes(seed.rawError),
   ).toBe(true);
   document = tutoringWorkDocument(seed.rawError, {

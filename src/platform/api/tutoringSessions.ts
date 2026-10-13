@@ -256,6 +256,7 @@ const tutorResponseResource = z.object({
   attributes: z.object({
     session_id: resourceId,
     message_id: resourceId,
+    retry_of_response_id: resourceId.nullable(),
     attempt: z.number().int().min(1),
     state: z.enum(responseStates),
     content: z.string(),
@@ -264,6 +265,7 @@ const tutorResponseResource = z.object({
 export type TutorResponseProjection = {
   readonly id: string;
   readonly messageId: string;
+  readonly retryOfId: string | null;
   readonly attempt: number;
   readonly state: TutorResponseState;
   readonly content: string;
@@ -276,6 +278,7 @@ function toResponseProjection(
   return {
     id: resource.id,
     messageId: resource.attributes.message_id,
+    retryOfId: resource.attributes.retry_of_response_id,
     attempt: resource.attributes.attempt,
     state: resource.attributes.state,
     content: resource.attributes.content,
@@ -357,8 +360,8 @@ export async function createStudentMessage(
 // Owner-only, non-refreshing, no-store; the optional well-formed request ID
 // reconciles an ambiguous send (a null reconciled message is the authoritative
 // not-committed answer; a malformed parameter is a 422 protocol rejection,
-// never "not committed"). `latest_response`, `reconciled_response` and the
-// stop/retry/reconnect/finish action fields are stripped for 6.4–6.5.
+// never "not committed"). Latest response and Finish eligibility stay out of
+// this slice; Stop/retry/reconnect actions are server-authored, never inferred.
 const workDocument = z.object({
   errors: z.never().optional(),
   data: z.object({
@@ -376,11 +379,18 @@ const workDocument = z.object({
       remaining_queue_capacity: z.number().int().min(0).max(1),
       generating_response: tutorResponseResource.nullable(),
       queued_work: studentMessageResource.nullable(),
+      latest_response: tutorResponseResource.nullable(),
       reconciled_message: studentMessageResource.nullable(),
       reconciled_response: tutorResponseResource.nullable(),
       actions: z.object({
         submit: z.boolean(),
         queue: z.boolean(),
+        stop: z.boolean(),
+        stop_response_ids: z.array(resourceId).max(2),
+        retry: z.boolean(),
+        retry_response_id: resourceId.nullable(),
+        reconnect: z.boolean(),
+        reconnect_response_id: resourceId.nullable(),
       }),
     }),
   }),
@@ -393,14 +403,108 @@ export type TutoringWork = {
   readonly remainingQueueCapacity: number;
   readonly generating: TutorResponseProjection | null;
   readonly queued: StudentMessageProjection | null;
+  readonly latest: TutorResponseProjection | null;
   // Server-authored eligibility only; never reconstructed locally.
   readonly actions: {
     readonly submit: boolean;
     readonly queue: boolean;
+    readonly stopResponseIds: readonly string[];
+    readonly retryResponseId: string | null;
+    readonly reconnectResponseId: string | null;
   };
   readonly reconciledMessage: StudentMessageProjection | null;
   readonly reconciledResponse?: TutorResponseProjection | null;
 };
+type WorkResource = z.infer<typeof workDocument>["data"];
+function projectWork(
+  session: TutoringSessionId,
+  data: WorkResource,
+  responseId?: string,
+): TutoringWork {
+  if (data.id !== session) throw new ApiProtocolError();
+  const a = data.attributes;
+  const generating =
+    a.generating_response === null
+      ? null
+      : toResponseProjection(session, a.generating_response);
+  const queued =
+    a.queued_work === null ? null : toMessageProjection(session, a.queued_work);
+  const reconciledMessage =
+    a.reconciled_message === null
+      ? null
+      : toMessageProjection(session, a.reconciled_message);
+  const latest =
+    a.latest_response === null
+      ? null
+      : toResponseProjection(session, a.latest_response);
+  const reconciledResponse =
+    responseId === undefined || a.reconciled_response === null
+      ? null
+      : toResponseProjection(session, a.reconciled_response);
+  if (
+    responseId !== undefined &&
+    reconciledResponse !== null &&
+    reconciledResponse.id !== responseId
+  )
+    throw new ApiProtocolError();
+  const { actions } = a;
+  const stopIds = actions.stop_response_ids;
+  const activeIds = [generating?.id, queued?.response.id].filter(
+    (id): id is string => id !== undefined,
+  );
+  if (
+    new Set(stopIds).size !== stopIds.length ||
+    stopIds.some((id) => !activeIds.includes(id)) ||
+    actions.stop !== stopIds.length > 0 ||
+    actions.reconnect !== (actions.reconnect_response_id !== null) ||
+    (actions.reconnect_response_id !== null &&
+      actions.reconnect_response_id !==
+        (generating?.id ?? queued?.response.id)) ||
+    actions.retry !== (actions.retry_response_id !== null) ||
+    (actions.retry &&
+      (generating !== null ||
+        queued !== null ||
+        latest?.id !== actions.retry_response_id ||
+        (latest.state !== "failed" && latest.state !== "interrupted")))
+  )
+    throw new ApiProtocolError();
+  // The state enum is atomic with the one-generating/one-queued invariants.
+  const consistent =
+    (a.state === "idle" && generating === null && queued === null) ||
+    (a.state === "generating" && generating !== null && queued === null) ||
+    (a.state === "queued" && generating === null && queued !== null) ||
+    (a.state === "generating_and_queued" &&
+      generating !== null &&
+      queued !== null) ||
+    (a.state === "completed" &&
+      a.session_state === "completed" &&
+      generating === null &&
+      queued === null);
+  if (
+    !consistent ||
+    (a.state === "completed") !== (a.session_state === "completed") ||
+    (a.session_state === "completed" &&
+      (stopIds.length !== 0 || actions.retry || actions.reconnect))
+  )
+    throw new ApiProtocolError();
+  return {
+    sessionState: a.session_state,
+    state: a.state,
+    remainingQueueCapacity: a.remaining_queue_capacity,
+    generating,
+    queued,
+    latest,
+    actions: {
+      submit: actions.submit,
+      queue: actions.queue,
+      stopResponseIds: stopIds,
+      retryResponseId: actions.retry_response_id,
+      reconnectResponseId: actions.reconnect_response_id,
+    },
+    reconciledMessage,
+    ...(responseId === undefined ? {} : { reconciledResponse }),
+  };
+}
 export async function getTutoringSessionCurrentWork(
   session: TutoringSessionId,
   reconcile: {
@@ -421,56 +525,65 @@ export async function getTutoringSessionCurrentWork(
     initiator: "user",
     signal,
   });
-  if (data.id !== session) throw new ApiProtocolError();
-  const { attributes: a } = data;
-  const generating =
-    a.generating_response === null
-      ? null
-      : toResponseProjection(session, a.generating_response);
-  const queued =
-    a.queued_work === null ? null : toMessageProjection(session, a.queued_work);
-  const reconciledMessage =
-    a.reconciled_message === null
-      ? null
-      : toMessageProjection(session, a.reconciled_message);
-  const reconciledResponse =
-    reconcile.responseId === undefined || a.reconciled_response === null
-      ? null
-      : toResponseProjection(session, a.reconciled_response);
+  return projectWork(session, data, reconcile.responseId);
+}
+
+const retryDocument = z.object({
+  errors: z.never().optional(),
+  data: tutorResponseResource,
+});
+export async function retryTutorResponse(
+  session: TutoringSessionId,
+  messageId: string,
+  parentId: string,
+  requestId: string,
+  csrfToken: string,
+): Promise<TutorResponseProjection> {
+  const body = {
+    data: {
+      type: "tutor-response-retries",
+      attributes: { client_request_id: requestId },
+    },
+  } satisfies operations["retryTutorResponse"]["requestBody"]["content"][typeof jsonApiMediaType];
+  const response = await sendUnsafeRequest({
+    method: "POST",
+    path: `/api/v1/student-messages/${encodeURIComponent(messageId)}/response-retries`,
+    csrfToken,
+    body: JSON.stringify(body),
+  });
+  const document = await parseJsonApiResponse(
+    response,
+    retryDocument,
+    response.status === 201 ? 201 : 200,
+  );
+  const value = toResponseProjection(session, document.data);
   if (
-    reconcile.responseId !== undefined &&
-    reconciledResponse !== null &&
-    reconciledResponse.id !== reconcile.responseId
+    value.messageId !== messageId ||
+    value.retryOfId !== parentId ||
+    value.attempt <= 1
   )
     throw new ApiProtocolError();
-  // The state enum is atomic with the one-generating/one-queued invariants; a
-  // contradiction is a protocol failure, never a guessed presentation.
-  const consistent =
-    (a.state === "idle" && generating === null && queued === null) ||
-    (a.state === "generating" && generating !== null && queued === null) ||
-    (a.state === "queued" && generating === null && queued !== null) ||
-    (a.state === "generating_and_queued" &&
-      generating !== null &&
-      queued !== null) ||
-    (a.state === "completed" &&
-      a.session_state === "completed" &&
-      generating === null &&
-      queued === null);
-  if (
-    !consistent ||
-    (a.state === "completed") !== (a.session_state === "completed")
-  )
-    throw new ApiProtocolError();
-  return {
-    sessionState: a.session_state,
-    state: a.state,
-    remainingQueueCapacity: a.remaining_queue_capacity,
-    generating,
-    queued,
-    actions: { submit: a.actions.submit, queue: a.actions.queue },
-    reconciledMessage,
-    ...(reconcile.responseId === undefined ? {} : { reconciledResponse }),
-  };
+  return value;
+}
+
+export async function stopTutorResponse(
+  session: TutoringSessionId,
+  responseId: string,
+  csrfToken: string,
+): Promise<{
+  readonly work: TutoringWork;
+  readonly response: TutorResponseProjection;
+}> {
+  const response = await sendUnsafeRequest({
+    method: "POST",
+    path: `/api/v1/tutor-responses/${encodeURIComponent(responseId)}/interruptions`,
+    csrfToken,
+  });
+  const document = await parseJsonApiResponse(response, workDocument, 200);
+  const work = projectWork(session, document.data, responseId);
+  const targeted = work.reconciledResponse;
+  if (targeted?.state !== "interrupted") throw new ApiProtocolError();
+  return { work, response: targeted };
 }
 
 // Terminal event content is unconfirmed until this targeted owner-only read

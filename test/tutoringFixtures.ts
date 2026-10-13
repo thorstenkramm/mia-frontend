@@ -131,6 +131,7 @@ export function tutorResponseResource(
   state = "queued",
   content = "",
   attempt = 1,
+  retryOf: string | null = null,
 ) {
   return {
     type: "tutor-responses",
@@ -138,14 +139,17 @@ export function tutorResponseResource(
     attributes: {
       session_id: session,
       message_id: message,
-      retry_of_response_id: forbidden,
+      retry_of_response_id: retryOf,
       attempt,
       state,
       content,
       failure_code: forbidden,
       created_at: "2026-10-10T08:05:01.000000Z",
       started_at: null,
-      finished_at: null,
+      finished_at:
+        state === "completed" || state === "interrupted" || state === "failed"
+          ? "2026-10-10T08:05:03.000000Z"
+          : null,
     },
   };
 }
@@ -194,8 +198,7 @@ export function studentMessageMutationDocument(
 }
 
 // The current-work document in one of the five states. Stripped projections
-// (`latest_response`, `reconciled_response`, stop/retry/reconnect/finish
-// actions) carry the forbidden marker. Capacity/eligibility default to the
+// (`latest_response`, finish) carry the forbidden marker. Capacity/eligibility default to the
 // documented per-state truth; callers may override to test contradictions.
 export function tutoringWorkDocument(
   forbidden: string,
@@ -209,6 +212,10 @@ export function tutoringWorkDocument(
     reconciledResponse = null as unknown,
     submit,
     queue,
+    stopIds,
+    retryId = null,
+    latest = null as unknown,
+    reconnectId,
   }: {
     session?: string;
     sessionState?: string;
@@ -219,8 +226,21 @@ export function tutoringWorkDocument(
     reconciledResponse?: unknown;
     submit?: boolean | undefined;
     queue?: boolean | undefined;
+    stopIds?: readonly string[];
+    retryId?: string | null;
+    latest?: unknown;
+    reconnectId?: string | null;
   } = {},
 ) {
+  const generatingId = (generating as { id?: string } | null)?.id ?? null;
+  const queuedId =
+    (queued as { attributes?: { response?: { id?: string } } } | null)
+      ?.attributes?.response?.id ?? null;
+  const activeIds = [generatingId, queuedId].filter(
+    (id): id is string => id !== null,
+  );
+  const reconnect =
+    reconnectId === undefined ? (generatingId ?? queuedId) : reconnectId;
   return {
     data: {
       type: "tutoring-work-states",
@@ -232,18 +252,27 @@ export function tutoringWorkDocument(
           state === "idle" || state === "generating" ? 1 : 0,
         generating_response: generating,
         queued_work: queued,
-        latest_response: forbidden,
+        latest_response:
+          latest === null && retryId !== null
+            ? tutorResponseResource(
+                forbidden,
+                retryId,
+                session,
+                "message_gen",
+                "interrupted",
+              )
+            : latest,
         reconciled_message: reconciled,
         reconciled_response: reconciledResponse,
         actions: {
           submit: submit ?? state === "idle",
           queue: queue ?? state === "generating",
-          stop: forbidden,
-          stop_response_ids: forbidden,
-          retry: forbidden,
-          retry_response_id: forbidden,
-          reconnect: forbidden,
-          reconnect_response_id: forbidden,
+          stop: (stopIds ?? activeIds).length > 0,
+          stop_response_ids: stopIds ?? activeIds,
+          retry: retryId !== null,
+          retry_response_id: retryId,
+          reconnect: reconnect !== null,
+          reconnect_response_id: reconnect,
           finish: forbidden,
         },
       },

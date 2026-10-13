@@ -219,6 +219,45 @@ export const messages = defineMessages({
     id: "tutoring.responseFailed",
     defaultMessage: "Response failed",
   },
+  tutoringStopResponse: {
+    id: "tutoring.stopResponse",
+    defaultMessage: "Stop response",
+  },
+  tutoringStopUnknown: {
+    id: "tutoring.stopUnknown",
+    defaultMessage:
+      "Stop outcome unknown. Check the saved response before acting again.",
+  },
+  tutoringResponseRetryUnknown: {
+    id: "tutoring.responseRetryUnknown",
+    defaultMessage:
+      "Retry outcome unknown. Check current work; only an explicit exact re-retry sends again.",
+  },
+  tutoringActionRejected: {
+    id: "tutoring.actionRejected",
+    defaultMessage: "The response action was not accepted. Check current work.",
+  },
+  tutoringResponseStopped: {
+    id: "tutoring.responseStopped",
+    defaultMessage: "Tutor response stopped.",
+  },
+  tutoringResponseRetryQueued: {
+    id: "tutoring.responseRetryQueued",
+    defaultMessage: "Linked response queued.",
+  },
+  tutoringTryNow: { id: "tutoring.tryNow", defaultMessage: "Try now" },
+  tutoringResumeRetries: {
+    id: "tutoring.resumeRetries",
+    defaultMessage: "Resume retries",
+  },
+  tutoringReconnectAvailable: {
+    id: "tutoring.reconnectAvailable",
+    defaultMessage: "Reconnect available",
+  },
+  tutoringRetriesExhausted: {
+    id: "tutoring.retriesExhausted",
+    defaultMessage: "Reconnect attempts exhausted",
+  },
   tutoringStreamLost: {
     id: "tutoring.streamLost",
     defaultMessage: "Connection lost. Response may continue; text unconfirmed.",

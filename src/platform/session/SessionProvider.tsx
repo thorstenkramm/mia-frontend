@@ -148,6 +148,7 @@ export function useAuthenticationBootstrapState(): AuthenticationBootstrapState 
 
 export function useSessionActions(): {
   readonly checkRouteAdmission: () => Promise<void>;
+  readonly markRevalidationNeeded: () => void;
   readonly stopLifecycleWaiting: () => void;
   readonly continueWorking: () => Promise<void>;
   readonly refreshSession: () => Promise<void>;
@@ -205,6 +206,9 @@ export function useSessionActions(): {
     runAuthenticatedMutation: (request, isCurrent) =>
       controller.runAuthenticatedMutation(request, isCurrent),
     checkRouteAdmission: () => controller.checkRouteAdmission(),
+    // The existing notification-only 1.8 lifecycle transition; feature
+    // transport loss must not initiate authenticated discovery.
+    markRevalidationNeeded: () => controller.observeLifecycle(),
     stopLifecycleWaiting: () => controller.stopLifecycleWaiting(),
     continueWorking: () => controller.continueWorking(),
     refreshSession: () => controller.refreshSession(),

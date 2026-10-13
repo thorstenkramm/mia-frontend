@@ -83,6 +83,18 @@ export const courseUnitCases = [
   },
   {
     title:
+      "Tutoring Stop accepts only 200 with a targeted interrupted response and independent current work",
+    file: "src/platform/api/tutoringSessions.test.ts",
+    points: ["tutoring-stop-document"],
+  },
+  {
+    title:
+      "Tutoring response retry accepts linked 201/200 but rejects wrong lineage and status",
+    file: "src/platform/api/tutoringSessions.test.ts",
+    points: ["tutoring-retry-document"],
+  },
+  {
+    title:
       "Tutoring workspace withholds session and transcript reads until learning participation settles",
     file: "src/app/routes/learnSessionEntry.test.tsx",
     points: ["tutoring-admitted"],
@@ -211,6 +223,26 @@ export const courseUnitCases = [
     file: "src/app/routes/learnSessionEntry.test.tsx",
     points: ["tutoring-route-hidden"],
   },
+  ...(
+    [
+      [
+        "Tutoring addressed denial destroys retained page memory but a failed check preserves it",
+        "tutoring-addressed-denial",
+      ],
+      [
+        "Tutoring linked retry replaces a queued POST article with fast terminal work truth",
+        "tutoring-fast-terminal-retry",
+      ],
+      [
+        "Tutoring queued Stop fences an older terminal GET while retaining both targeted articles",
+        "tutoring-stale-terminal-work",
+      ],
+    ] as const
+  ).map(([title, point]) => ({
+    title,
+    file: "src/app/routes/learnSessionEntry.test.tsx",
+    points: [point],
+  })),
   {
     title:
       "Tutoring recovery replaces a found session with the workspace and offers fixed exits when none",
