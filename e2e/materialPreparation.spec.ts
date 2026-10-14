@@ -515,10 +515,23 @@ test(
     const control = await materialBackend(page);
     await page.goto("/prepare/courses/course_1");
     await ready(page, "Course preparation");
-    await page
-      .getByRole("navigation", { name: "Course preparation", exact: true })
-      .getByRole("link", { name: "Course materials", exact: true })
-      .click();
+    await expect(
+      page.getByRole("heading", {
+        level: 1,
+        name: routeSecretFixture(page).courseName,
+      }),
+    ).toBeVisible();
+    await expect(
+      page.getByRole("heading", { level: 2, name: "Materials and students" }),
+    ).toBeVisible();
+    const materialsCard = page
+      .locator("main")
+      .getByRole("link", { name: /^Course materials\b/u });
+    await expect(materialsCard).toHaveAttribute(
+      "href",
+      "/prepare/courses/course_1/materials",
+    );
+    await materialsCard.click();
     await ready(page, "Course materials");
     await page.locator(`main a[href="${list}/new"]`).click();
     await ready(page, "Create course material");

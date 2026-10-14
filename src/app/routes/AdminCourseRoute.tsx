@@ -23,6 +23,7 @@ import { RouteDepartureLink } from "../../platform/ui/RouteDepartureLink";
 import { RouteRecoveryPanel } from "../../platform/ui/RouteRecoveryPanel";
 import type { CourseRouteResource } from "../../features/courses/CourseRouteProps";
 import { ApplicationShell } from "../ApplicationShell";
+import { CourseHubHeader } from "../../features/courses/CoursePreparationRoute";
 import { SessionWarning } from "../SessionLifecycle";
 import { CheckingAccess } from "./CheckingAccess";
 import {
@@ -113,12 +114,17 @@ export function CourseAdmissionSurface<T>({
   route,
   exit,
   copy = courseAdmissionCopy,
+  hubCourse,
   children,
 }: {
   readonly state: HostState<T>;
   readonly route: Pick<CourseEntryRoute, "titleMessage" | "headingMessage">;
   readonly exit: ReactNode;
   readonly copy?: AdmissionCopy;
+  readonly hubCourse?: {
+    readonly name: string;
+    readonly state: "active" | "inactive";
+  };
   readonly children: ReactNode;
 }) {
   const intl = useIntl();
@@ -138,6 +144,56 @@ export function CourseAdmissionSurface<T>({
         <SessionWarning />
       </CheckingAccess>
     );
+  if (state.kind !== "Ready")
+    if (
+      route.headingMessage.id === messages.preparationHub.id &&
+      state.kind === "Check failed" &&
+      state.error?.kind === "http" &&
+      state.error.disclosure.status === 503 &&
+      state.error.code === "course_readiness_unavailable"
+    )
+      return (
+        <ApplicationShell
+          titleMessage={messages.preparationHubTitle}
+          headingMessage={messages.preparationHub}
+          courseHeader={{
+            breadcrumbs: <CourseHubHeader unavailable />,
+            heading: intl.formatMessage(messages.preparationHub),
+          }}
+        >
+          <SessionWarning />
+          <RouteRecoveryPanel
+            heading={intl.formatMessage(
+              messages.preparationPanelUnavailableHeading,
+            )}
+            tone="red"
+            actions={
+              <>
+                <button
+                  type="button"
+                  className={actionClass}
+                  onClick={() => void checkRouteAdmission()}
+                >
+                  {intl.formatMessage(
+                    messages.preparationPanelUnavailableRetry,
+                  )}
+                </button>
+                <RouteDepartureLink
+                  to="/prepare/courses"
+                  className={actionClass}
+                >
+                  {intl.formatMessage(messages.preparationPanelUnavailableBack)}
+                </RouteDepartureLink>
+              </>
+            }
+          >
+            <p>
+              {intl.formatMessage(messages.preparationPanelUnavailableBody)}
+            </p>
+            <TechnicalErrorDisclosure error={state.error} />
+          </RouteRecoveryPanel>
+        </ApplicationShell>
+      );
   if (state.kind !== "Ready")
     return (
       <SimpleEntrySurface
@@ -180,6 +236,15 @@ export function CourseAdmissionSurface<T>({
     <ApplicationShell
       titleMessage={route.titleMessage}
       headingMessage={route.headingMessage}
+      {...(hubCourse === undefined
+        ? {}
+        : {
+            courseHeader: {
+              breadcrumbs: <CourseHubHeader courseName={hubCourse.name} />,
+              heading: <bdi dir="auto">{hubCourse.name}</bdi>,
+              meta: <CourseHubHeader courseState={hubCourse.state} />,
+            },
+          })}
     >
       <SessionWarning />
       <RouteRecoveryBoundary
@@ -275,7 +340,16 @@ export function CourseResourceHost({
   // Equivalent host JSX is marked in LearnCourseRoute.tsx: separate joined
   // and staff resources/authorization; shared neutral frame is already reused.
   return (
-    <CourseAdmissionSurface state={state} route={route} exit={exit}>
+    <CourseAdmissionSurface
+      state={state}
+      route={route}
+      exit={exit}
+      {...(route.resource === "hub" &&
+      state.kind === "Ready" &&
+      state.resource.kind === "preparation"
+        ? { hubCourse: state.resource.preparation.course }
+        : {})}
+    >
       {state.kind === "Ready" ? (
         <Content
           resource={state.resource}

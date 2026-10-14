@@ -12,14 +12,21 @@ test.use({ trace: "off", video: "off", screenshot: "off" });
 const hub = "/prepare/courses/course_1";
 const goals = `${hub}/learning-goals`;
 const field = (page: Page) => page.locator("#teaching-field");
-async function ready(page: Page, name: string) {
+async function ready(page: Page, name: string, unavailable = false) {
   await expect
     .poll(async () => (await page.title()) === `${name} | MIA`)
     .toBe(true);
   await expect
     .poll(async () =>
       page
-        .getByRole("heading", { level: 1, name, exact: true })
+        .getByRole("heading", {
+          level: 1,
+          name:
+            name === "Course preparation" && !unavailable
+              ? routeSecretFixture(page).courseName
+              : name,
+          exact: true,
+        })
         .evaluate((node) => document.activeElement === node),
     )
     .toBe(true);
@@ -124,7 +131,7 @@ test(
       ["language", "Course language", "language"],
     ];
     for (const [slug, heading, attribute] of fields) {
-      await page.locator(`main nav a[href="${hub}/${slug}"]`).click();
+      await page.locator(`main dl a[href="${hub}/${slug}"]`).click();
       await ready(page, heading ?? "");
       const value =
         attribute === "language" ? "ja" : `${fixture.teachingText}\n${slug}`;
@@ -166,7 +173,7 @@ test(
         control.candidateReads === 0,
     ).toBe(true);
     await expect
-      .poll(() => hasText(page, "Inactive — preparation is incomplete"))
+      .poll(() => hasText(page, "4 items block activation"))
       .toBe(true);
     expect(
       (await page
@@ -176,18 +183,13 @@ test(
         .count()) === 0,
     ).toBe(true);
     expect(
-      (await page
-        .getByRole("navigation", { name: "Course preparation", exact: true })
-        .getByRole("link", { name: "Course materials", exact: true })
-        .getAttribute("href")) === `${hub}/materials` &&
+      (await page.locator(`main a[href="${hub}/materials"]`).count()) === 2 &&
         (await page
           .getByRole("link", {
             name: "Choose material to review its brief",
             exact: true,
           })
-          .getAttribute("href")) === `${hub}/materials` &&
-        (await page.locator(`main dl a[href="${hub}/materials"]`).count()) ===
-          1,
+          .count()) === 0,
     ).toBe(true);
     await routeHygieneCheckpoint(page, "preparation-persisted");
     expect(
@@ -257,25 +259,26 @@ test(
     const control = await courseBackend(page);
     control.scopeIds = ["course_1"];
     for (const [state, text] of [
-      ["inactive_incomplete", "Inactive — preparation is incomplete"],
-      ["inactive_activatable", "Inactive — ready for activation"],
-      ["active_accepting", "Active — accepting new tutoring sessions"],
+      ["inactive_incomplete", "4 items block activation"],
+      ["inactive_activatable", "Ready to activate"],
+      ["active_accepting", "Active — open for new tutoring sessions"],
       [
         "active_not_accepting",
-        "Active — not accepting new tutoring sessions; existing sessions may finish",
+        "Active, but new tutoring sessions are unavailable",
       ],
     ] as const) {
       control.readiness = state;
       control.courseState = state.startsWith("active_") ? "active" : "inactive";
       control.activatedAt =
         control.courseState === "active" ? "2026-10-09T12:00:00.000000Z" : null;
-      // This test deliberately keeps viewer activation false even when aggregate
-      // preparation is ready; readiness state alone never authorizes activation.
-      control.activationEligible = false;
+      // Only the explicitly eligible first activation has the readiness entry.
+      control.activationEligible = state === "inactive_activatable";
       control.activationBlockers =
-        control.courseState === "active"
-          ? ["course_already_active"]
-          : ["assigned_supervisor_required"];
+        state === "inactive_activatable"
+          ? []
+          : control.courseState === "active"
+            ? ["course_already_active"]
+            : ["assigned_supervisor_required"];
       control.blockers =
         state === "inactive_activatable" || state === "active_accepting"
           ? []
@@ -295,14 +298,9 @@ test(
         (blocker) => blocker.id === "qualifying_material",
       );
       expect(
-        (await page.locator("main dl a").count()) ===
-          (materialBlocked ? 1 : 0) &&
-          (await page
-            .locator("main dl")
-            .getByRole("link", { name: "Course materials", exact: true })
-            .count()) === (materialBlocked ? 1 : 0) &&
-          (await page.locator(`main dl a[href="${hub}/materials"]`).count()) ===
-            (materialBlocked ? 1 : 0) &&
+        (await page.locator("main dl a").count()) === 5 &&
+          (await page.locator(`main a[href="${hub}/materials"]`).count()) ===
+            (materialBlocked ? 2 : 1) &&
           (await page
             .locator(
               'main a[href*="activate"], main a[href*="supervisors"], main a[href*="assignments"], main a[href*="brief"], main a[href^="/api/"], main a[href^="https:"]',
@@ -311,15 +309,206 @@ test(
       ).toBe(true);
     }
     expect(control.patches === 0 && control.collectionReads === 0).toBe(true);
+    control.readiness = "inactive_activatable";
+    control.courseState = "inactive";
+    control.activatedAt = "2026-10-08T10:00:00.000000Z";
+    control.deactivatedAt = "2026-10-09T10:00:00.000000Z";
+    control.activationEligible = true;
+    control.activationBlockers = [];
+    control.blockers = [];
+    await page.goto(hub);
+    await ready(page, "Course preparation");
+    await expect
+      .poll(() =>
+        hasText(page, "Activating it again is not available on this page."),
+      )
+      .toBe(true);
+    expect((await page.locator('main a[href*="activate"]').count()) === 0).toBe(
+      true,
+    );
     control.readUnavailable = true;
     await page.goto(hub);
-    await ready(page, "Course access unavailable");
+    await ready(page, "Course preparation", true);
+    await expect(
+      page.getByRole("heading", {
+        level: 2,
+        name: "Readiness could not be checked",
+      }),
+    ).toBeVisible();
     expect(!(await hasText(page, routeSecretFixture(page).courseName))).toBe(
       true,
     );
     await routeHygieneCheckpoint(page, "preparation-error");
   }),
 );
+
+test(
+  "hub saved content and blockers reflow in every locale and text mode",
+  protectedJourney(async (page) => {
+    test.setTimeout(120_000);
+    const control = await courseBackend(page);
+    control.scopeIds = ["course_1"];
+    control.teaching.language = "en";
+    control.teaching.learning_goals = routeSecretFixture(page).teachingText;
+    control.blockers = [
+      {
+        id: "supervisor_presence",
+        link: "/api/v1/courses/course_1/supervisors",
+      },
+      { id: "qualifying_material", link: "/api/v1/courses/course_1/materials" },
+    ];
+    control.activationBlockers = control.blockers.map((blocker) => blocker.id);
+    await page.goto("/");
+    for (const locale of locales)
+      for (const mode of ["standard", "large", "extra-large"]) {
+        await page.evaluate(
+          ({ locale, mode }) => {
+            localStorage.setItem("mia.interface.locale", locale);
+            localStorage.setItem("mia.interface.text-size", mode);
+          },
+          { locale, mode },
+        );
+        await page.setViewportSize({ width: 320, height: 900 });
+        await page.goto(hub);
+        expect(
+          await page
+            .locator("h1 bdi")
+            .evaluate(
+              (node, expected) => node.textContent === expected,
+              routeSecretFixture(page).courseName,
+            ),
+        ).toBe(true);
+        const labels = catalog(locale);
+        await expect(
+          page.getByRole("heading", {
+            name: labels["preparation.setup.heading"],
+            level: 2,
+          }),
+        ).toBeVisible();
+        expect(await hasText(page, `(en)`)).toBe(true);
+        expect(
+          await page.evaluate(
+            (expected) =>
+              document.documentElement.scrollWidth <= innerWidth &&
+              document.documentElement.lang === expected,
+            locale,
+          ),
+        ).toBe(true);
+        expect(
+          (await page
+            .locator('main a[href*="supervisors"], main a[href^="/api/"]')
+            .count()) === 0,
+        ).toBe(true);
+      }
+    await page.setViewportSize({ width: 390, height: 900 });
+    await page.reload();
+    expect(
+      await page.evaluate(
+        () => document.documentElement.scrollWidth <= innerWidth,
+      ),
+    ).toBe(true);
+    await routeHygieneCheckpoint(page, "hub-reflow");
+    expect(
+      control.collectionReads === 0 &&
+        control.candidateReads === 0 &&
+        control.detailReads.every((path) => path === "course_1"),
+    ).toBe(true);
+  }),
+);
+
+test(
+  "hub keeps long saved details and language tag readable at narrow widths",
+  protectedJourney(async (page) => {
+    const control = await courseBackend(page);
+    control.scopeIds = ["course_1"];
+    const fixture = routeSecretFixture(page);
+    control.name = `${fixture.courseName} `.repeat(8);
+    control.teaching.description = fixture.teachingText.repeat(8);
+    control.teaching.language = "zh-Hant-TW";
+    await page.goto("/");
+    for (const mode of ["standard", "large", "extra-large"]) {
+      await page.evaluate(
+        (value) => localStorage.setItem("mia.interface.text-size", value),
+        mode,
+      );
+      await page.setViewportSize({ width: 320, height: 900 });
+      await page.goto(hub);
+      await expect(
+        page.getByRole("heading", { level: 2, name: "Course setup" }),
+      ).toBeVisible();
+      for (const [slug, saved] of [
+        ["language", "zh-Hant-TW"],
+        ["details", control.teaching.description],
+      ] as const) {
+        const value = page.locator(
+          `main dl > div:has(a[href="${hub}/${slug}"]) dd > span > span:first-child`,
+        );
+        expect(
+          await value.evaluate((node, expected) => {
+            if (!(node instanceof HTMLElement)) return false;
+            const description = node.closest("dd");
+            if (!description || !node.textContent?.includes(expected))
+              return false;
+            const walker = document.createTreeWalker(
+              node,
+              NodeFilter.SHOW_TEXT,
+            );
+            let last: Text | null = null;
+            while (walker.nextNode()) {
+              if (
+                walker.currentNode instanceof Text &&
+                walker.currentNode.textContent?.trim()
+              )
+                last = walker.currentNode;
+            }
+            if (!last) return false;
+            const range = document.createRange();
+            range.setStart(last, last.length - 1);
+            range.setEnd(last, last.length);
+            const glyph = range.getBoundingClientRect();
+            const box = description.getBoundingClientRect();
+            return (
+              getComputedStyle(node).webkitLineClamp === "none" &&
+              glyph.height > 0 &&
+              glyph.bottom <= box.bottom + 1 &&
+              glyph.right <= box.right + 1 &&
+              description.scrollWidth <= description.clientWidth + 1 &&
+              document.documentElement.scrollWidth <= innerWidth
+            );
+          }, saved ?? ""),
+        ).toBe(true);
+      }
+    }
+    expect(control.detailReads.every((id) => id === "course_1")).toBe(true);
+    await routeHygieneCheckpoint(page, "hub-reflow");
+  }),
+);
+
+test("hub remains operable at real 400 percent zoom", async () => {
+  await atBrowserZoom(4, async (page) => {
+    const control = await courseRoutes(page);
+    control.scopeIds = ["course_1"];
+    await page.goto(hub);
+    expect(
+      await page
+        .locator("h1 bdi")
+        .evaluate(
+          (node, expected) => node.textContent === expected,
+          routeSecretFixture(page).courseName,
+        ),
+    ).toBe(true);
+    expect(
+      await page.evaluate(
+        () => document.documentElement.scrollWidth <= innerWidth,
+      ),
+    ).toBe(true);
+    await expect(
+      page.getByRole("link", { name: /Course students/u }),
+    ).toBeVisible();
+    await routeHygieneCheckpoint(page, "hub-zoom");
+    expect(control.collectionReads === 0).toBe(true);
+  });
+});
 
 test(
   "preparation hidden save denial removes preview and reveals only inert technical error",
@@ -416,7 +605,7 @@ test(
     const fixture = routeSecretFixture(page);
     await page.goto(hub);
     await ready(page, "Course preparation");
-    await page.locator(`main nav a[href="${goals}"]`).click();
+    await page.locator(`main dl a[href="${goals}"]`).click();
     await ready(page, "Learning goals");
     await field(page).fill(fixture.teachingText);
     await page.goBack();
@@ -576,7 +765,7 @@ test(
     for (const destination of ["hub", "Home", "Back"]) {
       await page.goto(hub);
       await ready(page, "Course preparation");
-      await page.locator(`main nav a[href="${goals}"]`).click();
+      await page.locator(`main dl a[href="${goals}"]`).click();
       await ready(page, "Learning goals");
       await field(page).fill(fixture.teachingText);
       let release = () => {};

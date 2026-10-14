@@ -28,13 +28,19 @@ const contains = (page: Page, text: string) =>
     .locator("main")
     .textContent()
     .then((value) => value?.includes(text) === true);
-async function mounted(page: Page, label: string) {
+async function mounted(page: Page, label: string, unavailable = false) {
   await expect
     .poll(() =>
       page
         .locator("h1")
         .textContent()
-        .then((value) => value === label),
+        .then(
+          (value) =>
+            value ===
+            (label === "Course preparation" && !unavailable
+              ? routeSecretFixture(page).courseName
+              : label),
+        ),
     )
     .toBe(true);
   expect(
@@ -92,10 +98,7 @@ test(
     await mounted(page, "Course preparation");
     await expect
       .poll(() =>
-        contains(
-          page,
-          "Active — not accepting new tutoring sessions; existing sessions may finish",
-        ),
+        contains(page, "Active, but new tutoring sessions are unavailable"),
       )
       .toBe(true);
     await expect
@@ -132,11 +135,12 @@ test(
     await dispatch;
     control.readUnavailable = true;
     await click;
-    await mounted(page, "Course access unavailable");
+    await mounted(page, "Course preparation", true);
     expect(
       control.activations === 1 &&
         control.courseState === "active" &&
-        !(await contains(page, "Active — accepting new tutoring sessions")),
+        !(await contains(page, "Active — open for new tutoring sessions")) &&
+        (await page.getByText("Active", { exact: true }).count()) === 0,
     ).toBe(true);
     control.readUnavailable = false;
     await page
@@ -144,7 +148,7 @@ test(
       .click();
     await mounted(page, "Course preparation");
     await expect
-      .poll(() => contains(page, "Active — accepting new tutoring sessions"))
+      .poll(() => contains(page, "Active — open for new tutoring sessions"))
       .toBe(true);
     expect(control.activations === 1).toBe(true);
   }),
@@ -178,7 +182,7 @@ test(
       .click();
     await mounted(page, "Course preparation");
     await page
-      .getByRole("link", { name: "Course readiness", exact: true })
+      .getByRole("link", { name: "Review and activate", exact: true })
       .click();
     await mounted(page, "Course readiness");
     await scan(page);
@@ -200,7 +204,7 @@ test(
     await page.keyboard.press("Enter");
     await mounted(page, "Course preparation");
     await expect
-      .poll(() => contains(page, "Active — accepting new tutoring sessions"))
+      .poll(() => contains(page, "Active — open for new tutoring sessions"))
       .toBe(true);
     expect(
       control.activations === 1 &&
@@ -212,11 +216,9 @@ test(
           .count()) === 0,
     ).toBe(true);
     expect(
-      (await page
-        .locator(
-          `main a[href="${hub}/students"], main a[href="${hub}/students/new"]`,
-        )
-        .count()) === 2,
+      (await page.locator(`main a[href="${hub}/students"]`).count()) === 1 &&
+        (await page.locator(`main a[href="${hub}/students/new"]`).count()) ===
+          0,
     ).toBe(true);
     await scan(page);
     await routeHygieneCheckpoint(page, "activation-hub");
@@ -320,9 +322,9 @@ for (const state of ["active_not_accepting", "previously-active"] as const)
           (state === "active_not_accepting"
             ? await contains(
                 page,
-                "Active — not accepting new tutoring sessions",
+                "Active, but new tutoring sessions are unavailable",
               )
-            : await contains(page, "Reactivation is not available")),
+            : await contains(page, "Activating it again is not available")),
       ).toBe(true);
     }),
   );

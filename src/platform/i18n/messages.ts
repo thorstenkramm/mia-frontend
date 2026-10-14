@@ -3301,6 +3301,244 @@ export const messages = defineMessages({
     id: "preparation.hubTitle",
     defaultMessage: "Course preparation | MIA",
   },
+  preparationBreadcrumbs: {
+    id: "preparation.breadcrumbs",
+    defaultMessage: "Course path",
+  },
+  preparationStatePillInactive: {
+    id: "preparation.statePill.inactive",
+    defaultMessage: "Inactive",
+  },
+  preparationStatePillActive: {
+    id: "preparation.statePill.active",
+    defaultMessage: "Active",
+  },
+  preparationBadgeOptional: {
+    id: "preparation.badge.optional",
+    defaultMessage: "Optional",
+  },
+  preparationBadgeBlocksActivation: {
+    id: "preparation.badge.blocksActivation",
+    defaultMessage: "Blocks activation",
+  },
+  preparationBadgeBlocksSessions: {
+    id: "preparation.badge.blocksSessions",
+    defaultMessage: "Blocks new sessions",
+  },
+  preparationOpenReadiness: {
+    id: "preparation.openReadiness",
+    defaultMessage: "Open readiness review",
+  },
+  preparationPanelIncompleteHeading: {
+    id: "preparation.panel.incomplete.heading",
+    defaultMessage:
+      "{count, plural, one {# item blocks activation} other {# items block activation}}",
+  },
+  preparationPanelIncompleteBody: {
+    id: "preparation.panel.incomplete.body",
+    defaultMessage:
+      "The course stays inactive until {count, plural, one {it is} other {they are}} resolved. Work on them in any order; everything else on this page can wait.",
+  },
+  preparationPanelActivatableHeading: {
+    id: "preparation.panel.activatable.heading",
+    defaultMessage: "Ready to activate",
+  },
+  preparationPanelActivatableBody: {
+    id: "preparation.panel.activatable.body",
+    defaultMessage:
+      "Nothing blocks activation. Review the summary and confirm to open the course for new tutoring sessions.",
+  },
+  preparationPanelActivatableAction: {
+    id: "preparation.panel.activatable.action",
+    defaultMessage: "Review and activate",
+  },
+  preparationPanelPreviousHeading: {
+    id: "preparation.panel.previous.heading",
+    defaultMessage: "Nothing blocks activation",
+  },
+  preparationPanelPreviousBody: {
+    id: "preparation.panel.previous.body",
+    defaultMessage:
+      "This course was active before. Activating it again is not available on this page. While the course is inactive, students cannot start new tutoring sessions.",
+  },
+  preparationPanelAcceptingHeading: {
+    id: "preparation.panel.accepting.heading",
+    defaultMessage: "Active — open for new tutoring sessions",
+  },
+  preparationPanelAcceptingBody: {
+    id: "preparation.panel.accepting.body",
+    defaultMessage:
+      "Students in this course can start new tutoring sessions. Activated {activatedAt}.",
+  },
+  preparationPanelNotAcceptingHeading: {
+    id: "preparation.panel.notAccepting.heading",
+    defaultMessage: "Active, but new tutoring sessions are unavailable",
+  },
+  preparationPanelNotAcceptingBody: {
+    id: "preparation.panel.notAccepting.body",
+    defaultMessage:
+      "Sessions already in progress continue. Students can start new sessions again once the {count, plural, one {item} other {items}} below {count, plural, one {is} other {are}} resolved.",
+  },
+  preparationPanelUnavailableHeading: {
+    id: "preparation.panel.unavailable.heading",
+    defaultMessage: "Readiness could not be checked",
+  },
+  preparationPanelUnavailableBody: {
+    id: "preparation.panel.unavailable.body",
+    defaultMessage:
+      "MIA could not evaluate this course safely, so its preparation details are not shown. Try again in a moment.",
+  },
+  preparationPanelUnavailableRetry: {
+    id: "preparation.panel.unavailable.retry",
+    defaultMessage: "Check again",
+  },
+  preparationPanelUnavailableBack: {
+    id: "preparation.panel.unavailable.back",
+    defaultMessage: "Back to Prepare courses",
+  },
+  preparationBlockersHeadingInactive: {
+    id: "preparation.blockers.heading.inactive",
+    defaultMessage: "Blocking activation",
+  },
+  preparationBlockersHeadingActive: {
+    id: "preparation.blockers.heading.active",
+    defaultMessage: "Blocking new tutoring sessions",
+  },
+  preparationBlockerLearningGoalsName: {
+    id: "preparation.blocker.learningGoals.name",
+    defaultMessage: "Learning goals",
+  },
+  preparationBlockerLearningGoalsBody: {
+    id: "preparation.blocker.learningGoals.body",
+    defaultMessage:
+      "Describe what students should be able to do after this course.",
+  },
+  preparationBlockerLearningGoalsAction: {
+    id: "preparation.blocker.learningGoals.action",
+    defaultMessage: "Write learning goals",
+  },
+  preparationBlockerInstructionsName: {
+    id: "preparation.blocker.instructions.name",
+    defaultMessage: "AI instructions",
+  },
+  preparationBlockerInstructionsBody: {
+    id: "preparation.blocker.instructions.body",
+    defaultMessage:
+      "Describe how the AI tutor should work with students in this course. Examples and a preview help you along.",
+  },
+  preparationBlockerInstructionsAction: {
+    id: "preparation.blocker.instructions.action",
+    defaultMessage: "Write AI instructions",
+  },
+  preparationBlockerLanguageName: {
+    id: "preparation.blocker.language.name",
+    defaultMessage: "Course language",
+  },
+  preparationBlockerLanguageBody: {
+    id: "preparation.blocker.language.body",
+    defaultMessage: "Set the language this course is taught in.",
+  },
+  preparationBlockerLanguageAction: {
+    id: "preparation.blocker.language.action",
+    defaultMessage: "Set course language",
+  },
+  preparationBlockerSupervisorName: {
+    id: "preparation.blocker.supervisor.name",
+    defaultMessage: "Assigned supervisor",
+  },
+  preparationBlockerMaterialName: {
+    id: "preparation.blocker.material.name",
+    defaultMessage: "Approved course-wide material",
+  },
+  preparationBlockerMaterialInactive: {
+    id: "preparation.blocker.material.body.inactive",
+    defaultMessage:
+      "At least one course-wide material with uploaded files that has finished processing and that you have approved. Processing and approval are separate steps.",
+  },
+  preparationBlockerMaterialActive: {
+    id: "preparation.blocker.material.body.active",
+    defaultMessage:
+      "No course-wide material qualifies right now. This happens, for example, when the brief of an approved material is changed and needs your approval again.",
+  },
+  preparationBlockerMaterialAction: {
+    id: "preparation.blocker.material.action",
+    defaultMessage: "Open course materials",
+  },
+  preparationBlockerUnmet: {
+    id: "preparation.blocker.unmet",
+    defaultMessage: "Unmet",
+  },
+  preparationSetupHeading: {
+    id: "preparation.setup.heading",
+    defaultMessage: "Course setup",
+  },
+  preparationSetupIntro: {
+    id: "preparation.setup.intro",
+    defaultMessage:
+      "What the AI tutor works with. Each part is edited and saved on its own page.",
+  },
+  preparationSetupDetails: {
+    id: "preparation.setup.details",
+    defaultMessage: "Name and description",
+  },
+  preparationSetupSupervisorLabel: {
+    id: "preparation.setup.supervisorLabel",
+    defaultMessage: "Supervisors",
+  },
+  preparationSetupNotWritten: {
+    id: "preparation.setup.notWritten",
+    defaultMessage: "Not written yet",
+  },
+  preparationSetupNotAdded: {
+    id: "preparation.setup.notAdded",
+    defaultMessage: "Not added",
+  },
+  preparationSetupNoDescription: {
+    id: "preparation.setup.noDescription",
+    defaultMessage: "no description",
+  },
+  preparationSetupEdit: {
+    id: "preparation.setup.edit",
+    defaultMessage: "Edit",
+  },
+  preparationSetupWrite: {
+    id: "preparation.setup.write",
+    defaultMessage: "Write",
+  },
+  preparationSetupAdd: { id: "preparation.setup.add", defaultMessage: "Add" },
+  preparationSetupActionName: {
+    id: "preparation.setup.actionName",
+    defaultMessage: "{action} {field}",
+  },
+  preparationSetupSupervisors: {
+    id: "preparation.setup.supervisors",
+    defaultMessage:
+      "{count, number} assigned · assignments are managed by an administrator",
+  },
+  preparationEntriesHeading: {
+    id: "preparation.entries.heading",
+    defaultMessage: "Materials and students",
+  },
+  preparationEntriesMaterialsTitle: {
+    id: "preparation.entries.materials.title",
+    defaultMessage: "Course materials",
+  },
+  preparationEntriesMaterialsBody: {
+    id: "preparation.entries.materials.body",
+    defaultMessage: "Upload files, follow processing and approve briefs.",
+  },
+  preparationEntriesStudentsTitle: {
+    id: "preparation.entries.students.title",
+    defaultMessage: "Course students",
+  },
+  preparationEntriesStudentsInactive: {
+    id: "preparation.entries.students.body.inactive",
+    defaultMessage: "Students can be added once the course is active.",
+  },
+  preparationEntriesStudentsActive: {
+    id: "preparation.entries.students.body.active",
+    defaultMessage: "Create student accounts or add existing students.",
+  },
   preparationDetails: {
     id: "preparation.details",
     defaultMessage: "Course details",

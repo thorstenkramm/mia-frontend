@@ -195,6 +195,7 @@ function toPreparation(
     (activation.eligible &&
       (readiness.state !== "inactive_activatable" ||
         readiness.blockers.length !== 0)) ||
+    (readiness.state === "inactive_activatable" && !activation.eligible) ||
     (readiness.state === "inactive_incomplete" && activation.eligible)
   )
     throw new ApiProtocolError();

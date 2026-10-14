@@ -824,6 +824,31 @@ export const courseUnitCases = [
     file: "src/app/routes/coursePreparation.test.tsx",
     points: ["preparation-input", "preparation-persisted"],
   },
+  ...["incomplete", "ready", "previous", "accepting", "not-accepting"].map(
+    (presentation) => ({
+      title: `hub ${presentation} renders only current server facts`,
+      file: "src/app/routes/coursePreparation.test.tsx",
+      points: ["hub-states"],
+    }),
+  ),
+  {
+    title:
+      "hub rejects a ready-state/activation disagreement without claiming prior activation",
+    file: "src/app/routes/coursePreparation.test.tsx",
+    points: ["hub-protocol"],
+  },
+  {
+    title:
+      "hub blockers preserve server order and never turn API links into hrefs",
+    file: "src/app/routes/coursePreparation.test.tsx",
+    points: ["hub-blockers"],
+  },
+  {
+    title:
+      "hub readiness failure removes course identity and retries only by explicit admission",
+    file: "src/app/routes/coursePreparation.test.tsx",
+    points: ["hub-unavailable"],
+  },
   {
     title:
       "preparation backend validation retains correction and clears invalid associations",

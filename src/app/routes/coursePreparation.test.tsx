@@ -5,7 +5,6 @@ import {
   render,
   screen,
   waitFor,
-  within,
 } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
 import { http, HttpResponse, type JsonBodyType } from "msw";
@@ -87,31 +86,39 @@ function backend() {
     release: null as Promise<void> | null,
     readFail: false,
     readRelease: null as Promise<void> | null,
+    courseState: "inactive" as "inactive" | "active",
+    activatedAt: null as string | null,
+    deactivatedAt: null as string | null,
+    readiness: "inactive_incomplete" as
+      | "inactive_incomplete"
+      | "inactive_activatable"
+      | "active_accepting"
+      | "active_not_accepting",
+    activationEligible: false,
+    activationBlockers: ["learning_goals", "qualifying_material"] as string[],
+    blockers: [
+      { id: "learning_goals", link: "/api/v1/courses/course_1" },
+      { id: "qualifying_material", link: "/api/v1/courses/course_1/materials" },
+    ] as { id: string; link: string | null }[],
   };
   const resource = () => ({
     type: "courses",
     id: "course_1",
     attributes: {
       name: fixture.name,
-      state: "inactive",
-      activated_at: null,
-      deactivated_at: null,
+      state: state.courseState,
+      activated_at: state.activatedAt,
+      deactivated_at: state.deactivatedAt,
       created_at: "2026-10-08T10:00:00.000000Z",
       ...state.fields,
       readiness: {
         activation: {
-          eligible: false,
-          blockers: ["learning_goals", "qualifying_material"],
+          eligible: state.activationEligible,
+          blockers: state.activationBlockers,
           consequences: ["activate_course"],
         },
-        state: "inactive_incomplete",
-        blockers: [
-          { id: "learning_goals", link: "/api/v1/courses/course_1" },
-          {
-            id: "qualifying_material",
-            link: "/api/v1/courses/course_1/materials",
-          },
-        ],
+        state: state.readiness,
+        blockers: state.blockers,
       },
     },
     relationships: { supervisors: { data: [{ type: "users", id: "s1" }] } },
@@ -268,13 +275,15 @@ it("preparation validates Unicode bounds then installs persisted distinct teachi
   ).toBe(true);
   courseUnitCheckpoint("preparation-persisted");
   await user.click(screen.getByRole("link", { name: "Course preparation" }));
-  await screen.findByRole("heading", { level: 1, name: "Course preparation" });
+  await screen.findByRole("heading", { level: 1, name: fixture.name });
   await waitFor(() =>
-    expect(mainIncludes("Inactive — preparation is incomplete")).toBe(true),
+    expect(mainIncludes("2 items block activation")).toBe(true),
   );
   await waitFor(() =>
     expect(
-      screen.queryAllByRole("link", { name: "AI instructions" }).length > 0,
+      document.querySelector(
+        'main dl a[href="/prepare/courses/course_1/ai-instructions"]',
+      ) !== null,
     ).toBe(true),
   );
   expect(
@@ -284,26 +293,188 @@ it("preparation validates Unicode bounds then installs persisted distinct teachi
     ),
   ).toBe(true);
   expect(
-    within(screen.getByRole("navigation", { name: "Course preparation" }))
-      .getByRole("link", { name: "Course materials" })
+    screen
+      .getByRole("link", { name: /Course materials/u })
       .getAttribute("href") === "/prepare/courses/course_1/materials" &&
-      screen
-        .getByRole("link", {
-          name: "Choose material to review its brief",
-        })
-        .getAttribute("href") === "/prepare/courses/course_1/materials" &&
       document.querySelectorAll(
-        'main dl a[href="/prepare/courses/course_1/materials"]',
-      ).length === 1,
+        'main a[href="/prepare/courses/course_1/materials"]',
+      ).length === 2 &&
+      screen.queryByRole("link", {
+        name: "Choose material to review its brief",
+      }) === null,
   ).toBe(true);
-  await user.click(
-    screen.getAllByRole("link", { name: "AI instructions" })[0] as HTMLElement,
+  const instructionsLink = document.querySelector(
+    'main dl a[href="/prepare/courses/course_1/ai-instructions"]',
   );
+  if (!(instructionsLink instanceof HTMLElement))
+    throw new Error("Missing inline instruction action.");
+  await user.click(instructionsLink);
   await screen.findByRole("heading", { level: 1, name: "AI instructions" });
   expect(
     ((await screen.findByLabelText("AI instructions")) as HTMLTextAreaElement)
       .value === "",
   ).toBe(true);
+});
+
+for (const presentation of [
+  "incomplete",
+  "ready",
+  "previous",
+  "accepting",
+  "not-accepting",
+] as const)
+  it(`hub ${presentation} renders only current server facts`, async () => {
+    const { fixture, state } = backend();
+    if (presentation === "ready" || presentation === "previous") {
+      state.readiness = "inactive_activatable";
+      state.blockers = [];
+      state.activationEligible = true;
+      state.activationBlockers = [];
+      if (presentation === "previous")
+        state.deactivatedAt = "2026-10-08T10:00:00.000000Z";
+      if (presentation === "previous")
+        state.activatedAt = "2026-10-08T09:00:00.000000Z";
+    }
+    if (presentation === "accepting" || presentation === "not-accepting") {
+      state.courseState = "active";
+      state.activatedAt = "2026-10-08T10:00:00.000000Z";
+      state.readiness =
+        presentation === "accepting"
+          ? "active_accepting"
+          : "active_not_accepting";
+      state.activationBlockers = [
+        "course_already_active",
+        ...(presentation === "not-accepting"
+          ? ["learning_goals", "qualifying_material"]
+          : []),
+      ];
+      if (presentation === "accepting") state.blockers = [];
+    }
+    state.fields.language = "en";
+    state.fields.learning_goals = fixture.teachingText;
+    mount("/prepare/courses/course_1");
+    await screen.findByRole("heading", { level: 1, name: fixture.name });
+    expect(
+      document.title === "Course preparation | MIA" && state.reads === 1,
+    ).toBe(true);
+    expect(
+      (await screen.findByRole("heading", {
+        level: 2,
+        name: "Course setup",
+      })) !== null,
+    ).toBe(true);
+    expect(
+      mainIncludes("English (en)") && mainIncludes(fixture.teachingText),
+    ).toBe(true);
+    expect(
+      screen
+        .getByRole("link", { name: "Edit Learning goals" })
+        .getAttribute("href") === "/prepare/courses/course_1/learning-goals",
+    ).toBe(true);
+    expect(
+      screen.queryByRole("link", {
+        name: "Choose material to review its brief",
+      }) === null,
+    ).toBe(true);
+    expect(
+      screen.queryByRole("link", { name: "Review and activate" }) !== null,
+    ).toBe(presentation === "ready");
+    expect(
+      document.querySelector(
+        'main a[href="/prepare/courses/course_1/activate"]',
+      ) === null,
+    ).toBe(true);
+    expect(screen.queryAllByText("Blocks activation").length > 0).toBe(
+      presentation === "incomplete",
+    );
+    expect(screen.queryAllByText("Blocks new sessions").length > 0).toBe(
+      presentation === "not-accepting",
+    );
+    if (presentation === "previous")
+      expect(
+        mainIncludes("Activating it again is not available on this page."),
+      ).toBe(true);
+    if (presentation === "not-accepting")
+      expect(mainIncludes("Sessions already in progress continue.")).toBe(true);
+    if (presentation === "accepting")
+      expect(mainIncludes("Activated")).toBe(true);
+    courseUnitCheckpoint("hub-states");
+  });
+
+it("hub rejects a ready-state/activation disagreement without claiming prior activation", async () => {
+  const { fixture, state } = backend();
+  state.readiness = "inactive_activatable";
+  state.activationEligible = false;
+  state.activationBlockers = ["assigned_supervisor_required"];
+  state.blockers = [];
+  mount("/prepare/courses/course_1");
+  await screen.findByRole("heading", {
+    level: 1,
+    name: "Course access unavailable",
+  });
+  expect(
+    state.reads === 1 &&
+      document.title === "Course access unavailable | MIA" &&
+      !mainIncludes(fixture.name) &&
+      !mainIncludes("This course was active before.") &&
+      !mainIncludes("Course setup") &&
+      screen.queryByRole("link", { name: "Review and activate" }) === null &&
+      !document.querySelector('main a[href*="activate"]'),
+  ).toBe(true);
+  courseUnitCheckpoint("hub-protocol");
+});
+
+it("hub blockers preserve server order and never turn API links into hrefs", async () => {
+  const { state } = backend();
+  state.blockers = [
+    { id: "supervisor_presence", link: "/api/v1/courses/course_1/supervisors" },
+    { id: "language", link: "https://untrusted.invalid" },
+    { id: "qualifying_material", link: "/api/v1/courses/course_1/materials" },
+  ];
+  state.activationBlockers = state.blockers.map((item) => item.id);
+  mount("/prepare/courses/course_1");
+  await screen.findByRole("heading", { level: 2, name: "Blocking activation" });
+  const blockers = document.querySelector(
+    'section[aria-labelledby="course-blockers-heading"]',
+  );
+  expect(
+    blockers?.querySelectorAll("h3").length === 3 &&
+      blockers.querySelectorAll("h3")[0]?.textContent ===
+        "Assigned supervisor" &&
+      blockers.querySelectorAll("a").length === 1 &&
+      blockers.querySelector("a")?.getAttribute("href") ===
+        "/prepare/courses/course_1/materials" &&
+      !document.querySelector(
+        'main a[href^="/api/"], main a[href^="https:"]',
+      ) &&
+      mainIncludes("An administrator must resolve supervisor assignment."),
+  ).toBe(true);
+  courseUnitCheckpoint("hub-blockers");
+});
+
+it("hub readiness failure removes course identity and retries only by explicit admission", async () => {
+  const { fixture, state } = backend();
+  state.readFail = true;
+  mount("/prepare/courses/course_1");
+  await screen.findByRole("heading", {
+    level: 2,
+    name: "Readiness could not be checked",
+  });
+  expect(
+    document.title === "Course preparation | MIA" &&
+      !mainIncludes(fixture.name) &&
+      !mainIncludes("Course setup") &&
+      !mainIncludes("Last checked") &&
+      screen.getByRole("link", { name: "Back to Prepare courses" }) !== null &&
+      state.reads === 1,
+  ).toBe(true);
+  state.readFail = false;
+  await userEvent
+    .setup()
+    .click(screen.getByRole("button", { name: "Check again" }));
+  await screen.findByRole("heading", { level: 1, name: fixture.name });
+  expect(state.reads === 2).toBe(true);
+  courseUnitCheckpoint("hub-unavailable");
 });
 
 it("preparation backend validation retains correction and clears invalid associations", async () => {

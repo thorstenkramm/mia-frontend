@@ -178,8 +178,10 @@ export async function checkRouteSecretHygiene() {
                       item.id.startsWith("material-"),
                     )
                   : scope === "preparation"
-                    ? routeHygieneCases.filter((item) =>
-                        item.id.startsWith("preparation-"),
+                    ? routeHygieneCases.filter(
+                        (item) =>
+                          item.id.startsWith("preparation-") ||
+                          item.id.startsWith("hub-"),
                       )
                     : scope === "invitations"
                       ? routeHygieneCases.filter((item) =>

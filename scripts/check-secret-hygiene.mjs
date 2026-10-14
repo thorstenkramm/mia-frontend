@@ -216,8 +216,10 @@ async function checkCourseUnitHygiene() {
                 item.title.startsWith("material "),
               )
             : process.env.MIA_SECRET_HYGIENE_SCOPE === "preparation-unit"
-              ? courseUnitCases.filter((item) =>
-                  item.title.startsWith("preparation "),
+              ? courseUnitCases.filter(
+                  (item) =>
+                    item.title.startsWith("preparation ") ||
+                    item.title.startsWith("hub "),
                 )
               : courseUnitCases;
   const probes = selected.flatMap((item) =>

@@ -155,12 +155,18 @@ export function ApplicationShell({
   titleMessage,
   headingMessage,
   departureFallback,
+  courseHeader,
   children,
 }: {
   readonly titleMessage: MessageDescriptor;
   readonly headingMessage: MessageDescriptor;
   // Answers shell departures until the route content registers its own guard.
   readonly departureFallback?: () => RouteDeparture;
+  readonly courseHeader?: {
+    readonly breadcrumbs: ReactNode;
+    readonly heading: ReactNode;
+    readonly meta?: ReactNode;
+  };
   readonly children: ReactNode;
 }) {
   const intl = useIntl();
@@ -255,14 +261,18 @@ export function ApplicationShell({
           className="py-10 lg:pl-72"
         >
           <div className="break-words px-4 sm:px-6 lg:px-8">
+            {courseHeader?.breadcrumbs}
             <h1
               ref={headingRef}
               tabIndex={-1}
               className="text-2xl/7 font-bold text-gray-900 sm:text-3xl sm:tracking-tight"
             >
-              {intl.formatMessage(headingMessage)}
+              {courseHeader?.heading ?? intl.formatMessage(headingMessage)}
             </h1>
-            <div className="mt-6 max-w-lg">{children}</div>
+            {courseHeader?.meta}
+            <div className={courseHeader ? "mt-6 max-w-5xl" : "mt-6 max-w-lg"}>
+              {children}
+            </div>
             <BuildIdentifier className="mt-10 break-all text-sm/6 text-gray-500" />
           </div>
         </main>

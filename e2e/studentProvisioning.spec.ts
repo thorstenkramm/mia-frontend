@@ -364,7 +364,34 @@ test(
   protectedJourney(async (page) => {
     const control = await studentBackend(page);
     await page.goto(hub);
-    await mounted(page, "Course preparation");
+    await expect(
+      page.getByRole("heading", {
+        level: 1,
+        name: routeSecretFixture(page).courseName,
+      }),
+    ).toBeVisible();
+    await expect(page).toHaveTitle("Course preparation | MIA");
+    expect(
+      (await page.locator("main").count()) === 1 &&
+        (await page.locator("h1").count()) === 1,
+    ).toBe(true);
+    await expect(
+      page.getByRole("heading", {
+        level: 2,
+        name: "Active, but new tutoring sessions are unavailable",
+      }),
+    ).toBeVisible();
+    const studentsCard = page
+      .locator("main")
+      .getByRole("link", { name: /^Course students\b/u });
+    await expect(studentsCard).toHaveAttribute("href", list);
+    await studentsCard.click();
+    await mounted(page, "Course students");
+    expect(
+      control.rosterReads === 1 &&
+        (await page.locator("tbody tr").count()) === 0,
+    ).toBe(true);
+    const rosterReadsBeforeCreation = control.rosterReads;
     await page
       .getByRole("link", { name: "Create student", exact: true })
       .click();
@@ -406,7 +433,7 @@ test(
       .poll(
         async () =>
           (await page.locator("tbody tr").count()) === 1 &&
-          control.rosterReads === 1,
+          control.rosterReads === rosterReadsBeforeCreation + 1,
       )
       .toBe(true);
     await page.reload();

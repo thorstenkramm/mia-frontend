@@ -89,6 +89,7 @@ development_status:
 
   # Later scope: select only after the student-tutoring MVP milestone or a new owner decision.
   epic-7: backlog
+  7-1-status-first-preparation-hub: done
   7-1-request-mentoring: backlog
   7-2-triage-and-assign-requests: backlog
   7-3-respond-and-schedule: backlog

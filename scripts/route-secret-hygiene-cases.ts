@@ -420,6 +420,23 @@ export const routeHygieneCases = [
     checkpoints: ["preparation-error", "complete"],
   },
   {
+    id: "hub-reflow",
+    title:
+      "hub saved content and blockers reflow in every locale and text mode",
+    checkpoints: ["hub-reflow", "complete"],
+  },
+  {
+    id: "hub-long-values",
+    title:
+      "hub keeps long saved details and language tag readable at narrow widths",
+    checkpoints: ["hub-reflow", "complete"],
+  },
+  {
+    id: "hub-zoom",
+    title: "hub remains operable at real 400 percent zoom",
+    checkpoints: ["hub-zoom", "complete"],
+  },
+  {
     id: "preparation-hidden",
     title:
       "preparation hidden save denial removes preview and reveals only inert technical error",

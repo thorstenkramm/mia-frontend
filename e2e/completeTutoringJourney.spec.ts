@@ -88,7 +88,10 @@ test("one synthetic invitation-to-second-tutoring-session journey preserves reco
         journey.course.persisted,
     ).toBe(true);
     await supervisor.goto(hub);
-    await heading(supervisor, "Course preparation");
+    await heading(supervisor, journey.adminFixture.courseName);
+    await expect(
+      supervisor.getByRole("heading", { name: "Course setup", level: 2 }),
+    ).toBeVisible();
     for (const [field, value] of [
       ["learning-goals", journey.supervisorFixture.teachingText],
       ["ai-instructions", journey.supervisorFixture.teachingText],
@@ -121,7 +124,15 @@ test("one synthetic invitation-to-second-tutoring-session journey preserves reco
     expect(journey.course.patches === 3 && journey.course.patchValid).toBe(
       true,
     );
-    await supervisor.goto(`${hub}/materials/new`);
+    await supervisor.goto(hub);
+    await heading(supervisor, journey.adminFixture.courseName);
+    const materialsCard = supervisor
+      .locator("main")
+      .getByRole("link", { name: /^Course materials\b/u });
+    await expect(materialsCard).toHaveAttribute("href", `${hub}/materials`);
+    await materialsCard.click();
+    await heading(supervisor, "Course materials");
+    await supervisor.locator(`main a[href="${hub}/materials/new"]`).click();
     await heading(supervisor, "Create course material");
     await supervisor
       .locator("#material-name")
@@ -188,11 +199,23 @@ test("one synthetic invitation-to-second-tutoring-session journey preserves reco
     await supervisor
       .getByRole("button", { name: "Confirm activation" })
       .click();
-    await heading(supervisor, "Course preparation");
+    await heading(supervisor, journey.adminFixture.courseName);
+    await expect(
+      supervisor.getByRole("heading", {
+        name: "Active — open for new tutoring sessions",
+        level: 2,
+      }),
+    ).toBeVisible();
     expect(
       journey.course.courseState === "active" && journey.material.approved,
     ).toBe(true);
-    await supervisor.goto(`${hub}/students/new`);
+    const studentsCard = supervisor
+      .locator("main")
+      .getByRole("link", { name: /^Course students\b/u });
+    await expect(studentsCard).toHaveAttribute("href", `${hub}/students`);
+    await studentsCard.click();
+    await heading(supervisor, "Course students");
+    await supervisor.getByRole("link", { name: "Create student" }).click();
     await heading(supervisor, "Create student");
     await fillStudent(supervisor);
     await routeHygieneCheckpoint(supervisor, "journey-student-input");

@@ -270,7 +270,7 @@ for (const acceptance of ["active_accepting", "active_not_accepting"])
     await user.click(button);
     await screen.findByRole("heading", {
       level: 1,
-      name: "Course preparation",
+      name: control.name,
     });
     await waitFor(() =>
       expect(
@@ -279,15 +279,15 @@ for (const acceptance of ["active_accepting", "active_not_accepting"])
           control.reads >= 3 &&
           includes(
             acceptance === "active_accepting"
-              ? "Active — accepting new tutoring sessions"
-              : "Active — not accepting new tutoring sessions",
+              ? "Active — open for new tutoring sessions"
+              : "Active, but new tutoring sessions are unavailable",
           ) &&
           document.querySelector(
             'main a[href="/prepare/courses/course_1/students"]',
           ) !== null &&
           document.querySelector(
             'main a[href="/prepare/courses/course_1/students/new"]',
-          ) !== null &&
+          ) === null &&
           !document.querySelector(
             'main a[href*="deactivate"], main a[href*="delete"]',
           ),
@@ -305,6 +305,13 @@ for (const change of ["name", "teaching", "eligibility", "lifecycle"])
     if (change === "teaching") control.teaching = "changed";
     if (change === "eligibility") {
       control.eligible = false;
+      control.readiness = "inactive_incomplete";
+      control.blockers = [
+        {
+          id: "qualifying_material",
+          link: "/api/v1/courses/course_1/materials",
+        },
+      ];
       control.actionBlockers = ["assigned_supervisor_required"];
     }
     if (change === "lifecycle") {
@@ -320,7 +327,7 @@ for (const change of ["name", "teaching", "eligibility", "lifecycle"])
       await submit();
       await screen.findByRole("heading", {
         level: 1,
-        name: "Course preparation",
+        name: control.name,
       });
       expect(control.posts === 1).toBe(true);
     } else
@@ -494,7 +501,7 @@ it("activation duplicate native submissions cannot queue another unsafe dispatch
     form.requestSubmit();
   });
   await act(async () => release());
-  await screen.findByRole("heading", { level: 1, name: "Course preparation" });
+  await screen.findByRole("heading", { level: 1, name: control.name });
   expect(control.posts === 1).toBe(true);
   courseUnitCheckpoint("activation-duplicate");
 });
