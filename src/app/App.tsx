@@ -19,10 +19,12 @@ import {
   useAuthenticationBootstrapState,
   useMfaEnrollment,
   useSessionActions,
+  useSessionScopeTransition,
   type AuthenticationBootstrapState,
   type EntryError,
 } from "../platform/data/EntryDataProvider";
 import { messages } from "../platform/i18n/messages";
+import { useMiaI18n } from "../platform/i18n/MiaIntlProvider";
 import { TechnicalErrorDisclosure } from "../platform/api/TechnicalErrorDisclosure";
 import type { TextSize } from "../platform/prefs/preferences";
 import {
@@ -83,8 +85,9 @@ const AdminInvitationRoute = lazy(() =>
   })),
 );
 // Story 4.5 bounded FFR-955 mitigation, matching the material-host precedent.
-// Course code loads only after ordered session/scope admission; all seven
-// catalogs remain synchronous. No protected prefetch or gate-owner change.
+// Course code loads only after ordered session/scope admission; the active
+// locale is available synchronously to every mounted route. No protected
+// prefetch or gate-owner change.
 const AdminCourseRoute = lazy(() =>
   import("./routes/AdminCourseRoute").then((module) => ({
     default: module.AdminCourseRoute,
@@ -115,6 +118,7 @@ export function App({
       }
       {...(queryClient ? { queryClient } : {})}
     >
+      <LocaleSessionFence />
       <BrowserRouter>
         <RouteSequenceProvider>
           <Routes>
@@ -133,6 +137,12 @@ export function App({
       </BrowserRouter>
     </EntryDataProvider>
   );
+}
+
+function LocaleSessionFence() {
+  const { cancelPendingActivation } = useMiaI18n();
+  useSessionScopeTransition(cancelPendingActivation);
+  return null;
 }
 
 function routeKey(

@@ -3,10 +3,39 @@ import { resolve } from "node:path";
 import { runInNewContext } from "node:vm";
 import { expect, it } from "vitest";
 import {
+  bootstrapRecoveryCopy,
   messageCatalogModule,
   messageDescriptorModule,
 } from "./message-catalogs";
 import { catalogMessageIds, messages } from "../src/platform/i18n/messages";
+
+it("derives only bootstrap recovery strings from every canonical launch catalog", () => {
+  const recovery = bootstrapRecoveryCopy(resolve("."));
+  for (const locale of [
+    "en-US",
+    "de-DE",
+    "fr-FR",
+    "pt-PT",
+    "pt-BR",
+    "es-ES",
+    "es-AR",
+  ]) {
+    const catalog = JSON.parse(
+      readFileSync(
+        resolve("src/platform/i18n/catalogs", `${locale}.json`),
+        "utf8",
+      ),
+    );
+    expect(recovery[locale]).toEqual({
+      "route.unavailable": catalog["route.unavailable"],
+      "route.loadFailed": catalog["route.loadFailed"],
+      "route.reload": catalog["route.reload"],
+      "entry.invitation.preview.tryAgain":
+        catalog["entry.invitation.preview.tryAgain"],
+      "entry.skipLink": catalog["entry.skipLink"],
+    });
+  }
+});
 
 it("production packed descriptors preserve every public identity and default in all catalogs", () => {
   const source = messageDescriptorModule(

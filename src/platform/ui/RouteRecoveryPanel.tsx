@@ -9,11 +9,13 @@ export function RouteRecoveryPanel({
   children,
   actions,
   headingRef,
+  pageHeading = false,
 }: {
   readonly heading: string;
   readonly children: ReactNode;
   readonly actions: ReactNode;
   readonly headingRef?: Ref<HTMLHeadingElement>;
+  readonly pageHeading?: boolean;
 }) {
   return (
     <div className="mt-8 rounded-md bg-yellow-50 p-4">
@@ -25,13 +27,17 @@ export function RouteRecoveryPanel({
           />
         </div>
         <div className="ml-3 min-w-0">
-          <h2
-            ref={headingRef}
-            tabIndex={headingRef ? -1 : undefined}
-            className="text-sm font-medium text-yellow-800"
-          >
-            {heading}
-          </h2>
+          {pageHeading ? (
+            <h1 className="text-sm font-medium text-yellow-800">{heading}</h1>
+          ) : (
+            <h2
+              ref={headingRef}
+              tabIndex={headingRef ? -1 : undefined}
+              className="text-sm font-medium text-yellow-800"
+            >
+              {heading}
+            </h2>
+          )}
           <div className="mt-2 text-sm text-yellow-700">{children}</div>
           <div className="mt-4">
             <div className="-mx-2 -my-1.5 flex flex-wrap gap-3">{actions}</div>

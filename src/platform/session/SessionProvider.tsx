@@ -2,6 +2,7 @@ import {
   createContext,
   use,
   useEffect,
+  useEffectEvent,
   useState,
   useSyncExternalStore,
   type ReactNode,
@@ -144,6 +145,24 @@ export function useAuthenticationBootstrapState(): AuthenticationBootstrapState 
     controller.getSnapshot,
     controller.getSnapshot,
   );
+}
+
+// Observe the controller's transition synchronously, before an outstanding
+// locale import can settle in the next microtask after a sign-in/scope change.
+export function useSessionScopeTransition(onTransition: () => void): void {
+  const controller = useSessionController();
+  const notify = useEffectEvent(onTransition);
+  useEffect(() => {
+    let stage = controller.getSnapshot().kind;
+    let scope = controller.getAuthenticatedAccess()?.epoch;
+    return controller.subscribe(() => {
+      const nextStage = controller.getSnapshot().kind;
+      const nextScope = controller.getAuthenticatedAccess()?.epoch;
+      if (nextStage !== stage || nextScope !== scope) notify();
+      stage = nextStage;
+      scope = nextScope;
+    });
+  }, [controller]);
 }
 
 export function useSessionActions(): {

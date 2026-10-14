@@ -29,7 +29,7 @@ export default function SignedOutEntryRoute({
   logoutConfirmed?: boolean;
 }) {
   const intl = useIntl();
-  const { locale, changeLocale } = useMiaI18n();
+  const { locale, changeLocale, loadState, retryLocale } = useMiaI18n();
   const [textSize, setCurrentTextSize] = useState(initialTextSize);
 
   function changeTextSize(nextTextSize: TextSize): void {
@@ -81,6 +81,29 @@ export default function SignedOutEntryRoute({
                 className="pointer-events-none col-start-1 row-start-1 mr-2 size-5 self-center justify-self-end text-gray-500 sm:size-4"
               />
             </div>
+            {loadState.kind === "loading-target" ? (
+              <p className="mt-2 text-sm text-gray-600">
+                {intl.formatMessage(messages.languageLabel)}:{" "}
+                {intl.formatMessage(messages.routeLoading)}
+              </p>
+            ) : null}
+            {loadState.kind === "failed-target" ? (
+              <div className="mt-2 text-sm text-gray-700">
+                <p>
+                  {intl.formatMessage(messages.languageLabel)}:{" "}
+                  {intl.formatMessage(messages.materialFailed)}
+                </p>
+                {/* Tailwind Plus: Application UI > Feedback > Alerts > With actions,
+                    v4/react-light.jsx, 2026-09-13-083323; nonblocking retry only. */}
+                <button
+                  type="button"
+                  onClick={retryLocale}
+                  className="mt-2 rounded-md px-2 py-1.5 font-medium text-gray-800 focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-indigo-600"
+                >
+                  {intl.formatMessage(messages.invitationTryAgain)}
+                </button>
+              </div>
+            ) : null}
           </div>
           {/* Tailwind Plus: Application UI > Forms > Radio Groups > Simple inline list */}
           {/* Library version: 2026-09-13-083323. MIA enlarges the blueprint radio to the required 24px target. */}

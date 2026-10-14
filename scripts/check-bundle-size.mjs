@@ -4,11 +4,9 @@ import { join } from "node:path";
 
 const root = process.cwd();
 // Owner decision 2026-10-12 (Story 6.3): 258000 gzip bytes. About 66 KB of
-// non-active locale catalogs remain in the synchronous entry bundle; deferring
-// them without changing first paint for all seven locales is follow-up work.
+// Each active catalog now loads before first React paint, outside the entry.
 // Owner decision 2026-10-13 (Story 6.5): 260000 gzip bytes; finish-state copy
-// alone estimates +307 B against 182 B headroom. Locale on-demand remains
-// filed in deferred-work.md, outside this story.
+// alone estimated +307 B against 182 B headroom. The 260000 limit is unchanged.
 const limit = 260_000;
 const manifestPath = join(root, "dist/.vite/manifest.json");
 
@@ -33,41 +31,74 @@ if (entryFiles.length === 0) {
 
 const initialRouteFiles = new Set();
 const visitedEntryKeys = new Set();
-function addInitialRouteFiles(entryKey) {
-  if (visitedEntryKeys.has(entryKey)) {
+function addInitialRouteFiles(entryKey, visited, files) {
+  if (visited.has(entryKey)) {
     return;
   }
-  visitedEntryKeys.add(entryKey);
+  visited.add(entryKey);
 
   const entry = manifest[entryKey];
   if (entry === undefined || !entry.file.endsWith(".js")) {
     return;
   }
 
-  initialRouteFiles.add(entry.file);
+  files.add(entry.file);
   for (const importedKey of entry.imports ?? []) {
-    addInitialRouteFiles(importedKey);
+    addInitialRouteFiles(importedKey, visited, files);
   }
 }
 
 for (const [entryKey] of entryFiles) {
-  addInitialRouteFiles(entryKey);
+  addInitialRouteFiles(entryKey, visitedEntryKeys, initialRouteFiles);
 }
 
-let compressedBytes = 0;
-for (const file of initialRouteFiles) {
-  compressedBytes += gzipSync(
-    readFileSync(join(root, "dist", file)),
-  ).byteLength;
+function sizeOf(files) {
+  let size = 0;
+  for (const file of files)
+    size += gzipSync(readFileSync(join(root, "dist", file))).byteLength;
+  return size;
 }
 
-if (compressedBytes > limit) {
-  console.error(
-    `FFR-955 failed: initial-route JavaScript is ${compressedBytes} bytes gzip; limit is ${limit} bytes.`,
+const entryBytes = sizeOf(initialRouteFiles);
+console.log(`FFR-955 entry/static JavaScript: ${entryBytes} bytes gzip.`);
+let failed = false;
+for (const locale of [
+  "en-US",
+  "de-DE",
+  "fr-FR",
+  "pt-PT",
+  "pt-BR",
+  "es-ES",
+  "es-AR",
+]) {
+  const key = `src/platform/i18n/catalogs/${locale}.json`;
+  const catalog = manifest[key];
+  if (
+    catalog?.isDynamicEntry !== true ||
+    !catalog.file?.endsWith(".js") ||
+    initialRouteFiles.has(catalog.file)
+  ) {
+    console.error(
+      `FFR-955 failed: ${locale} catalog is missing or included in the static entry.`,
+    );
+    failed = true;
+    continue;
+  }
+  const files = new Set(initialRouteFiles);
+  addInitialRouteFiles(key, new Set(), files);
+  const bytes = sizeOf(files);
+  console.log(
+    `FFR-955 ${locale} initial-paint JavaScript: ${bytes} bytes gzip.`,
   );
-  process.exit(1);
+  if (bytes > limit) {
+    console.error(
+      `FFR-955 failed: ${locale} initial-paint JS exceeds ${limit} bytes gzip.`,
+    );
+    failed = true;
+  }
 }
 
+if (failed) process.exit(1);
 console.log(
-  `FFR-955 passed: initial-route JavaScript is ${compressedBytes} bytes gzip; limit is ${limit} bytes.`,
+  `FFR-955 passed: all seven active locales <= ${limit} bytes gzip, no catalog in entry.`,
 );

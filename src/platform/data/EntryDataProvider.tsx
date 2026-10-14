@@ -59,5 +59,6 @@ export {
   useMfaEnrollment,
   useMaterialUpload,
   useSessionActions,
+  useSessionScopeTransition,
 } from "../session/SessionProvider";
 export type { AuthenticationBootstrapState } from "../session/sessionController";

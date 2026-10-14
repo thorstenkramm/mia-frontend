@@ -106,3 +106,57 @@ export function compactMessageCatalogs(): Plugin {
     },
   };
 }
+
+// The full catalog can itself fail to download. This tiny, canonical-derived
+// subset remains in the entry so the selected language has a recovery screen.
+export function bootstrapRecoveryCopy(
+  root: string,
+): Record<string, Record<string, string>> {
+  const keys = [
+    "route.unavailable",
+    "route.loadFailed",
+    "route.reload",
+    "entry.invitation.preview.tryAgain",
+    "entry.skipLink",
+  ];
+  return Object.fromEntries(
+    ["en-US", "de-DE", "fr-FR", "pt-PT", "pt-BR", "es-ES", "es-AR"].map(
+      (locale) => {
+        const catalog = readCatalog(
+          resolve(root, "src/platform/i18n/catalogs", `${locale}.json`),
+        );
+        return [
+          locale,
+          Object.fromEntries(
+            keys.map((key) => {
+              const text = catalog[key];
+              if (text === undefined)
+                throw new Error("Missing bootstrap recovery copy.");
+              return [key, text];
+            }),
+          ),
+        ];
+      },
+    ),
+  );
+}
+
+export function localeRecoveryCopy(): Plugin {
+  const id = "virtual:mia-locale-recovery";
+  const resolved = `\0${id}`;
+  let root = "";
+  return {
+    name: "mia-locale-recovery",
+    configResolved(config) {
+      root = config.root;
+    },
+    resolveId(source) {
+      return source === id ? resolved : null;
+    },
+    load(source) {
+      return source === resolved
+        ? `export default ${JSON.stringify(bootstrapRecoveryCopy(root))};`
+        : null;
+    },
+  };
+}

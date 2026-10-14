@@ -1,20 +1,23 @@
 import { describe, expect, it } from "vitest";
-import { catalogs, locales, negotiateLocale } from "./locales";
+import { locales, negotiateLocale } from "./locales";
+import { catalogStore } from "./catalogLoader";
 import englishCatalog from "./catalogs/en-US.json";
 import { messages } from "./messages";
 
-it("runtime English preserves every canonical message without a duplicate text table", () => {
+it("runtime English and every lazy catalog preserve canonical messages", async () => {
   const ids = Object.values(messages)
     .map((message) => message.id)
     .sort();
   expect(Object.keys(englishCatalog).sort()).toEqual(ids);
   const canonical: Record<string, string> = englishCatalog;
+  const loaded = await Promise.all(
+    locales.map((locale) => catalogStore.load(locale)),
+  );
   for (const id of ids) {
-    expect(catalogs["en-US"][id] === canonical[id]).toBe(true);
+    expect(loaded[0]?.[id] === canonical[id]).toBe(true);
     // Every supported locale still has every message; no locale was pruned.
     expect(
-      locales.every((locale) => {
-        const catalog: Record<string, string> = catalogs[locale];
+      loaded.every((catalog) => {
         return typeof catalog[id] === "string";
       }),
     ).toBe(true);
