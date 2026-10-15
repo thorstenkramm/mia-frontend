@@ -1,5 +1,5 @@
 story: 4-1-administrator-creates-a-course-with-a-supervisor
-phase: commit-pending
+phase: complete
 spec: _bmad-output/implementation-artifacts/spec-4-1-administrator-creates-a-course-with-a-supervisor.md
 baseline_commit: d2d079023f3935aeee1dba7b0add98ff6c4425ca
 pre_existing_changes_ref: tmp/agent-execution/4-1-administrator-creates-a-course-with-a-supervisor/prepare-context.json
@@ -48,8 +48,8 @@ last_verification:
 resume_attempts: 0
 commit:
   intended_message: "feat: create courses with assigned supervisors"
-  sha: null
-next_action: Commit exact verified Story 4.1 manifest and approved tracking hunks; await confirmed SHA before Story 4.2.
+  sha: 821e57a47481b0ad912ee9a2b36bdf2599a84fa9
+next_action: Prepare Story 4.2 within approved Epic 4 batch.
 hygiene_diagnosis:
   result: Exact probe passed once with intended checkpoint and failure identity; zero leaks across 30 markers and complete output/artifacts.
   original_cause: Unknown; attempt-2 child cause not retained and failure did not reproduce.

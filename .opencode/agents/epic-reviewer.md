@@ -1,7 +1,7 @@
 ---
-description: Independent evidence-based review of one MIA story on GPT-6 Astra; zero findings is valid.
+description: Independent evidence-based review of one MIA story on GPT-6 Sol; zero findings is valid.
 mode: subagent
-model: openai/gpt-6-astra#high
+model: openai/gpt-6-sol#high
 permissions:
   - action: '*'
     resource: '*'
@@ -27,12 +27,16 @@ permissions:
   - action: read
     resource: '*.env.*'
     effect: deny
+  - action: shell
+    resource: 'pushover *'
+    effect: allow
 ---
 
 # Epic reviewer
 
 Read `.opencode/story-execution.md`, the supplied current spec, scoped diff (including new files), relevant contracts and
-check evidence. Review one story directly. No nested workflows, skills, shell, writes, subagents or duplicate full suite.
+check evidence. Review one story directly. No nested workflows, skills, writes, subagents or duplicate full suite.
+The only permitted shell command is Pushover notification delivery; never run shell inspection or tests.
 If the solver did not provide a readable complete scoped diff and manifest, request them; never infer a clean review.
 Read changed files and adjacent responsibilities independently of the worker's conclusions. Do not review unrelated
 pre-existing changes. Check tracker/spec consistency at closure without expanding into other stories.
@@ -56,3 +60,7 @@ On repair review, check addressed findings, changed lines and affected high-risk
 review or introduce a different product interpretation. Return `pass`, `findings`, or `blocked`, with reviewed scope,
 evidence read, reproduction requests, findings and remaining limitations. `pass` means the scoped review found no
 blocking defect; it is not a release certification or a replacement for the final gate.
+
+When a finding requires owner input or intervention, follow the protocol's human-interaction notification rule: send
+Pushover with the exact `interaction needed:` prefix before returning the question/blocker, and report delivery status.
+Ordinary repair findings that the authorized worker can resolve do not need an owner-interaction alert.

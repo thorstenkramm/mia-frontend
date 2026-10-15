@@ -1,5 +1,12 @@
 {
   "$schema": "https://opencode.ai/config.json",
+  "providers": {
+    "openai": {
+      "settings": {
+        "transport": "http"
+      }
+    }
+  },
   "plugins": [
     "@upstash/context7-opencode"
   ]

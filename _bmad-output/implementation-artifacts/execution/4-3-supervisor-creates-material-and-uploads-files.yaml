@@ -1,5 +1,5 @@
 story: 4-3-supervisor-creates-material-and-uploads-files
-phase: commit-pending
+phase: complete
 spec: _bmad-output/implementation-artifacts/spec-4-3-supervisor-creates-material-and-uploads-files.md
 baseline_commit: 3c04d84976f6c0bc5d53228d2cc8d15683155e55
 pre_existing_changes:
@@ -60,8 +60,8 @@ last_verification:
 resume_attempts: 0
 commit:
   intended_message: "feat: add course material creation and file upload"
-  sha: null
-next_action: "Worker runs the authoritative final gate ./run-all-tests.sh for the final input fingerprint; on pass, prepare commit-pending."
+  sha: 025a5b0a30cd8fe68cfe33a876a3551345aba6c7
+next_action: "Closed 2026-10-09. 52-file commit confirmed at HEAD. Next story in approved milestone order: 4-4-process-material-and-approve-its-brief (requires fresh owner/solver dispatch; not auto-started)."
 blocked_on: "R2 outcome-truth blocker after two repair batches: stale prior-rejection feedback contradicts Stop-waiting unknown state on deletion retry. Reviewer reproduction: 406 first DELETE, second deliberate DELETE held, Stop waiting; assert unconfirmed-only wording, exactly two DELETEs, no replay; late 204 must not resolve the stopped attempt."
 owner_decisions:
   b1_upload_limits:

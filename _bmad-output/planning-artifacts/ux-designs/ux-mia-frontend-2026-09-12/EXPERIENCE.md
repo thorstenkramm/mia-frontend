@@ -536,10 +536,16 @@ authorization, stale-state, eligibility, and domain contracts and are not blocke
 
 ### Course Preparation
 
-Preparation is a hub, not a linear wizard. It permits a sensible non-linear order, preserves drafts, shows every
-activation prerequisite, returns to items needing attention, and ends with a readiness review. Learning goals and AI
-instructions are separate guided plain-text fields with templates, examples, code-point and byte feedback, exact
-read-only preview, and warnings against secrets and unnecessary personal data.
+Preparation is a hub, not a linear wizard. It permits a sensible non-linear order, preserves drafts, and ends with a
+readiness review. The hub leads with the course's standing: one status panel states where the course stands and what
+comes next, followed by the server-reported blockers with at most one resolution action each, the saved course setup
+(language with its tag, learning goals, AI instructions, curriculum, name and description, assigned supervisors) with
+one inline edit action per row, and entry cards for materials and students. The readiness review explains what is
+missing and how readiness works; the activation confirmation shows the reviewed facts, what activation changes, and
+every operation outcome — changed facts, rejection, unknown outcome. Only server-authored readiness is shown: no
+inferred met rows, percentages, or counts from extra reads. Learning goals and AI instructions remain separate guided
+plain-text fields with templates, examples, code-point and byte feedback, exact read-only preview, and warnings
+against secrets and unnecessary personal data.
 
 ### Mentoring
 

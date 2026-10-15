@@ -1,0 +1,85 @@
+story: 6-6-prove-the-complete-tutoring-journey
+phase: complete
+spec: _bmad-output/implementation-artifacts/spec-6-6-prove-the-complete-tutoring-journey.md
+baseline_commit: 872d44e706738965313751e00fb2068e4c45c99c
+pre_existing_changes:
+- .opencode/** workflow edits, AGENTS.md, README.md, run-all-tests.sh, sprint-status.yaml, older execution YAMLs
+- 'untracked: .github/workflows/checks.yml, epic-2 retro, execution/6-3..6-6 YAMLs, scripts/check-{duplication,markdown,trivy}.sh'
+- no pre-existing edits overlap the planned 6-6 manifest
+files:
+- _bmad-output/implementation-artifacts/spec-6-6-prove-the-complete-tutoring-journey.md
+- _bmad-output/planning-artifacts/epics.md
+- e2e/completeTutoringFixtures.ts
+- e2e/completeTutoringJourney.spec.ts
+- e2e/courseFixtures.ts
+- e2e/materialFixtures.ts
+- e2e/studentFixtures.ts
+- e2e/routeSecretHygiene.ts
+- scripts/check-route-secret-hygiene.mjs
+- scripts/route-secret-hygiene-cases.ts
+worker_session: ses_eca757d60ffelaubME7AjmbRF2
+reviewer_session: ses_eca0f44e0ffe8mrpnSQQk8rOQ6
+models:
+  prepare: openai/gpt-6-sol#high
+  catalog_verified: openai/gpt-6-sol#high and mistral/mistral-medium-2604#high active 2026-10-13
+completed_blocks:
+- 'Story selected 2026-10-13: explicit user dispatch ("move on to 6-6"); matches sprint next_story after 6-5 closure (commit 872d44e706738965313751e00fb2068e4c45c99c). Per-story reviewed+verified commit
+  authorized by agent mandate. 6-6 is the END of the approved Epic 2→6 milestone order — stop at its end; epics 7-9 require new owner scope.'
+- 'Carried context: 6-6 is the end-to-end proof story (built frontend served by the backend, local SMTP/provider fakes, ONE backend-connected chain + focused recovery/denial evidence; reuse accumulated
+  6-1..6-5 evidence; never paid/production providers; an operator-run real-deployment demonstration only IF owner-authorizes it). Bundle now 259,261/260,000 — 6-6 should add e2e/evidence, not entry code.
+  Activation hygiene flake root cause unknown (bounded-negative, epic-1-retro-item-2 open).'
+- 'Prepare blocked-then-decided 2026-10-13 (worker ses_eca757d60ffelaubME7AjmbRF2): backend-connected chain was not runnable as specified — provider Endpoint override exists in the client but is never wired
+  to config (verified: cmd/mia/main.go:568-639, openai.go:19-86; clicksend.base_url precedent exists; no documented fake harness). Owner rulings after explanation: (1) REMOVE the real-backend automated
+  test requirement — the journey chain runs on the existing local-fake infrastructure and the integration gap (no automated real-backend proof) is recorded honestly; (2) the operator-run real-deployment
+  demonstration is SKIPPED (not authorized/performed). No backend change happens. Both need dated scoped notes: epics.md story 6.6 + the spec.'
+- 'Prepare ready 2026-10-13: epics.md carries the dated 6.6 owner-override note (real-backend requirement removed, mocked-chain gap recorded, operator demo skipped); spec decision-complete; no application/entry-bundle
+  change planned. Story marked in-progress.'
+- 'Implement complete 2026-10-13: single local-fake Chromium journey (invite → join/prepare → provision → student setup → tutor → finish → second session) incl. lost-response recovery + another-user scope
+  denial. Journey 1 + 9 affected regressions + hygiene (8 checkpoints + early-failure canary) + typecheck/lint/build/prettier pass; bundle 259,271/260,000 (+10B measurement drift, no application-source
+  change). Honest scope: fake-backed frontend behavior only; real-backend integration and operator demo recorded as not proven/performed.'
+- 'Repair review PASS 2026-10-13 (reviewer ses_eca0f44e0ffe8mrpnSQQk8rOQ6): F1-F3 proof-validity fixes confirmed; assertions would fail at their respective regressed boundaries; no real-backend claim introduced.
+  Verification phase entered; Pushover delivered via PATH.'
+- 'Final verification PASSED 2026-10-13 (single gate, exit 0): all 16 stages, none skipped — unit 919/919, Chromium 336/336, route hygiene 209 cases/437 checkpoints + early-failure canary, bundle 259,271/260,000
+  (729B margin); fingerprint sha256 aab191ba...17b49b before/after match. Trivy MEDIUM candidate adjudicated post-gate (no source change/no rerun): known public ISO country-code false positive, source src/platform/ui/countryCodes.ts
+  → accountProfileOptions asset; same asset/offset/SHA class as 6-5. Evidence verify-trivy-adjudication.md. Remaining nonblocking advisories: 4 low audit, Trivy low dependency, Vite/Node notices.'
+- 'Closed 2026-10-13: commit 0f5ed193db3d07c312573e3ef27d9d8381868f77 confirmed at HEAD (11 reviewed story paths + tracker epic-6/6-6-done hunks; exclusions held; no push). Epic 6 / student-tutoring MVP
+  milestone closed under the dated 6.6 owner override: local-fake proof only; real-backend integration, SMTP/provider wiring, deployed usability and operator demo remain NOT proven. 1 review round (3 proof
+  blockers fixed); 1 final gate (all stages pass); Trivy candidate adjudicated false positive.'
+repair_queue:
+- finding: 'F1: material-upload proof accepts an invalid fixture request — completeTutoringJourney.spec.ts:1127-1153 uploads synthetic.pdf but materialFixtures.ts:313-335 requires a filename containing
+    the generated course name; validMultipart=false yet the fake returns 201 and the journey proceeds. Remedy: align filename expectation and assert—or reject at the fake boundary—validCreate/validMultipart
+    and lifecycle validity before material becomes ready.'
+  root_cause: fake returns success without enforcing its own validity conditions
+  disposition: fixed (confirmed by repair review)
+  evidence: reviewer ses_eca0f44e0ffe8mrpnSQQk8rOQ6 blocking finding 1
+- finding: 'F2: explicit recovery not established — workReads > 1 can be satisfied by the earlier workspace load/Refresh; a broken Refresh doing no reconciliation could pass. Remedy: snapshot reads before
+    the lost-response Refresh; require a NEW current-work read carrying the interrupted send''s exact request ID and assert its reconciled result; keep the no-second-POST check.'
+  root_cause: vacuous count assertion instead of identity-correlated reconciliation
+  disposition: fixed (confirmed by repair review)
+  evidence: reviewer ses_eca0f44e0ffe8mrpnSQQk8rOQ6 blocking finding 2
+- finding: 'F3: second-session fake can certify an invalid start — completeTutoringFixtures.ts:900-984 marks session started for any matching course-session request without validating method/course/CSRF/request
+    ID/selected material; message handler accepts any non-GET. Remedy: validate the second start/send requests against their OpenAPI shape and assert those validations before claiming the distinct second
+    session.'
+  root_cause: fake accepts any matching URL without contract validation
+  disposition: fixed (confirmed by repair review)
+  evidence: reviewer ses_eca0f44e0ffe8mrpnSQQk8rOQ6 blocking finding 3
+last_verification:
+  status: passed
+  command: ./run-all-tests.sh
+  exit_code: 0
+  baseline: 872d44e706738965313751e00fb2068e4c45c99c
+  fingerprint: sha256 aab191ba62054e2875c42bee8cbd0f411c7156d8a22d4b276eb32d142c17b49b (before/after match)
+  unit_tests: 919
+  browser_tests: 336
+  hygiene: 209 route cases/437 checkpoints; early-failure canary passed
+  bundle_gzip_bytes: 259271
+  bundle_budget_bytes: 260000
+  skipped: []
+  report: tmp/agent-execution/6-6-prove-the-complete-tutoring-journey/verify-report.json
+  trivy_adjudication: tmp/agent-execution/6-6-prove-the-complete-tutoring-journey/verify-trivy-adjudication.md
+resume_attempts: 0
+commit:
+  intended_message: 'test: prove complete tutoring journey'
+  sha: 0f5ed193db3d07c312573e3ef27d9d8381868f77
+next_action: Epic 6 complete. STOP — Epics 7-9 require fresh explicit owner scope; do not start next_story automatically.
+blocked_on: null

@@ -1,5 +1,5 @@
 story: 3-1-administrator-invites-a-supervisor
-phase: commit-pending
+phase: complete
 spec: _bmad-output/implementation-artifacts/spec-3-1-administrator-invites-a-supervisor.md
 baseline_commit: cc135de863a6e436c73ec484335c0d2def46cf89
 pre_existing_changes:
@@ -111,8 +111,8 @@ last_verification:
 resume_attempts: 2
 commit:
   intended_message: "feat: add administrator supervisor invitation management"
-  sha: null
-next_action: Worker commits exact verified story manifest and solver-approved Story 3.1 tracking hunks; preserve unrelated existing tracking changes.
+  sha: 9469ea34b58115c20bbafbec5b6d903cddddd1a0
+next_action: Prepare Story 3.2 within approved Epic 3 batch.
 duplication_repair:
   report: tmp/agent-execution/3-1-administrator-invites-a-supervisor/duplication-fix-report.md
   delta: tmp/agent-execution/3-1-administrator-invites-a-supervisor/duplication-repair.diff

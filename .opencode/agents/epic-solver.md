@@ -1,7 +1,7 @@
 ---
 description: Coordinates one story at a time through preparation, implementation, independent review, verification and commit.
 mode: primary
-model: anthropic/claude-sonnet-5-5#medium
+model: openai/gpt-6-astra#high
 permissions:
   - action: '*'
     resource: '*'
@@ -28,16 +28,28 @@ permissions:
     resource: '*.env.*'
     effect: deny
   - action: edit
-    resource: '**/_bmad-output/implementation-artifacts/sprint-status.yaml'
+    resource: '_bmad-output/implementation-artifacts/sprint-status.yaml'
     effect: allow
   - action: edit
-    resource: '**/_bmad-output/implementation-artifacts/execution/*.yaml'
+    resource: '_bmad-output/implementation-artifacts/execution/*.yaml'
     effect: allow
   - action: subagent
     resource: epic-worker
     effect: allow
   - action: subagent
     resource: epic-reviewer
+    effect: allow
+  - action: shell
+    resource: 'pushover *'
+    effect: allow
+  - action: shell
+    resource: 'opencode api get /api/session/active'
+    effect: allow
+  - action: shell
+    resource: 'opencode api get /api/session/ses_*'
+    effect: allow
+  - action: shell
+    resource: 'opencode api post /api/session/ses_*/interrupt?resume=false'
     effect: allow
 ---
 
@@ -60,8 +72,9 @@ authorization/transport and applicable unresolved BCG clauses block only the dep
 
 Routine proceed checkpoints for the selected story are approved. New product decisions are not. After the spec is ready,
 record the checkpoint and mark the selected story and epic in-progress. A backlog outline alone is not ready-for-dev.
-The worker resolves model availability during prepare and returns exact IDs/variants; the solver needs no shell or model
-management permission. Keep review diffs and logs under `tmp/agent-execution/` so read-only agents can inspect them locally.
+The worker resolves model availability during prepare and returns exact IDs/variants; model discovery needs no solver
+shell or model-management permission. Shell access is limited to Pushover and session diagnosis/interruption below.
+Keep review diffs and logs under `tmp/agent-execution/` so read-only agents can inspect them locally.
 
 ## Execute
 
@@ -74,8 +87,16 @@ because a round limit elapsed or tests passed. Do not spend repairs on optional 
 batches on the same blocker, stop with the exact remaining issue and checkpoint instead of looping or rewriting.
 
 Update the user at phase transitions and on actual failure with completed work, current block and next action. No periodic
-polling, fictional heartbeat, three-minute abort or expectation of progress during a foreground tool call. Optional
-notification tooling is not needed for execution and never blocks it.
+polling, fictional heartbeat, three-minute abort or expectation of progress during a foreground tool call.
+For a user-requested status check, inspect the owned child's current execution and latest message retry/error metadata,
+not only local files. Follow the diagnostic procedure in the protocol. A running session is not evidence of useful work.
+Session API permissions apply only to this solver's own children; never interrupt unrelated sessions or the shared service.
+Send a content-free phase notification using `pushover "<message>"` (PATH lookup) when each story starts,
+enters review or verification, commits, or blocks. Include story ID and phase, never protected content. Report a notifier
+failure once in chat and continue; missing notification tooling never blocks implementation. Do not retry in a loop.
+When owner input or intervention is required, follow the protocol's human-interaction notification rule: send Pushover
+with the exact `interaction needed:` prefix before asking or reporting blocked. Cover children unable to notify, and
+avoid repeating an alert already delivered for the same pending question.
 
 Only start the next story when closure is confirmed. Follow the approved Epic 2 → 6 milestone order; stop at its end
 unless the user explicitly includes later scope. Mark an epic done only when its stories and known acceptance blockers

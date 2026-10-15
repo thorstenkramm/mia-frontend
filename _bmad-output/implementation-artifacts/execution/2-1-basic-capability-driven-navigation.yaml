@@ -1,5 +1,5 @@
 story: 2-1-basic-capability-driven-navigation
-phase: commit-pending
+phase: complete
 spec: _bmad-output/implementation-artifacts/spec-2-1-basic-capability-driven-navigation.md
 baseline_commit: b8909dbaacd7eb3e6eb2c85a650a0f3fc9ba4a7e
 pre_existing_changes:
@@ -60,6 +60,7 @@ completed_blocks:
   - fix-batch-1
   - fix-batch-2
   - verify
+  - commit
 repair_queue:
   - finding: "R1 (High) shell links bypass recovery-code acknowledgement and history replacement"
     root_cause: "Shell navigation had no way to ask the mounted route about departure"
@@ -117,6 +118,8 @@ last_verification:
 resume_attempts: 0
 commit:
   intended_message: "feat: add capability-driven application navigation (story 2.1)"
-  sha: null
-next_action: Commit the explicit story manifest only; preserve both approved parent bookkeeping files; confirm SHA before marking execution complete.
+  sha: d1be39a5a4c041f7a26dfef30e6d1e605b21f8ab
+  result: "Confirmed single scoped commit, 28 files; parent is baseline. No push. Git emitted automatic committer identity warning; no configuration change or amend."
+  log: tmp/agent-execution/2-1-basic-capability-driven-navigation/commit.log
+next_action: Prepare 2-2-working-routes-and-parent-navigation on a later authorized dispatch; do not start it in this call.
 blocked_on: null

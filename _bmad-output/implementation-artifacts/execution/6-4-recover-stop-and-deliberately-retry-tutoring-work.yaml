@@ -1,0 +1,122 @@
+story: 6-4-recover-stop-and-deliberately-retry-tutoring-work
+phase: complete
+spec: _bmad-output/implementation-artifacts/spec-6-4-recover-stop-and-deliberately-retry-tutoring-work.md
+baseline_commit: 8e53651822f9b8955ee1406c23c820c073542cd8
+pre_existing_changes:
+- .opencode/ agent+protocol+opencode.json edits, AGENTS.md, README.md, run-all-tests.sh, sprint-status.yaml, older execution YAMLs (owner/previous-story bookkeeping)
+- 'untracked: .github/workflows/checks.yml, epic-2-retro-2026-10-07.md, execution/6-3+6-4 YAMLs, scripts/check-{duplication,markdown,trivy}.sh'
+- no pre-existing edits overlap the planned 6-4 manifest
+files:
+- _bmad-output/implementation-artifacts/spec-6-4-recover-stop-and-deliberately-retry-tutoring-work.md
+- _bmad-output/planning-artifacts/ux-designs/ux-mia-frontend-2026-09-12/FRONTEND-STATE-MACHINES.md
+- _bmad-output/planning-artifacts/ux-designs/ux-mia-frontend-2026-09-12/BACKEND-CONTRACT-GAPS.md
+- src/app/App.tsx
+- src/app/routes/LearnSessionRoute.tsx
+- src/app/routes/learnSessionEntry.test.tsx
+- src/features/tutoring/TutoringCurrentWork.tsx
+- src/features/tutoring/TutoringStreamControls.tsx
+- src/features/tutoring/TutoringWorkspaceRoute.tsx
+- src/features/tutoring/tutorStreamController.ts
+- src/features/tutoring/tutorStreamController.test.ts
+- src/features/tutoring/tutoringRetention.ts
+- src/features/tutoring/useTutorResponseActions.ts
+- src/features/tutoring/useTutorStream.ts
+- src/platform/api/tutoringSessions.ts
+- src/platform/api/tutoringSessions.test.ts
+- src/platform/i18n/messages.ts
+- src/platform/i18n/catalogs/en-US.json
+- src/platform/i18n/catalogs/de-DE.json
+- src/platform/i18n/catalogs/fr-FR.json
+- src/platform/i18n/catalogs/pt-PT.json
+- src/platform/i18n/catalogs/pt-BR.json
+- src/platform/i18n/catalogs/es-ES.json
+- src/platform/i18n/catalogs/es-AR.json
+- src/platform/session/SessionProvider.tsx
+- scripts/route-secret-hygiene-cases.ts
+- scripts/secret-hygiene-evidence.ts
+- test/tutoringFixtures.ts
+- e2e/tutoringFixtures.ts
+- e2e/tutoringSessions.spec.ts
+worker_session: ses_ecc25b8a3ffeW92Zrf5vImyqG4
+reviewer_session: ses_ecbb61400ffeukZJZGa7aiAJvH
+models:
+  prepare: openai/gpt-6-sol#high
+  catalog_verified: openai/gpt-6-sol#high and mistral/mistral-medium-2604#high active 2026-10-13
+completed_blocks:
+- 'Story selected 2026-10-13: owner scope 2026-10-12 ("once 6-3 completed, move on to 6-4"); matches sprint next_story set after 6-3 closure (commit 8e53651822f9b8955ee1406c23c820c073542cd8). Per-story
+  reviewed+verified commit authorized by agent mandate; stop after 6-4 unless told otherwise.'
+- 'Carried context: 6-3''s scoped FRONTEND-STATE-MACHINES.md §3 note deferred server event IDs to the 6-4 reconnect slice (owner option 1: no backend obligation recorded — 6-4 must re-evaluate event identity
+  vs path-bound fencing as an open decision if the contract requires more). Bundle headroom after 6-3: 1,429 gzip bytes against the owner-raised 258,000 budget. Activation secret-hygiene flake root cause
+  unknown (bounded-negative; did not recur in gate run #4); epic-1-retro-item-2 remains open.'
+- 'Prepare blocked-then-decided 2026-10-13 (worker ses_ecc25b8a3ffeW92Zrf5vImyqG4): spec written; 4 owner rulings — (1) scoped 6-4 §3 exception: path-bound identity + epoch fencing + atomic snapshot replacement,
+  reconnect re-baselines from snapshot, relaxed guarantee = same-epoch repeated valid deltas undetectable; (2) scoped §4 resolution: state machine owns reconnect client sequence, dated note in BCG-001 without
+  closing the global gap; (3) §7 Stop wording corrected 204 → 200 TutoringStopDocument; (4) lost-retry = outcome-unknown path: no ownership inference, no auto-replay, explicit re-retry safe via backend
+  lineage linking (201 creates / 200 returns linked existing). Worker''s Pushover failed (hardcoded path); solver covered.'
+- 'Prepare ready 2026-10-13 (worker ses_ecc25b8a3ffeW92Zrf5vImyqG4): spec decision-complete with the four rulings applied; §3/§7 + BCG-001 scoped notes landed; baseline unchanged 8e536518; planned manifest
+  recorded. Story marked in-progress; epic-6 already in-progress.'
+- 'Implement partial 2026-10-13 (worker ses_ecc25b8a3ffeW92Zrf5vImyqG4): API/current-work block + stream-controller retry-bound block implemented and unit-tested (57/57 affected pass; typecheck/lint/build/bundle
+  256,567 pass). BLOCKER verified by solver (App.tsx:137,540-541): Privacy shield unmounts the tutoring route (routeKey null), discarding route-local draft + reconnect bound; retention across shield needs
+  a state owner above the unmount boundary, outside the current manifest and near the spec''s no-platform-controller exclusion. Worker Pushover failed (hardcoded path); solver covered.'
+- 'Owner decision 2026-10-13 (6-4 ruling 5): authorize a bounded manifest extension — feature-scoped tutoring retention owner in features/tutoring, keyed to session/route identity, above the App.tsx route
+  unmount boundary, teardown on route/account/scope loss; explicitly NOT a platform-level controller.'
+- 'Implement complete 2026-10-13: retention owner (tutoringRetention.ts) + reconnect bound survival across shield, Stop/retry/reconnect controls, linked-attempt rendering, 7-catalog copy, browser journeys,
+  hygiene registrations. Conditional useTutorResponseActions.ts created (hook coherence). App.tsx/SessionProvider.tsx touched for owner placement above the unmount boundary per the approved extension. typecheck/lint/i18n
+  pass; 58 unit + 30 Chromium + scoped hygiene 30 cases/49 checkpoints pass; bundle 257,813/258,000 (187B headroom — flagged for 6-5/6-6 risk).'
+- 'Fix round 1 complete 2026-10-13 (worker): F1 definitive-unavailable destroys retained memory (LearnSessionRoute.tsx:156); F2 follow-up targeted response replaces queued linked article (useTutorResponseActions.ts:206)
+  + browser fake covers terminal-before-follow-up; F3 work-revision fencing vs stale terminal reads (TutoringWorkspaceRoute.tsx:175, useTutorStream.ts:96-114,227). 61 unit + 32 Chromium + scoped hygiene
+  pass; bundle 257,818/258,000. Reviewer re-check next.'
+- 'Repair review 2026-10-13: F1+F2 confirmed fixed; F3 code-traces correct but test evidence can pass vacuously (F3b gap). Worker tightens the race tests.'
+- 'Repair review PASS 2026-10-13 (reviewer ses_ecbb61400ffeukZJZGa7aiAJvH): F1-F3 + F3b all closed; race tests now reach the stale-read boundary. Verification phase entered; Pushover delivered via PATH.'
+- 'Gate run #1 failed at format:check 2026-10-13: Prettier reports 17 story-owned files needing formatting (drift introduced across fix rounds). Typecheck/coverage/lint passed; later stages not reached.
+  Fingerprint 97def7cc...b55acb over 292 inputs, before/after match. Routine mechanical repair — no owner input needed. Worker Pushover failed again (hardcoded path); no alert required for routine findings.'
+- 'Final verification PASSED 2026-10-13 (single fresh gate for repaired inputs, exit 0): all 16 stages, none skipped — unit 915/915, Chromium 324/324, hygiene 196/262 + 197/406, bundle 257,818/258,000 (182B
+  spare); fingerprint sha256 9d87cba0...d832a4 over 292 inputs, before/after match. Advisories: 4 low audit, Trivy LOW+MEDIUM (same known country-code false positive class). Activation flake did not recur.
+  Preceded by mechanical Prettier repair of 17 story files (no semantic drift: typecheck/lint/format + 61/61 focused unit green pre-gate).'
+- 'Closed 2026-10-13: commit 61df24ef7361981c8ee16ee86eb7d97e320e3c24 confirmed at HEAD (30 story paths + tracker 6-4-done line). Exclusions held; no push. Elapsed ~1 session incl. 5 owner rulings; 2 review
+  rounds (3 blockers + 1 test-strength gap fixed); 2 gate runs (1 format repair, 1 pass). Owner scope ended at 6-4 — 6-5 NOT started.'
+repair_queue:
+- finding: 'F1: retained draft survives route-resource denial — tutoringRetention.ts:25-55 destroys on route/account/capability-epoch change but NOT when the addressed session read becomes hidden; Refresh
+    after shield can render unavailable surface without destroy() (LearnSessionRoute.tsx:127-149). Remedy: destroy feature owner when workspace admission definitively reports unavailable addressed resource;
+    retain on nondefinitive failures.'
+  root_cause: teardown trigger set misses definitive resource-denial path
+  disposition: fixed
+  evidence: reviewer ses_ecbb61400ffeukZJZGa7aiAJvH blocking finding 1
+- finding: 'F2: fast terminal retry can remain displayed as queued — useTutorResponseActions.ts:193-213 adds queued linked response then installs follow-up work without updating the linked article from
+    reconciledResponse; idle current-work + terminal reconciled response still renders stale queued projection (TutoringCurrentWork.tsx:123-135). Remedy: replace linked projection with the targeted response
+    from the successful follow-up read; extend the browser fake to reach the boundary.'
+  root_cause: follow-up work install skips linked-article reconciliation
+  disposition: fixed
+  evidence: reviewer ses_ecbb61400ffeukZJZGa7aiAJvH blocking finding 2
+- finding: 'F3: stale terminal read can overwrite a confirmed queued Stop — useTutorStream.ts:89-107 fences terminal-read callbacks by mounted state + response ID only; an older terminal GET settling after
+    a definitive queued-Stop can reinstall pre-Stop queued work (TutoringWorkspaceRoute.tsx:171-181), making an interrupted attempt appear stoppable. Remedy: fence or serialize terminal work installation
+    against a newer definitive response-action result, preserving the targeted terminal article.'
+  root_cause: terminal-read fencing lacks ordering vs definitive response actions
+  disposition: fixed
+  evidence: reviewer ses_ecbb61400ffeukZJZGa7aiAJvH blocking finding 3
+- finding: 'F3b (verification gap): learnSessionEntry.test.tsx:1222-1226 and the browser race test can pass before the released stale GET settles — they await text already present from an earlier snapshot,
+    so they don''t prove the revision fence or legitimate terminal reconciliation. Remedy: wait for a distinct persisted terminal response after release, then assert queued Stop remains interrupted and
+    its Stop control absent; run focused unit+Chromium race cases sequentially.'
+  root_cause: test await point precedes the racing settlement
+  disposition: fixed
+  evidence: reviewer ses_ecbb61400ffeukZJZGa7aiAJvH repair-review gap
+last_verification:
+  status: passed
+  command: ./run-all-tests.sh
+  exit_code: 0
+  baseline: 8e53651822f9b8955ee1406c23c820c073542cd8
+  fingerprint: sha256 9d87cba084bbe893276f27df387c5f4aafd1a62be7b37c3a7f64c7d875d832a4 over 292 inputs (before/after match)
+  unit_tests: 915
+  browser_tests: 324
+  hygiene: 196 unit cases/262 checkpoints + 197 browser cases/406 checkpoints
+  bundle_gzip_bytes: 257818
+  bundle_budget_bytes: 258000
+  build_count: 1
+  skipped: []
+  report: tmp/agent-execution/6-4-recover-stop-and-deliberately-retry-tutoring-work/verify-report.json
+  history: run1 failed format:check (17 files, mechanical repair); run2 passed
+resume_attempts: 0
+commit:
+  intended_message: 'feat: recover, stop, and deliberately retry tutoring work'
+  sha: 61df24ef7361981c8ee16ee86eb7d97e320e3c24
+next_action: '6-4 closed. Scope stop: 6-5-finish-and-show-the-completed-transcript requires a fresh explicit dispatch.'
+blocked_on: null

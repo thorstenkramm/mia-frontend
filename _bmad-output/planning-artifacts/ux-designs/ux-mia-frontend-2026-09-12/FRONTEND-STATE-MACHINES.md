@@ -505,6 +505,10 @@ No activation, readiness-review, or supervisor action is added; no full-machine 
 Outside the approved slices above these states are `BLOCKED` on `BCG-011: Course readiness and session-start eligibility`. Do not count material rows,
 inspect nullable fields, or probe activation or session creation to discover readiness.
 
+Sprint change 2026-10-14: Epic 7 re-presents the preparation hub, readiness review and activation confirmation. The
+`HUB-*`/`RDY-*`/`ACT-*` presentation-state mapping lives with Stories 7.1/7.2; this machine's states and transitions
+are unchanged by the redesign.
+
 ## 13. Tutor Attempt Lineage and Stable DOM
 
 | State | Trigger | UI | Permitted action | Authoritative recovery |

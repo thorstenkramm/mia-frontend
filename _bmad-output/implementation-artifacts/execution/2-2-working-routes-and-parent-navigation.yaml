@@ -1,5 +1,5 @@
 story: 2-2-working-routes-and-parent-navigation
-phase: commit-pending
+phase: complete
 readiness: ready
 spec: _bmad-output/implementation-artifacts/spec-2-2-working-routes-and-parent-navigation.md
 baseline_commit: d1be39a5a4c041f7a26dfef30e6d1e605b21f8ab
@@ -89,6 +89,8 @@ completed_blocks:
   - verify-single-authoritative-gate-passed
   - verify-input-preservation-and-baseline-advisory-dispositions
   - solver-tracking-synchronization-after-permission-repair
+  - commit-confirmed-43-approved-paths
+  - epic2-closed-without-retrospective-or-next-epic-execution
 settled_decisions:
   O1: "Owner YES 2026-10-07 recorded in BACKEND-CONTRACT-GAPS.md BCG-009 Story 1-9 slice: Home remains MFA overview parent/fallback until /profile is implemented; no /profile in 2.2."
   O2: "Already settled by explicit user scope (no auth/MFA backlog beyond 2.1 C1/C3) and epics.md:47-49. Baseline C7 remains outside 2.2, known and open, with no compliance claim or silent closure. All new controls must satisfy guard/teardown; do not ask again."
@@ -156,7 +158,7 @@ last_verification:
   report: tmp/agent-execution/2-2-working-routes-and-parent-navigation/verification-report.md
   advisory_evidence: tmp/agent-execution/2-2-working-routes-and-parent-navigation/verification-advisories.log
   not_run: Manual browser/assistive-technology release evidence and separate baseline-worktree discrimination; no release or C7 compliance claim.
-  evidence_reuse: Commit worker must confirm unchanged fingerprints before scoped commit; reporting-only edits do not invalidate gate.
+  evidence_reuse: Commit worker confirmed unchanged application and backend API fingerprints; approved parent permission repair checked as documentation-only. No application tests/build rerun.
 prepare_checks:
   history_status: pass
   identity_and_sprint: pass
@@ -171,9 +173,12 @@ prepare_checks:
 resume_attempts: 0
 commit:
   intended_message: "feat: add working routes and parent navigation (story 2.2)"
-  sha: null
+  sha: cc135de863a6e436c73ec484335c0d2def46cf89
+  parent: d1be39a5a4c041f7a26dfef30e6d1e605b21f8ab
+  result: Confirmed scoped commit of exactly 43 approved paths; index empty, no push.
+  report: tmp/agent-execution/2-2-working-routes-and-parent-navigation/commit-report.md
   authorization: Explicit user authorization for per-story commit; no push.
-next_action: Confirm unchanged verified fingerprints and commit only the 43 story paths; completion remains pending confirmed full SHA.
+next_action: Stop; approved Epic 2 batch complete. Story 3.1 remains backlog for a later authorized batch; no retrospective or release certification.
 blocked_on: null
 clarification_attempt: "O1 resolved by owner YES dated 2026-10-07; O2 already settled by scope."
 operational_recovery: "Solver tracking writes were denied; worker correctly refused forbidden delegation. Parent repaired normalized-path permissions on 2026-10-07; solver applied verified closure metadata without application changes."

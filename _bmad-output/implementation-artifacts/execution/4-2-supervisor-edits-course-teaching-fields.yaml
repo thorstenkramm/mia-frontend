@@ -1,5 +1,5 @@
 story: 4-2-supervisor-edits-course-teaching-fields
-phase: commit-pending
+phase: complete
 spec: _bmad-output/implementation-artifacts/spec-4-2-supervisor-edits-course-teaching-fields.md
 baseline_commit: 821e57a47481b0ad912ee9a2b36bdf2599a84fa9
 worker_session: ses_ee4d84c1fffehFN0wEGVld5VyG
@@ -48,8 +48,8 @@ last_verification:
 resume_attempts: 0
 commit:
   intended_message: "feat: add course teaching fields and preparation readiness"
-  sha: null
-next_action: Commit verified Story 4.2 and approved tracking hunk, preserving documented continuation qualification.
+  sha: 3c04d84976f6c0bc5d53228d2cc8d15683155e55
+next_action: Prepare Story 4.3 within approved Epic 4 batch.
 repair_evidence:
   report: tmp/agent-execution/4-2-supervisor-edits-course-teaching-fields/fix-report.json
   delta: tmp/agent-execution/4-2-supervisor-edits-course-teaching-fields/repair.diff

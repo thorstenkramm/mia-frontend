@@ -1,0 +1,82 @@
+story: locale-on-demand-catalogs
+phase: complete
+spec: _bmad-output/implementation-artifacts/spec-locale-on-demand-catalogs.md
+baseline_commit: 0f5ed193db3d07c312573e3ef27d9d8381868f77
+pre_existing_changes: []
+files:
+- _bmad-output/implementation-artifacts/spec-locale-on-demand-catalogs.md
+- index.html
+- vite.config.ts
+- vitest.config.ts
+- scripts/check-bundle-size.mjs
+- scripts/message-catalogs.ts
+- scripts/message-catalogs.test.ts
+- src/main.tsx
+- src/vite-env.d.ts
+- src/app/App.tsx
+- src/features/auth/SignedOutEntryRoute.tsx
+- src/features/tutoring/tutoringSession.test.tsx
+- src/platform/i18n/locales.ts
+- src/platform/i18n/locales.test.ts
+- src/platform/i18n/MiaIntlProvider.tsx
+- src/platform/i18n/catalogLoader.ts
+- src/platform/i18n/catalogLoader.test.tsx
+- src/platform/ui/RouteRecoveryPanel.tsx
+- test/setup.ts
+- e2e/localeCatalogs.spec.ts
+- src/platform/session/SessionProvider.tsx
+- src/platform/data/EntryDataProvider.tsx
+- _bmad-output/implementation-artifacts/deferred-work.md
+worker_session: ses_ec41b25e4ffeqahfe6eLtWmXaS
+reviewer_session: ses_ec40921f0ffevG8NzeoRTKb1LP
+models:
+  prepare: openai/gpt-6-sol#high
+  catalog_verified: gpt-6-sol#high + mistral-medium-2604#high active 2026-10-14
+completed_blocks:
+- 'Selected 2026-10-14: owner decision on 7-1''s bundle blocker. This is the approved follow-up filed in deferred-work.md (from spec-6-3, owner-approved 2026-10-12): move all seven catalog assets out of
+  the initial-route bundle while preserving synchronous first paint for whichever of the seven locales is active; keep all seven available. Measured evidence: English-pinned trial 189,823 vs 256,554 gzip
+  (~66KB). Blocks 7-1-status-first-preparation-hub (projected +5-15KB vs 729B headroom).'
+- 'Boundaries: FFR-955 budget stays 260,000 (no raise); catalogs are static UI strings (not protected content); locale negotiation behavior unchanged; no remote fonts/scripts; the i18n gate stage must still
+  pass. Not an epic story — executed as bounded deferred work under the same prepare/implement/review/fix/verify/commit protocol; commit authorized per mandate.'
+- 'Prepare ready 2026-10-14: spec defines active-locale bootstrap, atomic switching, explicit failure/recovery, seven-locale bundle measurement, unit/browser coverage. No blockers.'
+- 'Implement 2026-10-14: all seven catalogs on demand; active catalog ready before first render; failed switch retains prior language + explicit recovery. Bundle 259,274 -> 192,453 gzip (-66,821); largest
+  initial paint 216,534/260,000. Targeted checks pass (168 unit, 10 locale browser, 6-6 journey, i18n, build/bundle). One duplicate-locator test correction, rerun green.'
+- 'Fix 2026-10-14: F1 sign-in/scope fencing (SessionProvider observes transitions synchronously, MiaIntlProvider cancels pending activation) + F2 localized skip-link copy with explicit main-landmark focus.
+  170 unit + 12 locale browser + 4 scaffold browser pass; bundle budget green. Manifest updated with fix-phase additions SessionProvider.tsx + EntryDataProvider.tsx (solver bookkeeping gap the reviewer
+  caught).'
+- 'Repair review PASS 2026-10-14: F1/F2 confirmed fixed; isolated mutation check proves both held-catalog MFA cases fail without the session fence and pass with it; F2 skip-link copy/focus covered. Full
+  gate pending.'
+- 'Verification PASSED 2026-10-14 (single gate, exit 0): all 16 stages, none skipped — 927 unit, 348 browser, hygiene 200 cases/266 checkpoints + canaries, duplication 0 clones, entry/static JS 192,803
+  gzip, largest initial paint 216,884/260,000 (pt-BR). Fingerprint sha256 b1ccf230...c83be before/after identical (296 inputs). Trivy MEDIUM adjudicated false positive (country-code class, same asset hash
+  as 6-5/6-6); LOW = katex CVE-2026-103923 advisory filed in deferred-work.md. deferred-work.md updated: locale entry LANDED.'
+- 'Closed 2026-10-14: commit e41c2b80a480b885d5abc79e776178f2ca6fbed5 (23 paths; exclusions held; no push). 1 review round (2 blockers: sign-in fence, skip-link a11y) + mutation check; gate exit 0; entry
+  JS 192,803 gzip (-66.5KB). Unblocks 7-1.'
+repair_queue:
+- finding: 'F1: stale switch crosses a sign-in transition — MiaIntlProvider.tsx:92-112 fences on reselection/unmount only; a pending uncached-locale activation surviving sign-in can change the restricted/authenticated
+    screen language + stored preference or announce an obsolete error. Remedy: cancel pending activation on sign-in/scope transition; test late success AND late failure.'
+  disposition: fixed (mutation-checked; confirmed by repair review)
+  evidence: reviewer ses_ec40921f0ffevG8NzeoRTKb1LP blocking finding 1
+- finding: 'F2: bootstrap-recovery bypass link mislabeled + no deterministic focus — main.tsx:96-101 labels first-focus link ''Not available'' and relies on bare href=#main. Fails AC-003 first-focus bypass.
+    Remedy: localized skip-link copy + explicit focus of the main target without adding a fragment.'
+  disposition: fixed (mutation-checked; confirmed by repair review)
+  evidence: reviewer ses_ec40921f0ffevG8NzeoRTKb1LP blocking finding 2
+last_verification:
+  status: passed
+  command: ./run-all-tests.sh
+  exit_code: 0
+  baseline: 0f5ed193db3d07c312573e3ef27d9d8381868f77
+  fingerprint: sha256 b1ccf230edf056d4d7c591a5842d9fa30e4275f295aa161a7ab807b4972c83be (before/after identical)
+  unit_tests: 927
+  browser_tests: 348
+  bundle_entry_gzip: 192803
+  bundle_largest_paint_gzip: 216884
+  bundle_budget_bytes: 260000
+  skipped: []
+  report: tmp/agent-execution/locale-on-demand-catalogs/verify-gate.log
+  trivy_adjudication: tmp/agent-execution/locale-on-demand-catalogs/verify-trivy-adjudication.md
+resume_attempts: 0
+commit:
+  intended_message: 'perf: load locale catalogs on demand'
+  sha: e41c2b80a480b885d5abc79e776178f2ca6fbed5
+next_action: Done. Resume 7-1-status-first-preparation-hub at implement against new baseline e41c2b80.
+blocked_on: null

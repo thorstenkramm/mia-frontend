@@ -185,7 +185,7 @@ Coverage: FFR-301 and the course list subset of FFR-801. Defer deletion and assi
 Prerequisite/reuse: joined supervisor from 3.2 and existing API/session owners. New work includes the minimal selector
 and `POST /api/v1/courses` using `CourseCreateRequestDocument`'s required `relationships.supervisors.data` (at least one
 `UserIdentifier`). Check the relevant BCG-008 collection/filter/state/pagination slice against
-`mia/api-doc/paths/users.yaml` and current course transport; the full account-directory UX remains later 8.5.
+`mia/api-doc/paths/users.yaml` and current course transport; the full account-directory UX remains later 9.5.
 
 ### Story 4.2: Supervisor edits course teaching fields
 
@@ -215,7 +215,7 @@ As an assigned supervisor, I want to upload course-wide teaching material throug
 Coverage: course-wide portions of FFR-401..404, AD-14. `platform/transfer` currently contains only an ownership README:
 this story implements the required upload transport there, reusing existing API/session owners for dispatch security,
 epoch fencing and teardown. Add the preparation-hub upload link with the working surface. Student-private material and
-drag-and-drop are deferred to 8.2; this milestone uses the native picker only.
+drag-and-drop are deferred to 9.2; this milestone uses the native picker only.
 
 ### Story 4.4: Process material and approve its brief
 
@@ -246,7 +246,7 @@ As a supervisor, I want to activate a course once it can support students and tu
   this story ends there. Roster and provisioning entry are owned by 5.1 when that surface lands.
 
 Coverage: FFR-302/303; BCG-011-dependent readiness must be reconciled to implemented transport.
-Reuse readiness from 4.2 and approved material from 4.4. Deactivation/reactivation and deletion are deferred to 8.2.
+Reuse readiness from 4.2 and approved material from 4.4. Deactivation/reactivation and deletion are deferred to 9.2.
 
 ## Epic 5: Get a student into the prepared course
 
@@ -371,86 +371,162 @@ Full learning-history browsing, summary regeneration, and supervisor correction 
 
 This milestone may record nonblocking defects. It cannot claim success without a usable student tutoring session.
 Reuse accumulated story evidence and existing fixtures; add one backend-connected chain and focused integration
-recovery/denial evidence. Do not repeat every auth suite or Epic 9 release-evidence matrix as new story work; required
-repository checks still apply, and the broader release evidence stays in Epic 9.
+recovery/denial evidence. Do not repeat every auth suite or Epic 10 release-evidence matrix as new story work; required
+repository checks still apply, and the broader release evidence stays in Epic 10.
 
 **Owner decision, 2026-10-13 (Story 6.6 only):** Set aside the automated real-backend test requirement, including the
 backend-served setup, backend-connected chain, and "mocked UI alone is not proof" clause, for this milestone. Prove one
 consolidated UI journey with existing local-fake E2E infrastructure and focused fake-backed recovery/denial evidence;
 record explicitly that real frontend/backend integration is **not proven**. The operator-run real-deployment demonstration
-is not authorized and is **not performed**. This exception does not change the remaining story scope or Epic 9 release
+is not authorized and is **not performed**. This exception does not change the remaining story scope or Epic 10 release
 evidence obligations.
 
-## Epic 7: Mentoring — after the tutoring milestone
+## Epic 7: Course preparation clarity
+
+Assigned supervisors see at a glance what blocks activation and act on it; the readiness review and activation
+confirmation explain themselves. Presentation only, on top of Stories 4.2 and 4.5. Added by sprint change proposal
+2026-10-14 (`sprint-change-proposal-2026-10-14.md`); the redesign package `tmp/course-preparation-redesign/` carries
+the binding state model (HUB-1..6, RDY-1/2, ACT-1..7), UX specification, backend-contract evidence and copy deck.
+
+### Story 7.1: Status-first preparation hub
+
+As an assigned supervisor, I want the preparation hub to tell me first where my course stands and what to do next, so
+that I can prepare and activate it without hunting through equal-looking buttons.
+
+- Given an `inactive_incomplete` course with two reported blockers, when the hub loads, then the amber status panel
+  reads "2 items block activation", the section "Blocking activation" lists exactly those two blockers in server order
+  with one action each, and no activation entry is shown.
+- Given a reported `supervisor_presence` blocker, when it renders, then it shows administrator guidance and no link or
+  button.
+- Given an `inactive_activatable` course with `activation.eligible = true` and no lifecycle instants, when the hub
+  loads, then the indigo panel offers "Review and activate", which opens the readiness review.
+- Given an eligible course with `activated_at` or `deactivated_at` set, when the hub loads, then the gray panel
+  explains that reactivation is not available on this surface and no activation entry exists.
+- Given an `active_accepting` course, when the hub loads, then the green panel shows the activation instant and the
+  students card reads "Create student accounts or add existing students."
+- Given an `active_not_accepting` course, when the hub loads, then the amber panel states that sessions in progress
+  continue and the blockers appear under "Blocking new tutoring sessions".
+- Given the course read returns `503 course_readiness_unavailable`, when the hub renders, then no course name, field
+  value, state pill or entry card appears, the breadcrumb ends in Course preparation, and "Check again" repeats the
+  read in the current admission epoch.
+- Given any state with course data, when the course setup renders, then each row shows the persisted value or its
+  empty text, and the blocker badge appears only for server-reported blocker IDs.
+- Given the course setup list, when the course language row renders, then it shows the display name in the interface
+  language and the stored BCP 47 tag, for example "English (en)".
+- Given the hub loads, when network traffic is inspected, then only the course read is requested; no material, student
+  or supervisor collection is read.
+- Given a viewport of 390 CSS pixels, when the hub renders, then setup rows stack and nothing scrolls horizontally.
+
+Covers CPR-FR-01..08 and CPR-NFR-01..07 from the redesign package; states HUB-1..6.
+
+### Story 7.2: Readiness review and activation confirmation
+
+As an assigned supervisor, I want the readiness review and the activation confirmation to explain what is missing,
+what activation changes and what happened to my attempt, so that I activate deliberately and never misread an outcome.
+
+- Given an inactive course with `activation.eligible = false`, when the readiness review loads, then it shows
+  "Activation unavailable", the unmet prerequisites with their actions, and the static explanation without any status
+  icons or checkmarks.
+- Given an eligible first activation, when the readiness review loads, then "Continue to activation" opens the
+  activation confirmation.
+- Given the activation confirmation, when it loads in ACT-1, then it shows course, current state, "None reported", the
+  three "What changes" items, Cancel and Confirm activation.
+- Given the supervisor confirms, when the pre-dispatch read runs or the request is in flight, then Confirm activation
+  is disabled and the status text matches ACT-2 or ACT-3.
+- Given the pre-dispatch read returns changed facts, when the form re-renders, then the alert "Course facts changed"
+  appears, the changed row carries the badge Changed, and no request is sent until the supervisor confirms again.
+- Given a `409` response, when it arrives, then the red alert appears with "Review current readiness" and technical
+  details, and no form is shown.
+- Given a lost response, an undeclared `5xx` or Stop waiting, when the attempt ends, then the amber unknown-outcome
+  alert offers Refresh course and Abandon unknown attempt, and nothing is retried automatically.
+- Given a validated `200` response, when it arrives, then the app navigates to the hub, which shows HUB-4 or HUB-5
+  from its own read, and success is announced once.
+
+Covers CPR-FR-08..11; states RDY-1/2 and ACT-1..7. Depends on 7.1 for the shared status panel and blocker card.
+
+### Story 7.3: Move the build identifier into the sidebar footer
+
+As any signed-in user, I want the build identifier out of the page content, so that content pages carry only course
+and account information.
+
+- Given any authenticated application surface, when the shell renders, then the build identifier appears in the
+  sidebar footer and no longer below the page content.
+- Given a narrow viewport, when the shell renders, then its existing narrow-width behavior is preserved.
+
+Application-shell presentation change only; no route, capability or content change.
+
+## Epic 8: Mentoring — after the tutoring milestone
 
 Deferred in its entirety; no mentor invitations, assignment UI, or mentoring controls are prerequisites for Epics 2–6.
 Keep existing backend data/permissions intact. Original acceptance details remain in the historical baseline.
 
-### Story 7.1: Request mentoring
-### Story 7.2: Triage and assign requests
-### Story 7.3: Respond and schedule
-### Story 7.4: Reschedule, cancel, complete (BCG-016-gated closure)
-### Story 7.5: Grant the mentor role (BCG-017-blocked)
+### Story 8.1: Request mentoring
+### Story 8.2: Triage and assign requests
+### Story 8.3: Respond and schedule
+### Story 8.4: Reschedule, cancel, complete (BCG-016-gated closure)
+### Story 8.5: Grant the mentor role (BCG-017-blocked)
 
-## Epic 8: Deferred supporting surfaces and operations
+## Epic 9: Deferred supporting surfaces and operations
 
 After the tutoring milestone; these are backlog scope, not ready implementation specs. Reuse the original acceptance
 contracts for each retained slice; refine when selected rather than designing them all before tutoring works.
 
-### Story 8.1: Complete Home aggregation and profile surfaces
+### Story 9.1: Complete Home aggregation and profile surfaces
 
 Full continuation/attention aggregation, student read-only profile, staff profile editing and mobile/avatar support.
 Original 2.2/2.4/2.5; preserve FFR-111..113/202..205 when these surfaces are built.
 
-### Story 8.2: Extended course and material management
+### Story 9.2: Extended course and material management
 
 Logos, supervisor relationship removal, course deactivation/reactivation and deletion, private student materials,
 download/deletion, and drag-and-drop/upload enhancements. Original 3.3/3.5, remaining 3.4 lifecycle scope and remaining
 4.1..4.5; BCG-014 still gates consequential mutations.
 
-### Story 8.3: Student support and supervisor oversight
+### Story 9.3: Student support and supervisor oversight
 
 Add existing student by exact username; profile/security support, membership removal, session-status oversight,
 completed transcripts and summary correction. Original 5.2..5.5; never show active chats to supervisors.
 
-### Story 8.4: Learning history and optional speech
+### Story 9.4: Learning history and optional speech
 
 Full history browser, summaries, follow-ups and speech controls. Original 6.7 speech portion and 6.8;
 basic completed transcript already belongs to new 6.5.
 
-### Story 8.5: Account administration and operational tools
+### Story 9.5: Account administration and operational tools
 
 Broader account/role management, non-supervisor invitations, course administration beyond creation, jobs and audit.
 Original 8.1..8.4 minus the supervisor invitation/course creation subsets moved earlier.
 
-### Story 8.6: Additional MFA management and remaining auth follow-up
+### Story 9.6: Additional MFA management and remaining auth follow-up
 
 Optional replacement, disable, SMS/mobile prerequisites and remaining MFA-specific retrospective follow-up.
 No role-based enrollment requirement. Preserve implemented flows and record real security issues; do not use this
 deferral to bypass a factor already required by the server.
 
-## Epic 9: Complete release evidence
+## Epic 10: Complete release evidence
 
 Formal release readiness follows the functional demonstration; checks required for implemented stories still run as they
 are built. The tutoring milestone is not a claim that every original release-one surface or manual criterion is complete.
 
-### Story 9.1: Performance harness and budget evidence
-### Story 9.2: Accessibility evidence matrix
-### Story 9.3: Localization and reflow release checks
-### Story 9.4: Security acceptance suites
-### Story 9.5: Manual release evidence
+### Story 10.1: Performance harness and budget evidence
+### Story 10.2: Accessibility evidence matrix
+### Story 10.3: Localization and reflow release checks
+### Story 10.4: Security acceptance suites
+### Story 10.5: Manual release evidence
 
 Original detailed acceptance remains in the historical baseline and binding companions. No existing release/security
 gate is waived. Deferred BCG work blocks its dependent feature, not every independent story in this plan.
 
 ## Requirement coverage after replanning
 
-- FFR-101..110/114..118/208: completed Epic 1, reused by 3.2 and 5.2; later MFA expansion in 8.6.
-- FFR-201/206/207: Epic 2. FFR-202..205 and FFR-111..113: later 8.1.
-- FFR-301..305: Epic 4's teaching/activation subset; remaining lifecycle/logos/destructive management in 8.2.
-- FFR-401..405: Epic 4's course-wide upload/processing/approval subset; private/download/delete extensions in 8.2.
-- FFR-503 and scoped roster: Epic 5. Remaining FFR-501/502/504..506 support/oversight in 8.3.
-- FFR-601..613: Epic 6's core session/safe reading/recovery/completion subset; optional speech and full history in 8.4.
-- FFR-701..705: Epic 7, later. FFR-801..804: Epic 3 and 4 minimum administration, remaining operations in 8.5.
+- FFR-101..110/114..118/208: completed Epic 1, reused by 3.2 and 5.2; later MFA expansion in 9.6.
+- FFR-201/206/207: Epic 2. FFR-202..205 and FFR-111..113: later 9.1.
+- FFR-301..305: Epic 4's teaching/activation subset; remaining lifecycle/logos/destructive management in 9.2.
+- FFR-401..405: Epic 4's course-wide upload/processing/approval subset; private/download/delete extensions in 9.2.
+- FFR-503 and scoped roster: Epic 5. Remaining FFR-501/502/504..506 support/oversight in 9.3.
+- FFR-601..613: Epic 6's core session/safe reading/recovery/completion subset; optional speech and full history in 9.4.
+- FFR-302/303 presentation refinement (status-first hub, explanatory readiness review and
+  activation confirmation): Epic 7, on top of Epic 4's implemented behavior.
+- FFR-701..705: Epic 8, later. FFR-801..804: Epic 3 and 4 minimum administration, remaining operations in 9.5.
 - FFR-951..956 and cross-cutting NFR/AD/AC obligations: applied to implemented paths; comprehensive release evidence
-  in Epic 9. Unimplemented later surfaces are not recorded as tested or complete.
+  in Epic 10. Unimplemented later surfaces are not recorded as tested or complete.

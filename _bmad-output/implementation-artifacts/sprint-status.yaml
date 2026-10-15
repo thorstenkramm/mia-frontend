@@ -29,17 +29,19 @@
 # - Dev moves story to 'review', then runs code-review (fresh context, different LLM recommended)
 # - Retrospective appends its action items to action_items; the status view surfaces open ones
 # - Tutoring-first replan 2026-10-06: execute Epics 2 -> 3 -> 4 -> 5 -> 6.
-# - Epics 7-9 are later backlog, not prerequisites for the tutoring demonstration.
+# - Epics 8-10 are later backlog; Epic 7 (course preparation clarity) follows the tutoring milestone.
+# - Sprint change 2026-10-14: Epic 7 inserted, mentoring/deferred/release epics renumbered 7->8, 8->9, 9->10;
+#   planning-artifacts/sprint-change-proposal-2026-10-14.md owns the map.
 # - Epic 1 remains in-progress for recorded acceptance follow-up; do not restart its done stories.
 # - Unstarted story IDs were replaced; planning-artifacts/sprint-change-proposal-2026-10-06.md owns the map.
 generated: 09-19-2026 13:57
-last_updated: 10-07-2026 10:28
+last_updated: 10-15-2026 10:05
 project: mia-frontend
 project_key: NOKEY
 tracking_system: file-system
 delivery_plan: _bmad-output/planning-artifacts/epics.md
 current_milestone: student-tutoring-mvp
-next_story: 2-2-working-routes-and-parent-navigation
+next_story: 7-2-readiness-review-and-activation-confirmation
 story_location: |
   /Users/thorsten/projects/thorsten/mia-frontend/_bmad-output/implementation-artifacts
 development_status:
@@ -55,17 +57,17 @@ development_status:
   1-9-totp-enrollment-and-recovery-codes: done
   epic-1-retrospective: done
 
-  epic-2: in-progress
+  epic-2: done
   2-1-basic-capability-driven-navigation: done
-  2-2-working-routes-and-parent-navigation: done # commit-pending until execution checkpoint confirms SHA
-  epic-2-retrospective: optional
+  2-2-working-routes-and-parent-navigation: done
+  epic-2-retrospective: done
 
   epic-3: done
   3-1-administrator-invites-a-supervisor: done
   3-2-supervisor-account-setup-and-password-only-entry: done
   epic-3-retrospective: optional
 
-  epic-4: in-progress
+  epic-4: done
   4-1-administrator-creates-a-course-with-a-supervisor: done
   4-2-supervisor-edits-course-teaching-fields: done
   4-3-supervisor-creates-material-and-uploads-files: done
@@ -73,7 +75,7 @@ development_status:
   4-5-activate-the-ready-course: done
   epic-4-retrospective: optional
 
-  epic-5: backlog
+  epic-5: done
   5-1-supervisor-provisions-a-student-into-the-active-course: done
   5-2-student-first-sign-in-and-joined-course-entry: done
   epic-5-retrospective: optional
@@ -88,31 +90,36 @@ development_status:
   epic-6-retrospective: optional
 
   # Later scope: select only after the student-tutoring MVP milestone or a new owner decision.
-  epic-7: backlog
+  epic-7: in-progress
   7-1-status-first-preparation-hub: done
-  7-1-request-mentoring: backlog
-  7-2-triage-and-assign-requests: backlog
-  7-3-respond-and-schedule: backlog
-  7-4-reschedule-cancel-complete-bcg-016-gated-closure: backlog
-  7-5-grant-the-mentor-role-bcg-017-blocked: backlog
+  7-2-readiness-review-and-activation-confirmation: backlog
+  7-3-move-the-build-identifier-into-the-sidebar-footer: backlog
   epic-7-retrospective: optional
 
   epic-8: backlog
-  8-1-complete-home-aggregation-and-profile-surfaces: backlog
-  8-2-extended-course-and-material-management: backlog
-  8-3-student-support-and-supervisor-oversight: backlog
-  8-4-learning-history-and-optional-speech: backlog
-  8-5-account-administration-and-operational-tools: backlog
-  8-6-additional-mfa-management-and-remaining-auth-follow-up: backlog
+  8-1-request-mentoring: backlog
+  8-2-triage-and-assign-requests: backlog
+  8-3-respond-and-schedule: backlog
+  8-4-reschedule-cancel-complete-bcg-016-gated-closure: backlog
+  8-5-grant-the-mentor-role-bcg-017-blocked: backlog
   epic-8-retrospective: optional
 
   epic-9: backlog
-  9-1-performance-harness-and-budget-evidence: backlog
-  9-2-accessibility-evidence-matrix: backlog
-  9-3-localization-and-reflow-release-checks: backlog
-  9-4-security-acceptance-suites: backlog
-  9-5-manual-release-evidence: backlog
+  9-1-complete-home-aggregation-and-profile-surfaces: backlog
+  9-2-extended-course-and-material-management: backlog
+  9-3-student-support-and-supervisor-oversight: backlog
+  9-4-learning-history-and-optional-speech: backlog
+  9-5-account-administration-and-operational-tools: backlog
+  9-6-additional-mfa-management-and-remaining-auth-follow-up: backlog
   epic-9-retrospective: optional
+
+  epic-10: backlog
+  10-1-performance-harness-and-budget-evidence: backlog
+  10-2-accessibility-evidence-matrix: backlog
+  10-3-localization-and-reflow-release-checks: backlog
+  10-4-security-acceptance-suites: backlog
+  10-5-manual-release-evidence: backlog
+  epic-10-retrospective: optional
 action_items:
   - id: "epic-1-retro-item-1-propose-lean-mvp-workflow-remove-review"
     epic: 1
@@ -149,3 +156,31 @@ action_items:
     owner: "Product owner + documentation maintainer"
     status: open
     ref: "_bmad-output/implementation-artifacts/epic-1-retro-2026-10-06.md"
+  - id: "epic-2-retro-item-6-cover-shared-control-loading-departure-h"
+    epic: 2
+    action: "Cover shared-control loading, departure, hidden and ambiguous boundaries
+      before handoff and during repairs (P2)."
+    owner: "Frontend implementer"
+    status: open
+    ref: "_bmad-output/implementation-artifacts/epic-2-retro-2026-10-07.md"
+  - id: "epic-2-retro-item-7-inventory-secret-bearing-tests-during-pr"
+    epic: 2
+    action: "Inventory secret-bearing tests during preparation; add failure checkpoints
+      alongside tests and observe actual dispatches (P3)."
+    owner: "Frontend/testing maintainer"
+    status: open
+    ref: "_bmad-output/implementation-artifacts/epic-2-retro-2026-10-07.md"
+  - id: "epic-2-retro-item-8-enforce-provider-failure-fallback-outsid"
+    epic: 2
+    action: "Enforce provider-failure fallback outside blocked model calls; preserve
+      single-writer checkpoints and report distinct execution phases (P1/P4)."
+    owner: "Execution/workflow maintainer"
+    status: open
+    ref: "_bmad-output/implementation-artifacts/epic-2-retro-2026-10-07.md"
+  - id: "epic-2-retro-item-9-smoke-check-effective-solver-tracking-pe"
+    epic: 2
+    action: "Smoke-check effective solver tracking permissions and denied source edits;
+      keep ownership consistent and reuse verified closure evidence (P5)."
+    owner: "Workflow maintainer"
+    status: open
+    ref: "_bmad-output/implementation-artifacts/epic-2-retro-2026-10-07.md"

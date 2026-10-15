@@ -1,0 +1,142 @@
+story: 6-3-stream-answers-without-disrupting-reading
+phase: complete
+spec: _bmad-output/implementation-artifacts/spec-6-3-stream-answers-without-disrupting-reading.md
+baseline_commit: 7b65da2f4393e9cb174815a4cca8ee4f6159d3a2
+pre_existing_changes:
+- .opencode/ agent/protocol/opencode.json edits (owner workflow updates + solver's owner-authorized gpt-6-sol pins, uncommitted)
+- AGENTS.md, README.md, run-all-tests.sh, sprint-status.yaml and seven older execution YAMLs (owner/previous-story bookkeeping, uncommitted)
+- 'untracked: .github/workflows/checks.yml, epic-2-retro-2026-10-07.md, scripts/check-{duplication,markdown,trivy}.sh'
+- no pre-existing edits overlap the planned tutoring/Markdown story manifest
+files:
+- _bmad-output/implementation-artifacts/spec-6-3-stream-answers-without-disrupting-reading.md
+- _bmad-output/implementation-artifacts/deferred-work.md
+- _bmad-output/planning-artifacts/ux-designs/ux-mia-frontend-2026-09-12/FRONTEND-STATE-MACHINES.md
+- scripts/check-bundle-size.mjs
+- src/features/tutoring/TutoringWorkspaceRoute.tsx
+- src/features/tutoring/TutoringCurrentWork.tsx
+- src/features/tutoring/TutoringStreamControls.tsx
+- src/features/tutoring/tutorStreamController.ts
+- src/features/tutoring/tutorStreamController.test.ts
+- src/features/tutoring/useTutorStream.ts
+- src/platform/api/tutoringSessions.ts
+- src/platform/api/tutoringSessions.test.ts
+- src/platform/markdown/ModelMarkdown.test.tsx
+- src/platform/i18n/messages.ts
+- src/platform/i18n/catalogs/en-US.json
+- src/platform/i18n/catalogs/de-DE.json
+- src/platform/i18n/catalogs/fr-FR.json
+- src/platform/i18n/catalogs/pt-PT.json
+- src/platform/i18n/catalogs/pt-BR.json
+- src/platform/i18n/catalogs/es-ES.json
+- src/platform/i18n/catalogs/es-AR.json
+- test/tutoringFixtures.ts
+- e2e/tutoringFixtures.ts
+- e2e/tutoringSessions.spec.ts
+- src/app/routes/learnSessionEntry.test.tsx
+- scripts/secret-hygiene-evidence.ts
+- scripts/route-secret-hygiene-cases.ts
+worker_session: ses_ecefedaf1ffeLBsCTdjLh4VPg6
+reviewer_session: ses_eceb259f0ffeDdL88yNmnXho9G
+models:
+  prepare: openai/gpt-6-sol#high
+  catalog_verified: openai/gpt-6-sol#high and mistral/mistral-medium-2604#high active 2026-10-12
+completed_blocks:
+- 'Story selected 2026-10-12: explicit user dispatch via epic-solver; matches sprint next_story. Scope is 6-3 only; per-story commit authorized by agent mandate; no advance to 6-4 without explicit owner
+  scope.'
+- 'Pushover correction 2026-10-12: binary is in PATH at ~/bin/pushover; the protocol''s hardcoded ~/.local/bin/pushover path is wrong on this machine. Notifications use `pushover` from PATH; owner may want
+  the agent/protocol paths updated.'
+- 'Model resolution 2026-10-12: catalog check showed gpt-6.1-sol/gpt-6-astra active with high variants — the running session''s dispatch catalog was stale, not the models. With owner authorization ("go
+  for it"), solver pinned epic-worker and epic-reviewer to openai/gpt-6-sol#high and refreshed the models cache; restart loaded them. story-execution.md still names old IDs; flagged, not edited.'
+- 'Prepare complete 2026-10-12 (worker ses_ecefedaf1ffeLBsCTdjLh4VPg6, openai/gpt-6-sol#high): bounded spec written; tooling/npm/Chromium/tailwindplus verified; spec documents TutorResponseEventStream snapshot/heartbeat/30s
+  write deadline as present and reuses BCG-012 current-work identity from 6-2. Solver independently verified the blocker against backend source (writeSSE emits only event:/data:, comment heartbeat) and
+  openapi paths (path-bound response identity).'
+- 'Owner decisions 2026-10-12: (1) normative FRONTEND-STATE-MACHINES.md §3 revision — for the no-reconnect slice, path-bound response identity + snapshot atomic replacement constitute the duplicate/identity
+  fencing; server event IDs deferred (6.4 reconnect re-evaluates). (2) No heartbeat-silence timeout in 6.3 — transport errors only. No backend change; no new BCG entry.'
+- 'Implement partial 2026-10-12 (worker ses_ecefedaf1ffeLBsCTdjLh4VPg6): stopped before UI integration — native EventSource cannot observe unknown named events (no wildcard listener), so §3''s unknown-event
+  fence is unenforceable on the mandated native transport; escalated. Preserved: targeted current-work response reconciliation (tutoringSessions.ts), test fixtures, unintegrated tutorStreamController.ts;
+  typecheck + scoped diff check passed; diff/logs under tmp/agent-execution/6-3-stream-answers-without-disrupting-reading/.'
+- 'Owner decision 2026-10-12 (third ruling): unknown named SSE events are unobservable to native EventSource and therefore never applied — fence-by-construction; all observable violations (malformed JSON
+  on the six known types, delta before snapshot, regressive/illegal ordering, events after terminal) still fence the epoch. Extends today''s scoped §3 note. No transport change.'
+- 'Implement near-complete 2026-10-12 (worker ses_ecefedaf1ffeLBsCTdjLh4VPg6): stream controller integrated, UI/controls/i18n/tests done; typecheck, lint/arch, catalog parity, build, 25 unit + 7 catalog
+  + 14 Chromium tests passed. Bundle check failed: 256,554 vs 256,000 gzip budget (554 over; 6-2 headroom was 564). Solver directed bounded mitigation under the owner-approved 6-2 precedent (within budget,
+  seven languages, no behavior change, budget not weakened) — routine precedent, no new product decision. Worker claims its Pushover delivered.'
+- 'Bundle mitigation round failed 2026-10-12 (worker ses_ecefedaf1ffeLBsCTdjLh4VPg6): descriptor-packing trial measured WORSE (257,210) and was fully removed; no bounded mitigation within constraints (seven
+  languages, no behavior change, budget intact) reached ≤256,000. Final 256,554 (+554). All other checks green (typecheck, lint/arch, 7-locale parity/ICU, build, 25 unit, 14 Chromium). Escalated to owner
+  with options; worker claims its Pushover for this blocker was delivered, solver did not duplicate.'
+- 'Measured analysis round complete 2026-10-12 (worker ses_ecefedaf1ffeLBsCTdjLh4VPg6, no retained code; tree verified byte-identical): on-demand catalogs pass easily (−66K, English-pinned 189,823) but
+  cannot keep a non-English active locale synchronous at first paint without new bootstrap infra+tests; tutoring route is ALREADY code-split (no saving); best sync packing 256,451 (+451, still over); all
+  other packing worse. Structural finding: ~66KB of the entry bundle is the six non-active locale catalogs. Worker''s Pushover for this round FAILED (hardcoded path, exit 127); solver covered it.'
+- 'Owner decision 2026-10-12 (fourth ruling): raise FFR-955 initial-route JS budget 256,000 → 258,000 gzip bytes (structural cause: ~66KB of entry bundle is the six non-active locale catalogs; no behavior-compatible
+  mitigation fits). Locale on-demand loading with synchronous first paint for all seven locales is to be filed as follow-up work in deferred-work.md.'
+- 'Implement complete 2026-10-12: budget constant raised to 258,000 with dated owner-decision rationale (scripts/check-bundle-size.mjs; unrelated gate edits preserved); deferred-work.md gained the locale
+  on-demand follow-up; bundle passes 256,554/258,000; build, typecheck, lint/arch, script checks, 11 checker regressions passed plus earlier green focused suites. Status implemented; scoped diff tmp/agent-execution/6-3-stream-answers-without-disrupting-reading/story.diff.'
+- Review phase entered 2026-10-12; Pushover delivered via PATH.
+- 'Repair review pass 2026-10-12 (reviewer ses_eceb259f0ffeDdL88yNmnXho9G): no remaining blocking defect in F1-F4; limitations = no independent test runs, final gate + manual browser/AT evidence outstanding.
+  Pushover verification-phase notification delivered via PATH.'
+- 'Gate-failure diagnosis 2026-10-12 (worker): learnSessionEntry.test.tsx:1238 failure was STORY-CAUSED — 6-3 opens a stream for the admitted queued response; the legacy jsdom test lacks native EventSource,
+  so constructor failure correctly announced transport loss, replacing the queued announcement. Fixed via case-local connected idle EventSource fake with global cleanup; original assertion unchanged; file
+  added to manifest. 62/62 affected unit + isolated case pass. Inputs changed → new final gate required.'
+- 'Owner scope expansion 2026-10-12: after 6-3 closure, proceed to 6-4-recover-stop-and-deliberately-retry-tutoring-work (per-story reviewed+verified commits under the same agent mandate; stop after 6-4
+  unless told otherwise).'
+- 'Final gate run #2 failed at secret hygiene 2026-10-12: unit 907/907, build ok, bundle 256,571/258,000 ok, i18n+api types ok, Chromium e2e 313/313 ok; SECRET HYGIENE failed — course-unit deliberate-failure
+  inventory mismatch at activation-previously-active (checkpointReached=false, failureIdentity=false, failures=1, early=false); duplication/audit/trivy/tailwind-catalog/markdown not reached. Fingerprint
+  sha256 1572f0fa...c34137a7 over 297 inputs, before/after match; evidence in verify-report.json + verify-*.log, prior failed run preserved under verify-previous-failed/.'
+- 'Hygiene diagnosis 2026-10-12 (worker): activation-previously-active NOT story-caused (baseline blobs match; scoped activation hygiene 30 cases/35 checkpoints passes; full-stage rerun failed at a DIFFERENT
+  unchanged activation browser checkpoint) — intermittent pre-existing flake, consistent with open epic-1-retro-item-2. Story-owned omissions found+fixed: 6-3 targeted-terminal unit checkpoint and nine
+  protected browser journeys registered in scripts/secret-hygiene-evidence.ts + scripts/route-secret-hygiene-cases.ts (both added to manifest); scoped tutoring hygiene passes. Worker claims interaction-needed
+  Pushover delivered.'
+- 'Owner decision 2026-10-12 (fifth ruling): authorize bounded diagnosis+repair of the intermittent activation secret-hygiene flake (maps to epic-1-retro-item-2), then a new full gate.'
+- 'Interruption 2026-10-12~23:17→00:25: final-gate run #3 dispatch interrupted mid-run (worker idle, outcome=interrupted). Partial evidence: unit/build/bundle/i18n/api-types passed, Chromium e2e reached
+  ~260/313; the single ✘ (scaffold pt-PT reflow, 15.8m) is the in-progress test killed by the interruption, not an assertion failure. No verify-report/after-fingerprint produced — run #3 is not evidence.
+  No stray playwright/vite/vitest processes; no server killed. Confirmed via session API + local artifacts 2026-10-13.'
+- 'Final gate run #4 launched 2026-10-13 (worker ses_ecefedaf1ffeLBsCTdjLh4VPg6): single fresh ./run-all-tests.sh running in background; interrupted run-3 log preserved as verify-interrupted-gate.log; before-gate
+  fingerprint recorded over 299 inputs. No pass claimed yet.'
+- 'Final verification PASSED 2026-10-13 (gate run #4, single fresh invocation, exit 0): typecheck/coverage/lint/arch/format, unit 907/907, build once, bundle 256,571/258,000, i18n, api types, Chromium 313/313,
+  secret hygiene 191 unit/257 + 186 browser/383 checkpoints, duplication, audit, trivy, tailwind catalog, markdown — no tooling skipped. Fingerprint sha256 88e74d71...cd79c23f over 299 inputs (3,949,560
+  bytes), before/after match. Advisories: 4 low KaTeX audit, Trivy LOW + MEDIUM country-code false positive (not suppressed). Activation flake did not recur; root cause remains unknown (bounded-negative
+  documented).'
+- 'Closed 2026-10-13: commit 8e53651822f9b8955ee1406c23c820c073542cd8 confirmed at HEAD (27 paths: spec, deferred-work entry, 6-3-done tracker hunk, §3 clarification, 3 approved scripts, tutoring source/tests,
+  7 catalogs, API/route tests, fixtures/e2e). No excluded files staged; pre-existing owner changes and checkpoint bookkeeping remain dirty per protocol. Elapsed ~1 day incl. 5 owner rulings + 1 interruption
+  recovery; 1 review round (3 blockers fixed); 4 gate runs (1 story-caused fix, 1 unrelated flake, 1 interruption, 1 pass).'
+repair_queue:
+- finding: 'F1: terminal success announced before persisted truth confirmed (useTutorStream.ts:121-150, TutoringCurrentWork.tsx:92-115); announce/present definitive terminal outcome only after targeted
+    persisted read validates, no double announce'
+  root_cause: announcement ledger treats SSE terminal as authoritative
+  disposition: fixed
+  evidence: reviewer ses_eceb259f0ffeDdL88yNmnXho9G blocking finding 1
+- finding: 'F2: presentation pause does not freeze transcript on stream failure (tutorStreamController.ts:302-313, TutoringCurrentWork.tsx:181-190); buffer failure presentation until Resume while still
+    closing/fencing immediately; keep auth/scope teardown immediate'
+  root_cause: failure presentation bypasses pause buffer
+  disposition: fixed
+  evidence: reviewer ses_eceb259f0ffeDdL88yNmnXho9G blocking finding 2
+- finding: 'F3: initial generating snapshot announces without a transition (useTutorStream.ts:132-161); seed announcement ledger from admitted work; announce generating only on actual queued→generating
+    change'
+  root_cause: announcement ledger not seeded from admitted current-work state
+  disposition: fixed
+  evidence: reviewer ses_eceb259f0ffeDdL88yNmnXho9G blocking finding 3
+- finding: 'F4 (verification gap): add+run targeted local-fake tests for AC-013 reader-away, pause/failure/resume, initial-snapshot announcement boundaries (focus, selection, scroll, live-region text);
+    return commands + content-free results'
+  root_cause: missing boundary coverage
+  disposition: fixed
+  evidence: reviewer ses_eceb259f0ffeDdL88yNmnXho9G verification request
+last_verification:
+  status: passed
+  command: ./run-all-tests.sh
+  exit_code: 0
+  baseline: 7b65da2f4393e9cb174815a4cca8ee4f6159d3a2
+  fingerprint: sha256 88e74d710a890d115f35b3147d9b1e30d47f1f0d0ee92f0039282133cd79c23f over 299 inputs / 3,949,560 bytes (before/after match)
+  unit_tests: 907
+  browser_tests: 313
+  hygiene: 191 unit cases/257 checkpoints + 186 browser cases/383 checkpoints
+  bundle_gzip_bytes: 256571
+  bundle_budget_bytes: 258000
+  build_count: 1
+  skipped: []
+  report: tmp/agent-execution/6-3-stream-answers-without-disrupting-reading/verify-report.json
+  history: run1 failed unit (story-caused, fixed); run2 failed hygiene (intermittent pre-existing activation flake); run3 interrupted mid-e2e; run4 passed
+resume_attempts: 1
+commit:
+  intended_message: 'feat: stream tutor responses without disrupting reading'
+  sha: 8e53651822f9b8955ee1406c23c820c073542cd8
+next_action: '6-3 closed. Per owner scope 2026-10-12: proceed to 6-4-recover-stop-and-deliberately-retry-tutoring-work with a fresh worker prepare dispatch.'
+blocked_on: null

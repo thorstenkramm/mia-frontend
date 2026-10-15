@@ -1,7 +1,7 @@
 ---
-description: Implements and verifies one bounded MIA story on Claude Opus 5.5; resumes fixes without replanning settled intent.
+description: Implements and verifies one bounded MIA story on GPT-6 Sol; resumes fixes without replanning settled intent.
 mode: subagent
-model: anthropic/claude-opus-5-5#high
+model: openai/gpt-6-sol#high
 permissions:
   - action: subagent
     resource: '*'
@@ -54,6 +54,10 @@ After implement/fix, write a complete scoped diff (tracked plus new story files)
 generate the diff. The reviewer has read tools only and depends on this actual diff, not a narrative summary.
 
 ## Report
+
+Before asking for owner input or returning a blocker requiring owner intervention, follow the human-interaction
+notification rule in `.opencode/story-execution.md`: send Pushover with the exact `interaction needed:` prefix.
+Include delivery status in the handoff so the solver can cover a failure without duplicating a successful alert.
 
 Return phase, status (`ready`, `implemented`, `fixed`, `verified`, `committed`, `commit-pending`, `blocked`), spec path,
 baseline/full commit SHA when applicable, explicit files changed, completed blocks, next action, checks with pass/fail/skip,

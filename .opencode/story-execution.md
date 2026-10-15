@@ -6,21 +6,61 @@ Use these agents instead of nesting complete BMAD build/review loops. Standalone
 
 ## Models and startup
 
-Starting settings: solver Claude Sonnet 5.5 medium; worker Claude Opus 5.5 high; reviewer GPT-6 Astra high. These are trial
-settings, not a performance ranking. A primary session keeps its selected model: explicitly select Sonnet 5.5 medium when
-starting the solver; choosing its agent name alone does not change an existing session's model. Children use their pinned
-models. Verify availability before a run. Never silently substitute an unavailable model.
+Owner provider decision, 2026-10-07: use OpenAI and Mistral. Anthropic is no longer a default or fallback for this workflow.
 
-The user approved cross-provider fallback after an actual provider failure: worker → `openai/gpt-6.1-sol#high`, reviewer
-→ `anthropic/claude-opus-5-5#high` in a fresh review session. Resolve exact available IDs before use. A fallback reviewer
-must not be the implementation session even if model families coincide. Sonnet coordinator outage can resume in an
-explicitly selected Astra session using this same checkpoint. No automatic benchmarking or paid model comparison runs.
+| Role | Default | Provider-failure fallback |
+| --- | --- | --- |
+| Solver | `openai/gpt-6-astra#high` | `mistral/mistral-medium-2604#high` |
+| Worker | `openai/gpt-6-sol#high` | `mistral/mistral-medium-2604#high` |
+| Reviewer | `openai/gpt-6-sol#high` | `mistral/mistral-medium-2604#high` |
+
+Re-verified against the runtime catalog on 2026-10-12: `gpt-6.1-sol` drifted out of the dispatch-resolvable set and the
+worker/reviewer pins moved to `gpt-6-sol` (owner decision). A running session resolves agent pins against its startup
+catalog, so catalog drift surfaces as dispatch rejection until opencode restarts — verify pins after any catalog change.
+Mistral Medium 3.5 is active, not the beta Large 4.
+Catalog availability does not establish quota or successful execution. Verify availability during preparation, without
+paid benchmarking calls. A primary session keeps its selected model: explicitly select the solver model at launch;
+choosing the agent alone does not change it. Explicitly select the chosen model on every child dispatch/resume, including
+after interruptions, rather than relying on a saved session or stale agent catalog. Record the actual model in the checkpoint.
+
+On observed `429` / `provider.rate-limit`, stop the affected execution and use the other approved provider immediately;
+do not deliberately retry the same provider. Keep that fallback for the rest of the batch. If both providers fail, checkpoint
+and report blocked, without bouncing between them. An old Anthropic session must be stopped and resumed on the OpenAI default.
+Confirm inactivity first and preserve code and verification evidence. A fallback reviewer always uses an independent review
+session, never the implementation session. Coordinator recovery needs the parent/operator to select the fallback explicitly.
 
 Before an unattended batch, agree its story/epic boundary and whether per-story commits are authorized. For known approved
 worktree changes preserve the baseline; unknown overlapping changes require one grouped question. Never demand a clean
 tree by committing someone else's work. Default to sequential stories in this workspace, not parallel writers/worktrees.
 
 ## Phase ownership
+
+### Human-interaction notifications
+
+Before asking the owner a question or stopping for owner intervention, the agent must send:
+
+```sh
+pushover "interaction needed: <story ID> — <brief blocker and requested action>"
+```
+
+The notifier binary is `pushover`, resolved via PATH (currently `~/bin/pushover`); never hardcode `$HOME/.local/bin/pushover` —
+that path does not exist on the owner's machine and silently broke worker notifications (exit 127) until 2026-10-13.
+
+The literal lowercase prefix `interaction needed:` is mandatory. This covers product/contract decisions, conflicting
+requirements, unknown overlapping edits, approvals, unresolved problems, exhausted repair attempts, and provider/quota,
+rate-limit, authentication or tooling failures that need the owner to unblock them. Send it when the need is identified,
+before returning a blocked report or asking the question; do not wait for another status request. Group related questions
+in one notification. Use content-free wording: no credentials, protected content, user data or raw error payloads.
+
+The agent detecting the need sends the notification and reports whether delivery succeeded. The solver sends it if a
+child could not, including when a provider failure prevents that child from executing tools. Avoid duplicate alerts for
+the same pending question already delivered; a new required action or blocker warrants a new alert. Include the full
+question and context in chat/report, not solely in Pushover. A delivery failure is reported once in chat and never retried
+in a loop; continue independent work when possible.
+
+Routine phase changes and successful automatic fallback do not themselves require this prefix. If fallback cannot
+proceed without the owner, use it. Model instructions cannot deliver a notification while the model itself is stalled;
+the parent/operator must handle observed runtime failures under the interruption procedure below.
 
 1. Solver selects `next_story` or explicit user selection. Worker prepares only that story's detailed spec and prerequisites.
 2. Solver records ready decisions, sets in-progress, dispatches worker implementation and obtains the scoped diff/manifest.
@@ -67,19 +107,52 @@ paths are operational metadata; never record fixture secrets, prompts containing
 accepted-story elapsed time/repair rounds/valid findings/provider failures locally in this record when measurable; do not
 invent totals from commit timestamps or introduce product telemetry.
 
-On rate limit, timeout or interruption: report stopped/unknown status immediately, inspect the diff and completed blocks,
-and make one bounded resume attempt only after the prior call's state is known. Respect provider retry-after; no tight
+On rate limit, timeout or interruption: report stopped/unknown status immediately and inspect the diff and completed blocks.
+For rate limits use the approved cross-provider policy above; for other failures make one bounded resume attempt only
+after the prior call's state is known. Respect provider retry-after; no tight
 loop, periodic polling or three-minute kill. If still unavailable, use the approved fallback with spec/checkpoint/current
 diff and exact remaining work, not the original task from scratch. A timed-out tool call may leave child work running:
 never launch a replacement writer until the original session/process is confirmed stopped through supported controls.
 If the runtime cannot establish or stop it, report that blocker honestly. Do not invent cancel/heartbeat tools.
+
+### Status diagnosis and safe interruption
+
+On a user status request or a delivered failure event, inspect the owned child using the documented local API, once:
+
+```sh
+opencode api get /api/session/active
+opencode api get /api/session/ses_CHILD/message?order=desc\&limit=3
+```
+
+Replace `ses_CHILD` with the checkpoint's actual session ID. Inspect execution activity and the latest message's `retry`
+and error metadata together. Session summary `outcome`/`idle` may describe an earlier dispatch; local test logs only prove
+completed checks. Report provider waiting separately from tool execution, review, verification and owner waiting. Do not
+repeat an "implementation underway" claim based solely on unchanged files. Summarize metadata only; never copy raw
+message bodies, provider payloads or reasoning into reports. If the API is unavailable, say current execution is unknown.
+
+For a confirmed provider failure in an owned child:
+
+```sh
+opencode api post /api/session/ses_CHILD/interrupt?resume=false
+opencode api get /api/session/active
+```
+
+Proceed only after that child is absent from active sessions (and any owned mutating tool has stopped). Record the error,
+retry attempt, interruption result and chosen fallback. Resume the same worker/checkpoint with explicit model selection;
+use a fresh independent context if switching the reviewer. No service restart, unrelated session interruption, concurrent
+writer, recurring poll, or arbitrary timeout. Notify the owner via chat/Pushover on the failure and recovery transition.
+
+These agent settings prevent selecting the exhausted Anthropic provider; they do not disable OpenCode's internal retry
+mechanism. The documented V2 configuration exposes no rate-limit retry-count switch. While a child is inside a tool call,
+the model cannot observe an undelivered retry event. Do not claim autonomous event-driven failover or a watchdog exists.
 
 ## Verification and environment
 
 Prepare checks tools once per batch. Install dependencies only when missing or lockfile changes; install Chromium before
 the first browser run. Use local cached tooling where available; network failures are infrastructure failures, not product
 decisions. Do not kill an unknown preview server to free a port. Report it or use a deliberately configured isolated port.
-The reviewer cannot run shell: worker supplies scoped diff and reproducible check evidence. This is read-only isolation,
+The reviewer may run only the Pushover notification command, not inspection/test shell commands: the worker supplies
+scoped diff and reproducible check evidence. This is read-only code isolation,
 not a claim that worker evidence is independently executed. The reviewer must inspect test quality and missing boundaries.
 
 `AGENTS.md` owns the gate. Documentation-only changes use applicable lint/consistency checks; application changes get the

@@ -203,8 +203,10 @@ only applicable Markdown lint and planning-consistency checks. Respect the Markd
 Do not run application tests or builds for these changes. Updating verification notes after a completed full gate
 does not require rerunning that gate unless executable code, configuration, or dependencies also changed.
 
-This repository has no CI, so nothing else runs these checks. On the backend, skipping the equivalent script is how
-the duplication gate stayed red across four consecutive stories.
+GitHub Actions (`.github/workflows/checks.yml`) mirrors the gate stage by stage, but only after a push. It does not
+replace running the script before reporting work complete. On the backend, skipping the equivalent script is how the
+duplication gate stayed red across four consecutive stories. When a gate stage changes, update `run-all-tests.sh` and
+the workflow together.
 
 The script skips components whose tooling is not installed yet and says so. When a component cannot run, name it and
 say it was skipped instead of implying the full suite passed.

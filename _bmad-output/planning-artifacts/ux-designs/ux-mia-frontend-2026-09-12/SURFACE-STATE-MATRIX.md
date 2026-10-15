@@ -316,9 +316,9 @@ history renders only returned records; absent later records and transcript quota
 | Surface | Profiles | Domain states | Exit | Companion |
 | --- | --- | --- | --- | --- |
 | Assigned-course list | `G,L` | `BCG-011` blocked: inactive/active; accepting/not accepting | Home or hub | `AUTH` |
-| Preparation hub | `G,D,W` | `BCG-011`: checking/incomplete/activatable/active states | list/item | `MATERIAL` |
-| Readiness review | `G,D,W` | `BCG-011`: blocked prerequisites and action eligibility | hub/item | `MATERIAL` |
-| Course activation | `G,D,X` | `BCG-011` blocked: checking; eligible; ineligible; active | hub | `MATERIAL` |
+| Preparation hub | `G,D,W` | `BCG-011`: checking/incomplete/activatable/active states; presentation states HUB-1..6 (Story 7.1) | list/item | `MATERIAL` |
+| Readiness review | `G,D,W` | `BCG-011`: blocked prerequisites and action eligibility; presentation states RDY-1/2 (Story 7.2) | hub/item | `MATERIAL` |
+| Course activation | `G,D,X` | `BCG-011` blocked: checking; eligible; ineligible; active; operation/presentation states ACT-1..7 (Story 7.2) | hub | `MATERIAL` |
 | Course deactivation | `G,D,X` | active; deactivated; stale assignment | hub | `MATERIAL` |
 
 An active course with no approved, ready, file-backed course-wide material remains active but blocks new sessions.
@@ -338,6 +338,11 @@ links resolve implemented teaching/material destinations only; supervisor assign
 guidance, not a future link. False eligibility, checking/read failure, prior activation and unknown outcome never enable
 activation. Reconciliation does not attribute an ambiguous attempt. The story ends at freshly admitted hub truth, not
 roster/provisioning. Reactivation and wider BCG-011/manual/release obligations remain outside this slice.
+
+Sprint change 2026-10-14: Epic 7 "Course preparation clarity" re-presents these three surfaces — status-first hub,
+explanatory readiness review and activation confirmation, and the hub's saved-content setup list. The
+`HUB-*`/`RDY-*`/`ACT-*` presentation states are owned by Stories 7.1/7.2. Domain states, routes, and the BCG-011
+reconciliation above are unchanged.
 
 Story 4.2 owner decision, 2026-10-08, at `BACKEND-CONTRACT-GAPS.md` §Story 4.2 readiness slice decision resumes the
 assigned-supervisor hub and the five teaching-field surfaces below using authoritative course GET/PATCH readiness.

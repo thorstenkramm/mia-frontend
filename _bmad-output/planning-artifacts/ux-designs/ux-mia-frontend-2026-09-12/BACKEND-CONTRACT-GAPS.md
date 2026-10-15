@@ -1124,7 +1124,7 @@ remain unattributed after course-state reconciliation and never trigger replay o
 Blocker resolution links are limited to exact same-course API links mapped to implemented teaching/material routes.
 Supervisor-presence gets truthful administrator guidance without an unimplemented assignment destination. Lifecycle
 instants withhold previously activated/deactivated courses from this first-activation surface. Reactivation belongs
-to Story 8.2; roster/provisioning belongs to 5.1. See `spec-4-5-activate-the-ready-course.md` under implementation artifacts
+to Story 9.2; roster/provisioning belongs to 5.1. See `spec-4-5-activate-the-ready-course.md` under implementation artifacts
 for the bounded implementation and automated evidence. The Story 4.2 slice decision remains intact. BCG-011 is not
 globally closed: student-start, deactivation/relationship, comprehensive concurrency and manual/browser/release evidence
 remain outstanding.
@@ -1707,7 +1707,7 @@ Status: **NON-BLOCKING FOLLOW-UP — generic authorized material list/detail acc
 The owner explicitly accepts the existing generic all-visible authorized `listMaterials`/`getMaterial` contract for the
 Story 4.3 milestone surface. Assigned supervisors are authorized for both course-wide and student-private material in
 their assigned course. Render returned rows with their authoritative scope label; student-private rows receive **no row
-actions**, including detail links or private-material controls, which remain deferred to Story 8.2. Do not fetch and hide
+actions**, including detail links or private-material controls, which remain deferred to Story 9.2. Do not fetch and hide
 unauthorized data or client-side hide private rows to simulate a server filter.
 
 This is an explicit, bounded exception to the milestone surface's least-data/privacy projection requirement, not a grant

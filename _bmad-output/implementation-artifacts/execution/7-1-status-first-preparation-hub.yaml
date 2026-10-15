@@ -1,0 +1,86 @@
+story: 7-1-status-first-preparation-hub
+phase: complete
+spec: _bmad-output/implementation-artifacts/spec-7-1-status-first-preparation-hub.md
+baseline_commit: e41c2b80a480b885d5abc79e776178f2ca6fbed5
+pre_existing_changes: []
+files:
+- _bmad-output/implementation-artifacts/spec-7-1-status-first-preparation-hub.md
+- src/app/ApplicationShell.tsx
+- src/app/routes/AdminCourseRoute.tsx
+- src/app/routes/coursePreparation.test.tsx
+- src/app/routes/courseActivation.test.tsx
+- src/features/courses/CoursePreparationRoute.tsx
+- src/features/courses/CourseReadinessChecklist.tsx
+- src/platform/ui/RouteRecoveryPanel.tsx
+- src/platform/i18n/messages.ts + seven catalogs (en-US, de-DE, es-ES, es-AR, fr-FR, pt-PT, pt-BR)
+- e2e/coursePreparation.spec.ts
+- e2e/courseActivation.spec.ts
+- scripts/secret-hygiene-evidence.ts
+- scripts/route-secret-hygiene-cases.ts
+- scripts/check-secret-hygiene.mjs
+- scripts/check-route-secret-hygiene.mjs
+worker_session: ses_ec4222fc9ffewUpvPPGSB1OZN0
+reviewer_session: ses_ec3a2d7e8ffeaAEwHL0102gyKc
+models:
+  prepare: openai/gpt-6-sol#high
+  catalog_verified: gpt-6-sol#high + mistral-medium-2604#high active 2026-10-14
+completed_blocks:
+- 'Story selected 2026-10-14: explicit user dispatch after the approved sprint change proposal 2026-10-14 (course preparation redesign). Epic 7 inserted ahead of mentoring; 7-1 is sprint next_story. Per-story
+  reviewed+verified commit authorized by agent mandate; stop at story end — 7.2/7.3 need explicit dispatch.'
+- 'Carried context: redesign package tmp/course-preparation-redesign/ is the design input (state model 03 is authoritative over screenshots; backend contract verified at backend 63c99925). Owner rulings:
+  language row shows display name + BCP 47 tag; two-line excerpts; build identifier move is story 7.3, NOT 7.1. Bundle watch: 259,271/260,000 (729 bytes headroom) — hub presentation is replaced, prepare
+  must project the net effect and escalate before implementing if overflow is likely (locale on-demand follow-up in deferred-work.md is the known lever). Known intermittent activation-hygiene flake: root
+  cause unknown — on gate failure there, stop and escalate.'
+- 'Sprint change bookkeeping: the 2026-10-14 planning edits (epics.md, EXPERIENCE.md, SURFACE-STATE-MATRIX.md, FRONTEND-STATE-MACHINES.md, BACKEND-CONTRACT-GAPS.md, sprint-status.yaml, new sprint-change-proposal-2026-10-14.md)
+  are intentional uncommitted owner-approved state — never stage them into the story commit.'
+- 'Prepare 2026-10-14: spec decision-complete (11 ACs mapped to HUB-1..6, blueprint bindings, copy split, negative tests; backend HEAD matches package-verified 63c99925, no drift). BLOCKED on bundle: 726-729B
+  headroom vs projected +5-15KB for seven-locale hub copy.'
+- 'Bundle blocker cleared 2026-10-14: locale on-demand follow-up landed (commit e41c2b80) — entry JS 192,803 gzip, ~43KB headroom vs the projected +5-15KB hub copy. Resuming at implement against the 7-1
+  spec.'
+- 'Implement 2026-10-14: HUB-1..6 status-first presentation (status panel, server-ordered blocker cards, setup list w/ excerpts + inline actions, entry cards, first-activation-only action, HUB-6 503 handling);
+  admission/denial/epoch/activation behavior stays with existing owners. 46 unit + 52 Chromium pass; hygiene 23/30 unit + 52/84 browser; bundle entry 194,203, largest paint 219,352/260,000.'
+- 'Repair review PASS 2026-10-15 (reviewer ses_ec3a2d7e8ffeaAEwHL0102gyKc): F1 projection rejection covers inconsistent combinations, negative test proven non-vacuous; F2 clamp limited to excerpts, 320px
+  regression proven. Full gate pending.'
+- 'Verify attempt 1 (2026-10-15): gate exit 1 — typecheck/lint/format/935 unit/build/bundle/i18n/API types passed; 3 pre-existing through-hub journeys failed on old-hub expectations; stages after Chromium
+  unreached. Bundle 194,206 entry / 219,355 largest paint. Trivy MEDIUM re-adjudicated country-code false positive. Not the known flake.'
+- 'Gate-failure repair round 2026-10-15: three through-hub journeys updated to the new presentation (47/47 focused) + one vacuous retired-text absence assertion replaced with current-claim + pill check.
+  Repair review PASS. New full gate authorized on changed inputs.'
+- 'Verification PASSED 2026-10-15 (2nd gate, exit 0): all 16 stages; 935 unit, 351 Chromium; hygiene 208/274 + 212/443; duplication 0; bundle 194,206 entry / 219,355 paint (40,645 headroom). Trivy MEDIUM
+  = country-code false positive; katex LOW already filed.'
+- 'Closed 2026-10-15: commit 869c99d73547659531c04b3dc297da9fb52ae5cf (26 story paths + 7-1-done tracker hunk; exclusions held; no push). 1 review round (2 blockers: protocol-failure projection, clamp scope)
+  + gate-failure round (3 through-hub journeys + 1 vacuous assertion); final gate exit 0: 935 unit, 351 Chromium, bundle 219,355/260,000.'
+repair_queue:
+- finding: 'F1: inconsistent response can falsely claim prior activation — CoursePreparationRoute.tsx:101-139 maps inactive_activatable + eligible=false + no lifecycle instants to HUB-3 (''was active before'');
+    courses.ts:184-199 projection doesn''t reject the combination. Remedy: reject the disagreement at the projection boundary (Story 4.5 protocol-failure path) + negative test.'
+  disposition: fixed (confirmed by repair review)
+  evidence: reviewer ses_ec3a2d7e8ffeaAEwHL0102gyKc blocking finding 1
+- finding: 'F2: line-clamp-2 on EVERY setup row (CoursePreparationRoute.tsx:353-355) — long course name can hide its description; long localized language name can hide the tag; violates setup-value + language-tag
+    criteria and AC-001 reflow. Remedy: clamp only goals/instructions/curriculum excerpts; language + name/description rows fully readable; narrow-width regression test.'
+  disposition: fixed (confirmed by repair review)
+  evidence: reviewer ses_ec3a2d7e8ffeaAEwHL0102gyKc blocking finding 2
+- finding: 'GATE-1: final gate exit 1 — 3 Chromium failures in existing journeys (e2e/completeTutoringJourney.spec.ts, materialPreparation, studentProvisioning) that navigate THROUGH the hub and still expect
+    the old hub heading/navigation link; missed in the implement-phase affected-spec inventory. Not the known flake. Remedy: update the three journeys'' hub traversal to the new presentation (journey intent
+    unchanged), rerun them, then a new authorized full gate. Gate stages after Chromium were not reached and must run in the new invocation.'
+  disposition: fixed (confirmed by repair review)
+  evidence: tmp/agent-execution/7-1-status-first-preparation-hub/verify-report.json + verify-gate.log
+last_verification:
+  status: passed
+  command: ./run-all-tests.sh (2nd authorized invocation; 1st failed honestly on through-hub journeys, repaired + review-passed)
+  exit_code: 0
+  baseline: e41c2b80a480b885d5abc79e776178f2ca6fbed5
+  fingerprint: sha256 fec22a45a0be04943f23fe3e0328f015fb9b1f7b79ef7b0ce18b68423e14bc89 (before/after identical, 295 inputs)
+  unit_tests: 935
+  browser_tests: 351
+  hygiene: 208 unit/274 checkpoints + 212 browser/443 checkpoints; canaries rejected; no marker leaks
+  bundle_entry_gzip: 194206
+  bundle_largest_paint_gzip: 219355
+  bundle_budget_bytes: 260000
+  skipped: []
+  report: tmp/agent-execution/7-1-status-first-preparation-hub/verify2-report.json
+  trivy_adjudication: tmp/agent-execution/7-1-status-first-preparation-hub/verify2-trivy-adjudication.md
+resume_attempts: 0
+commit:
+  intended_message: 'feat: status-first course preparation hub'
+  sha: 869c99d73547659531c04b3dc297da9fb52ae5cf
+next_action: 7-1 done. STOP — 7-2-readiness-review-and-activation-confirmation requires explicit owner dispatch.
+blocked_on: null

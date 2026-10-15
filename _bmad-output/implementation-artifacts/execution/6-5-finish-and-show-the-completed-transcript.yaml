@@ -1,0 +1,113 @@
+story: 6-5-finish-and-show-the-completed-transcript
+phase: complete
+spec: _bmad-output/implementation-artifacts/spec-6-5-finish-and-show-the-completed-transcript.md
+baseline_commit: 61df24ef7361981c8ee16ee86eb7d97e320e3c24
+pre_existing_changes:
+- .opencode/** workflow edits (incl. 2026-10-13 pushover PATH + model-table fixes), AGENTS.md, README.md, run-all-tests.sh, sprint-status.yaml, older execution YAMLs
+- 'untracked: .github/workflows/checks.yml, epic-2 retro, execution/6-3..6-5 YAMLs, scripts/check-{duplication,markdown,trivy}.sh'
+- no pre-existing edits overlap the planned 6-5 manifest
+files:
+- _bmad-output/implementation-artifacts/spec-6-5-finish-and-show-the-completed-transcript.md
+- _bmad-output/planning-artifacts/ux-designs/ux-mia-frontend-2026-09-12/ROUTE-INVENTORY.md
+- _bmad-output/planning-artifacts/ux-designs/ux-mia-frontend-2026-09-12/BACKEND-CONTRACT-GAPS.md
+- _bmad-output/planning-artifacts/ux-designs/ux-mia-frontend-2026-09-12/SURFACE-STATE-MATRIX.md
+- _bmad-output/planning-artifacts/ux-designs/ux-mia-frontend-2026-09-12/ACCESSIBILITY-ACCEPTANCE.md
+- scripts/check-bundle-size.mjs
+- scripts/route-secret-hygiene-cases.ts
+- scripts/secret-hygiene-evidence.ts
+- src/app/routes/entryRoutes.tsx
+- src/app/routes/LearnSessionRoute.tsx
+- src/app/routes/learnSessionEntry.test.tsx
+- src/features/tutoring/TutoringRouteProps.ts
+- src/features/tutoring/TutoringWorkspaceRoute.tsx
+- src/features/tutoring/TutoringFinishRoute.tsx
+- src/features/tutoring/useTutoringFinish.ts
+- src/features/tutoring/useStudentMessageSend.ts
+- src/platform/api/tutoringSessions.ts
+- src/platform/api/tutoringSessions.test.ts
+- src/platform/i18n/messages.ts
+- src/platform/i18n/catalogs/en-US.json
+- src/platform/i18n/catalogs/de-DE.json
+- src/platform/i18n/catalogs/fr-FR.json
+- src/platform/i18n/catalogs/pt-PT.json
+- src/platform/i18n/catalogs/pt-BR.json
+- src/platform/i18n/catalogs/es-ES.json
+- src/platform/i18n/catalogs/es-AR.json
+- test/tutoringFixtures.ts
+- e2e/tutoringFixtures.ts
+- e2e/tutoringSessions.spec.ts
+worker_session: ses_ecb509d7bffeOiR3ny1w4Sf8QE
+reviewer_session: ses_ecb1c7739ffeBB8lUokIrGotkW
+models:
+  prepare: openai/gpt-6-sol#high
+  catalog_verified: openai/gpt-6-sol#high and mistral/mistral-medium-2604#high active 2026-10-13
+completed_blocks:
+- 'Story selected 2026-10-13: explicit user dispatch ("move on to next story 6-5"); matches sprint next_story after 6-4 closure (commit 61df24ef7361981c8ee16ee86eb7d97e320e3c24). Per-story reviewed+verified
+  commit authorized by agent mandate; stop after 6-5 unless told otherwise.'
+- 'Carried context: bundle headroom is 182 gzip bytes (257,818/258,000) — 6-5 must fit or escalate BEFORE implementing; locale on-demand follow-up sits in deferred-work.md (not this story''s scope). Activation
+  secret-hygiene flake root cause unknown (bounded-negative, epic-1-retro-item-2 open). Normative notes from 6-3/6-4 (scoped §3 exception, §4 reconnect sequence ownership, §7 Stop=200, lost-retry outcome-unknown)
+  are settled and apply.'
+- 'Prepare blocked-then-decided 2026-10-13 (worker ses_ecb509d7bffeOiR3ny1w4Sf8QE): contracts validated (finish op + current-work eligibility exist); 2 owner rulings — (1) FFR-955 raised 258,000 → 260,000
+  (6-5 copy estimate +307B vs 182B headroom; locale on-demand stays in deferred-work.md); (2) scoped ROUTE-INVENTORY exception: completed transcript renders in the existing tutoring workspace route for
+  6-5, /learn/history/* ships with 8.4. Worker''s interaction-needed Pushover DELIVERED (exit 0) — 2026-10-13 path fix confirmed working.'
+- 'Prepare ready 2026-10-13: budget constant now 260,000 with appended dated rationale (headroom 2,182B over current 257,818); ROUTE-INVENTORY has the dated scoped completion-in-workspace exception; spec
+  decision-complete. Story marked in-progress.'
+- 'Implement complete 2026-10-13: finish via server-authored current-work eligibility + ordered revalidation; single completion dispatch; ambiguous outcomes require explicit read; read-only persisted transcript
+  after completed-session admission; next-session start offered; NO history route or summary UI. New owners: TutoringFinishRoute, useTutoringFinish, useStudentMessageSend, TutoringRouteProps. typecheck/lint/i18n/api-types/prettier
+  pass; 57 unit + 39 Chromium + scoped hygiene canaries pass; bundle 259,055/260,000. Scoped evidence notes added to SURFACE-STATE-MATRIX + ACCESSIBILITY-ACCEPTANCE (reviewer to verify they close nothing
+  global).'
+- 'Fix round 1 complete 2026-10-13 (worker): F1 — projector retains authoritative student_id; both learner admissions reject non-owner before work/transcript reads, finish revalidation repeats; dual-capability
+  reproduction asserts ZERO transcript GETs/work GETs/Finish POSTs. F2 — retention owner holds account/epoch/session-keyed unresolved-Finish interlock across in-tab navigation; workspace cannot offer Finish
+  while set; held-POST reproduction asserts exactly ONE POST across stop-waiting/return/home-back/active-read/late-response. 58 unit + 8 focused Chromium + 6 retention regressions + scoped hygiene pass;
+  bundle 259,250/260,000. Noted limitation: interlock is page-memory-only (no full-reload survival).'
+- 'Repair review 2026-10-13: F1 confirmed fixed. F2 remains blocking (round-2): Confirm ignores the retained interlock after a failed→successful Refresh sequence. Worker repairing with reviewer-specified
+  reproduction case.'
+- 'Repair review round 2 PASS 2026-10-13 (reviewer ses_ecb1c7739ffeBB8lUokIrGotkW): F1 fixed (round 1), F2 fixed (round 2) — interlock gates Confirm on every Refresh path; reproduction + resolution tests
+  reach the boundary. No remaining findings. Declared limitation noted: interlock is page-memory-only (no full-reload survival) — accepted by reviewer, recorded here.'
+- 'Gate run #1 failed at duplication 2026-10-13: clones MaterialFilesRoute.tsx:471-484 ↔ TutoringFinishRoute.tsx:119-132 (story-introduced) and TutoringWorkspaceRoute.tsx:126-136 ↔ :345-355 (intra-file).
+  Everything before it passed incl. unit 919/919, Chromium 335/335, hygiene 200/266 + 208/429, bundle 259,258/260,000; Prettier clean first attempt. Fingerprint sha256 85489683...cfb727 over 306 inputs.
+  Routine bounded repair; no owner input needed.'
+- 'Final verification PASSED 2026-10-13 (single fresh gate after clone repair, exit 0): all 16 stages, none skipped — unit 919/919, Chromium 335/335, hygiene 200/266 + 208/429, duplication 0 clones, bundle
+  259,261/260,000. Fingerprint sha256 9f055e48...f9617200 over 306 inputs, before/after match. Clone dispositions: cross-route match judged incidental Tailwind Plus ''Simple alert'' presentation (marked
+  with counterpart note, no speculative wrapper); intra-file clone extracted to local TranscriptCollection. Advisories: 4 low audit, Trivy LOW KaTeX + MEDIUM country-code false positive. Activation flake
+  did not recur.'
+- 'Closed 2026-10-13: commit 872d44e706738965313751e00fb2068e4c45c99c confirmed at HEAD (32 files: 31 verified story paths + tracker 6-5-done hunk; exclusions held; no push). Elapsed 1 session incl. 2 owner
+  rulings; 2 review rounds (2 blockers: cross-account transcript leak F1, Finish-interlock bypass F2 fixed round 2); 2 gate runs (1 duplication repair, 1 pass). Owner scope ended at 6-5 — 6-6 NOT started.'
+repair_queue:
+- finding: 'F1: completed transcript can enter the wrong Learn scope — LearnSessionRoute.tsx:129-138 fetches messages after getTutoringSession WITHOUT checking current-account ownership; backend authorizes
+    assigned supervisors to read completed sessions (service.go:702-705,786-793), so a dual-capability supervisor could open another student''s completed session at the student-owned route and fetch/render
+    its transcript. Remedy: check authoritative student_id against the admitted account before the transcript request; fixed hidden-denial on mismatch; dual-capability regression asserting NO transcript
+    GET.'
+  root_cause: admission check omits ownership comparison for completed-session transcript read
+  disposition: fixed (confirmed by repair review)
+  evidence: reviewer ses_ecb1c7739ffeBB8lUokIrGotkW blocking finding 1
+- finding: 'F2: leaving an unknown Finish outcome removes its interlock — after Stop waiting/lost completion response (useTutoringFinish.ts:2246-2248,2262-2266) departure to the workspace (TutoringFinishRoute.tsx:108-113)
+    can re-offer Finish (TutoringWorkspaceRoute.tsx:316-323,492-498) while a first POST may remain unsettled, bypassing machine 8''s outcome-unknown reconcile-only rule. Remedy: retain/enforce the unresolved
+    Finish interlock across route return; no second completion dispatch until resolved; held-POST→Stop waiting→workspace return→attempt Finish case asserting no second POST. | REPAIR REVIEW: F2 remains
+    blocking (round 2) — useTutoringFinish.ts:125,134-150,152-160: unknown Finish + failed Refresh becomes Check failed; a later successful Refresh becomes Confirmable DESPITE finishUnresolved still true;
+    Confirm checks only local state → second POST possible. Remedy: enforce retained interlock at Confirm; unknown stays authoritative across failed/changed-work reads; clear only on established resolution.
+    Repro: lose first Finish response; Refresh with session-read 503; restore active/idle eligible; Refresh again; assert Confirm disabled and finishPosts==1.'
+  root_cause: unresolved-attempt interlock is route-local and lost on departure
+  disposition: fixed (confirmed by repair review)
+  evidence: reviewer ses_ecb1c7739ffeBB8lUokIrGotkW blocking finding 2
+last_verification:
+  status: passed
+  command: ./run-all-tests.sh
+  exit_code: 0
+  baseline: 61df24ef7361981c8ee16ee86eb7d97e320e3c24
+  fingerprint: sha256 9f055e4893e5327a9581df7cbd7d19b4c96c07b8f9c304e4eb362cf8f9617200 over 306 inputs (before/after match)
+  unit_tests: 919
+  browser_tests: 335
+  hygiene: 200 unit cases/266 checkpoints + 208 route cases/429 checkpoints
+  bundle_gzip_bytes: 259261
+  bundle_budget_bytes: 260000
+  build_count: 1
+  skipped: []
+  report: tmp/agent-execution/6-5-finish-and-show-the-completed-transcript/verify-report.json
+  history: run1 failed duplication (2 clones, repaired); run2 passed
+resume_attempts: 0
+commit:
+  intended_message: 'feat: finish tutoring and show the completed transcript'
+  sha: 872d44e706738965313751e00fb2068e4c45c99c
+next_action: '6-5 closed. Scope stop: 6-6-prove-the-complete-tutoring-journey requires a fresh explicit dispatch.'
+blocked_on: null
