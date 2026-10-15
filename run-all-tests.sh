@@ -12,6 +12,18 @@ set -euo pipefail
 
 skipped=()
 
+# Content-free per-stage timing (measurement for the test-suite speedup plan in
+# tmp/improve-tests.md). One greppable line per stage; labels are stage names only.
+stage_start=0
+time_stage() {
+  # $1 = content-free stage label; prints elapsed time for the previous stage.
+  if [[ -n "${timed_stage:-}" ]]; then
+    echo "TIMING stage=$timed_stage seconds=$((SECONDS - stage_start))"
+  fi
+  timed_stage="$1"
+  stage_start=$SECONDS
+}
+
 skip() {
   echo "SKIPPED: $1"
   skipped+=("$1")
@@ -38,6 +50,7 @@ else
   for target in typecheck check:typecheck-coverage lint format:check test build check:bundle-size check:i18n check:api-types; do
     if has_script "$target"; then
       echo "Running npm run $target ..."
+      time_stage "npm:$target"
       npm run "$target"
       if [[ "$target" == "build" ]]; then built=1; fi
     else
@@ -51,6 +64,7 @@ else
   else
     if has_script "test:e2e:built"; then
       echo "Running npm run test:e2e:built (using this gate's build) ..."
+      time_stage "npm:test:e2e:built"
       npm run test:e2e:built
     else
       skip "npm run test:e2e:built (script not defined)"
@@ -58,6 +72,7 @@ else
 
     if has_script "check:secret-hygiene:built"; then
       echo "Running npm run check:secret-hygiene:built (using this gate's build) ..."
+      time_stage "npm:check:secret-hygiene:built"
       npm run check:secret-hygiene:built
     else
       skip "npm run check:secret-hygiene:built (script not defined)"
@@ -69,6 +84,7 @@ fi
 # Duplication
 # ---------------------------------------------------------------------------
 
+time_stage "duplication"
 ./scripts/check-duplication.sh
 
 # ---------------------------------------------------------------------------
@@ -77,12 +93,14 @@ fi
 
 if [[ -f package-lock.json ]]; then
   echo "Running npm audit ..."
+  time_stage "npm-audit"
   npm audit --audit-level=high
 else
   skip "npm audit (no package-lock.json yet)"
 fi
 
 if command -v trivy >/dev/null 2>&1; then
+  time_stage "trivy"
   ./scripts/check-trivy.sh
 else
   skip "Trivy scan (trivy not installed)"
@@ -94,6 +112,7 @@ fi
 
 if [[ -d tailwindplus ]]; then
   echo "Checking Tailwind Plus catalog ..."
+  time_stage "tailwind-catalog"
   ./scripts/twp-catalog.sh --check
 else
   skip "Tailwind Plus catalog check (library not downloaded)"
@@ -103,12 +122,15 @@ fi
 # Markdown
 # ---------------------------------------------------------------------------
 
+time_stage "markdown"
 ./scripts/check-markdown.sh
 
 # ---------------------------------------------------------------------------
 # Result
 # ---------------------------------------------------------------------------
 
+time_stage ""
+echo "TIMING stage=total seconds=$SECONDS"
 echo
 if [[ ${#skipped[@]} -gt 0 ]]; then
   echo "Completed with ${#skipped[@]} skipped component(s):"

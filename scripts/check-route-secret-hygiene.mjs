@@ -198,6 +198,10 @@ export async function checkRouteSecretHygiene() {
                           : routeHygieneCases;
   const root = await mkdtemp(join(tmpdir(), "mia-route-hygiene-"));
   const evidence = [];
+  // Content-free per-probe timing (speedup-plan measurement): child wall time
+  // vs. the test's own duration from the JSON report; the difference is
+  // process + preview-server boot and teardown overhead.
+  const timing = { probes: 0, totalMs: 0, testMs: 0 };
   try {
     const probes = selected.flatMap((item) =>
       item.checkpoints.map((point) => ({ item, point, early: false })),
@@ -228,6 +232,7 @@ export async function checkRouteSecretHygiene() {
             : item.id.startsWith("tutoring-")
               ? "e2e/tutoringSessions.spec.ts"
               : null;
+      const probeStarted = Date.now();
       const child = spawnSync(
         executable,
         publicSpec !== null
@@ -317,6 +322,14 @@ export async function checkRouteSecretHygiene() {
         })),
       );
       const result = results[0];
+      const probeMs = Date.now() - probeStarted;
+      const testMs = (result?.attempts ?? []).reduce(
+        (sum, attempt) => sum + (attempt.duration ?? 0),
+        0,
+      );
+      timing.probes++;
+      timing.totalMs += probeMs;
+      timing.testMs += testMs;
       const errors = result?.attempts[0]?.errors ?? [];
       const id = `${item.id}:${point}`;
       let checkpoint = null;
@@ -376,12 +389,15 @@ export async function checkRouteSecretHygiene() {
         record.status = "pass";
       }
       console.log(
-        `Route hygiene ${item.id}/${point}: ${record.status}; original output/artifacts marker-free.`,
+        `Route hygiene ${item.id}/${point}: ${record.status}; original output/artifacts marker-free; ${probeMs} ms total, ${testMs} ms test.`,
       );
       await rm(directory, { recursive: true, force: true });
     }
     console.log(
       `Actual route-test hygiene passed: ${selected.length} tests, ${probes.length - 1} secret checkpoints, early-failure canary rejected.`,
+    );
+    console.log(
+      `Route hygiene timing: probes=${timing.probes} total=${Math.round(timing.totalMs / 1000)}s test=${Math.round(timing.testMs / 1000)}s overhead=${Math.round((timing.totalMs - timing.testMs) / 1000)}s.`,
     );
   } finally {
     const destination = process.env.MIA_ROUTE_HYGIENE_REPORT;

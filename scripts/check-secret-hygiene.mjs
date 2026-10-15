@@ -117,6 +117,7 @@ async function runFailures(runner, earlyId) {
           "--reporter=json",
           `--outputFile.json=${reportFile}`,
         ];
+  const runStarted = Date.now();
   const result = spawnSync(
     join(process.cwd(), "node_modules", ".bin", runner),
     args,
@@ -194,6 +195,10 @@ async function runFailures(runner, earlyId) {
     )
       rejected.push(id);
   }
+  // Content-free timing for the speedup-plan baseline.
+  console.log(
+    `Secret-hygiene timing: ${runner} ${earlyId ? "canary" : "baseline"} run ${Math.round((Date.now() - runStarted) / 1000)}s.`,
+  );
   return rejected;
 }
 
@@ -230,7 +235,10 @@ async function checkCourseUnitHygiene() {
     point: selected[0].points[0],
     early: true,
   });
+  // Content-free timing for the speedup-plan baseline (M5 sizing).
+  const courseUnitTiming = { probes: 0, totalMs: 0 };
   for (const [index, { item, point, early }] of probes.entries()) {
+    const probeStarted = Date.now();
     const directory = join(outputDir, `course-unit-${index}`);
     await mkdir(directory);
     const reportFile = join(directory, "report.json");
@@ -305,9 +313,14 @@ async function checkCourseUnitHygiene() {
       throw new Error(
         `Course unit checkpoint/failure inventory mismatch: ${item.title}/${point}; checkpointReached=${checkpoint === point}; failureIdentity=${accepted}; failures=${failures.length}; early=${early}.`,
       );
+    courseUnitTiming.probes++;
+    courseUnitTiming.totalMs += Date.now() - probeStarted;
   }
   console.log(
     `Course unit hygiene: ${selected.length} actual tests, ${probes.length - 1} checkpoints; early-failure canary rejected; zero marker leaks.`,
+  );
+  console.log(
+    `Course unit timing: probes=${courseUnitTiming.probes} total=${Math.round(courseUnitTiming.totalMs / 1000)}s.`,
   );
 }
 
