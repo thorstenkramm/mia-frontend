@@ -1,0 +1,53 @@
+story: 7-2-readiness-review-and-activation-confirmation
+phase: verify
+spec: _bmad-output/implementation-artifacts/spec-7-2-readiness-review-and-activation-confirmation.md
+baseline_commit: afaa2fae83f289048b6a72fd440187e707f938f3
+pre_existing_changes: []
+files:
+- _bmad-output/implementation-artifacts/spec-7-2-readiness-review-and-activation-confirmation.md
+- _bmad-output/implementation-artifacts/sprint-status.yaml
+worker_session: ses_ec1867b9cffemBoC2UjRRYI9tb
+reviewer_session: ses_ec1523775ffejm01R0L4T9z49N (blind-hunter), ses_ec1523774ffe1M56KzPjQRDyJT (edge-case-hunter)
+models:
+  prepare: kimi-code/k3 (solver)
+  implement: openai/gpt-6-sol#high
+  review: openai/gpt-6-sol#high
+  verify: openai/gpt-6-sol#high
+completed_blocks:
+- implement (worker ses_ec1867b9cffemBoC2UjRRYI9tb)
+- review (blind-hunter + edge-case-hunter, findings triaged in spec Review Triage Log)
+- patch (solver-applied after worker session could not be resumed)
+repair_queue:
+- finding: CourseHubBlockers rendered activation-only extras on the hub
+  root_cause: extras defense implemented in the shared component instead of the readiness route
+  disposition: patched (includeExtras opt-in; hub unchanged) with hub regression test
+  evidence: Review Triage Log row 1; 52 unit tests pass
+- finding: departure-guard Stay fallback ref null during pending states
+  root_cause: status ref moved exclusively to conditionally rendered outcome alerts
+  disposition: patched (form h2 carries ref while no outcome alert does; mid-flow ACT-7 focus widened) with pending-state assertion
+  evidence: Review Triage Log row 3; 52 unit tests pass
+- finding: gate run 1 failed at format:check
+  root_cause: solver-applied patch test was not prettier-clean
+  disposition: fixed (prettier write; format:check passes)
+  evidence: gate.log (superseded)
+- finding: gate run 2 failed at check:secret-hygiene:built
+  root_cause: environmental — a timeout-killed diagnostic hygiene run left an orphaned vite preview on port 4173, so the first public-config route probe could not start its server (reproduced, then confirmed healthy after the orphan was killed)
+  disposition: orphan process (identified as this session's own killed child) terminated; probe re-run passes with correct checkpoint and controlled-failure identity
+  evidence: manual probe reproduction, checkpoint file written, ControlledRouteHygieneFailure identity present
+- finding: gate run 3 failed at check:secret-hygiene:built, tutoring-stream-loss/complete, category=timeout
+  root_cause: PRE-EXISTING, not story-caused — the test fails identically in isolation at baseline afaa2fa (worktree-built proof); the workspace admission lands on the SessionPrivacyShield. The story's own readiness-503 probe and all 305 preceding probes passed. Same family as the known intermittent hygiene flake (epic-1-retro-item-2), currently deterministic (3/3 this afternoon; passed this morning at 7-1's green gate)
+  disposition: owner authorized bounded diagnosis+repair; two stacked causes found and repaired in separate commits — (1) the one-second session watchdog misread load-stalled first callbacks (>2s gap) as sleep/late-timer during cold start, repaired by starting wake/rollback judgment after one trusted watchdog interval post-install while deadline expiry stays enforced from the first sample (commit 35179db); (2) the stream-loss test raced the intended 6.4 privacy cover (transport loss marks revalidation needed; the cover replaces the workspace within a few hundred ms of stream end) by polling for the workspace title first, repaired by waiting for the settled cover and asserting focus retained on its heading (commit 903ebf6)
+  evidence: shield stack trace captured in-page (useTutorStream markRevalidationNeeded -> observeLifecycle -> shield); probe-env failure reproduced deterministically pre-fix; controlled identity ControlledRouteHygieneFailure:tutoring-stream-loss:complete and checkpoint restored post-fix; tutoring hygiene scope 43 tests/77 checkpoints pass; full tutoringSessions spec 43/43; unit 940/940
+- finding: gate run 4 failed at the same probe after the watchdog-only repair
+  root_cause: the watchdog repair addressed only cause (1); the test/cover race (cause 2) still decided the probe under reporter overhead
+  disposition: test repaired (commit 903ebf6, see gate-run-3 entry); tutoring hygiene scope verified green standalone
+  evidence: gate-final.log; standalone MIA_ROUTE_HYGIENE_SCOPE=tutoring pass
+- finding: gate run 5 failed at the duplication stage (jscpd, threshold 0) — the first run to survive past hygiene
+  root_cause: two clones introduced by 7-2 files: CoursePreparationRoute/CourseReadinessRoute shared the status-panel message formatting (count + activatedAt), and 7-2's gray-tone extension of RouteRecoveryPanel aligned its actions slot with InvitationStatus's
+  disposition: CourseStatusPanel now owns the heading/body message formatting (both call sites pass descriptors + values); the RouteRecoveryPanel/InvitationStatus pair is marked jscpd:ignore as two independent Tailwind Plus alert-with-actions blueprint instances, with the required cross-note at the other site
+  evidence: scripts/check-duplication.sh reports 0 clones; 52/52 focused course tests pass; typecheck/lint/prettier clean
+last_verification: flake repairs and duplication fix validated by focused checks; full gate pending on HEAD 903ebf6 + story files + duplication fix
+resume_attempts: 0
+commit: null
+next_action: Full gate; on green, worker commits tracker+spec+story files
+blocked_on: null

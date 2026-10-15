@@ -305,6 +305,9 @@ export function OutcomeAlert({
           >
             {children}
           </div>
+          {/* This actions slot shares the Tailwind Plus alert-with-actions
+              blueprint with RouteRecoveryPanel.tsx; the pair's jscpd marker
+              lives in RouteRecoveryPanel.tsx. */}
           {actions === undefined ? null : (
             <div className="mt-4">
               <div className="-mx-2 -my-1.5 flex flex-wrap gap-3">

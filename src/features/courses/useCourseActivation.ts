@@ -16,10 +16,17 @@ import { messages } from "../../platform/i18n/messages";
 import { useRouteActivity } from "../../platform/ui/useRouteActivity";
 import { useUnsavedInputGuard } from "../../platform/ui/routeDeparture";
 
-type Feedback = (typeof messages)[keyof typeof messages];
+type Outcome =
+  | "changed"
+  | "rejected"
+  | "checkFailed"
+  | "unknown"
+  | "abandoned"
+  | "unavailable";
 type Settled = {
   readonly kind: "Reviewing" | "Rejected" | "Outcome unknown";
-  readonly feedback: Feedback | null;
+  readonly outcome: Outcome | null;
+  readonly changedRows: readonly ("course" | "state" | "prerequisites")[];
   readonly error: EntryApiFailure | null;
   readonly reconciled: boolean;
 };
@@ -29,7 +36,8 @@ type ActivationState =
   | { readonly kind: "Reconciling"; readonly previous: Settled };
 const review = {
   kind: "Reviewing",
-  feedback: null,
+  outcome: null,
+  changedRows: [],
   error: null,
   reconciled: false,
 } satisfies Settled;
@@ -53,6 +61,26 @@ function reviewedFacts(value: CoursePreparation): string {
     [...value.readiness.blockers].sort((a, b) => a.id.localeCompare(b.id)),
   ]);
 }
+function changedRows(
+  before: CoursePreparation,
+  after: CoursePreparation,
+): Settled["changedRows"] {
+  return [
+    ...(before.course.name !== after.course.name ? ["course" as const] : []),
+    ...(before.course.state !== after.course.state ? ["state" as const] : []),
+    ...(before.readiness.blockers.length !== after.readiness.blockers.length
+      ? ["prerequisites" as const]
+      : []),
+  ];
+}
+const outcomeHeading = {
+  changed: messages.activationChangedHeading,
+  rejected: messages.activationRejectedHeading,
+  checkFailed: messages.preparationCheckFailed,
+  unknown: messages.activationUnknownHeading,
+  abandoned: messages.courseActivationAbandoned,
+  unavailable: messages.activationUnavailableHeading,
+} as const;
 
 // Machine 12's route-local operation owner. Session owns security/scope epochs,
 // fresh CSRF, the single unsafe dispatch and settlement even after Stop waiting.
@@ -92,12 +120,15 @@ export function useCourseActivation(
   };
   const feedback = (
     kind: Settled["kind"],
-    message: Feedback,
+    outcome: Outcome,
     error: EntryApiFailure | null,
     reconciled = false,
+    rows: Settled["changedRows"] = [],
   ) => {
-    flushSync(() => update({ kind, feedback: message, error, reconciled }));
-    announce(intl.formatMessage(message), "urgent");
+    flushSync(() =>
+      update({ kind, outcome, error, reconciled, changedRows: rows }),
+    );
+    announce(intl.formatMessage(outcomeHeading[outcome]), "urgent");
   };
   const [, action, pending] = useActionState<void, FormData>(async () => {
     if (
@@ -122,9 +153,10 @@ export function useCourseActivation(
     if (before.kind !== "completed") {
       attempt.current = null;
       if (before.kind === "failed")
-        feedback("Rejected", messages.preparationCheckFailed, before.failure);
+        feedback("Rejected", "checkFailed", before.failure);
       return;
     }
+    const rows = changedRows(applied, before.value);
     setApplied(before.value);
     setCheckedAt(Date.now());
     if (
@@ -132,7 +164,13 @@ export function useCourseActivation(
       !canFirstActivate(before.value)
     ) {
       attempt.current = null;
-      feedback("Reviewing", messages.courseActivationChanged, null);
+      feedback(
+        "Reviewing",
+        canFirstActivate(before.value) ? "changed" : "unavailable",
+        null,
+        false,
+        rows,
+      );
       return;
     }
     const result = await runAuthenticatedMutation(
@@ -157,14 +195,14 @@ export function useCourseActivation(
         break;
       case "rejected":
       case "not-sent":
-        feedback("Rejected", messages.courseActivationRejected, result.failure);
-        break;
-      case "unknown":
         feedback(
-          "Outcome unknown",
-          messages.courseActivationUnknown,
+          "Rejected",
+          result.kind === "not-sent" ? "checkFailed" : "rejected",
           result.failure,
         );
+        break;
+      case "unknown":
+        feedback("Outcome unknown", "unknown", result.failure);
         break;
       case "superseded":
         break;
@@ -192,9 +230,7 @@ export function useCourseActivation(
     if (result.kind === "failed") {
       feedback(
         previous.kind === "Outcome unknown" ? "Outcome unknown" : "Rejected",
-        previous.kind === "Outcome unknown"
-          ? messages.courseActivationUnknown
-          : messages.preparationCheckFailed,
+        previous.kind === "Outcome unknown" ? "unknown" : "checkFailed",
         result.failure,
       );
     } else if (result.kind === "completed") {
@@ -203,17 +239,23 @@ export function useCourseActivation(
       if (previous.kind === "Outcome unknown")
         update({ ...previous, error: null, reconciled: true });
       else if (reviewedFacts(result.value) !== reviewedFacts(applied))
-        feedback("Reviewing", messages.courseActivationChanged, null);
-      else update({ ...review, feedback: previous.feedback });
+        feedback(
+          "Reviewing",
+          canFirstActivate(result.value) ? "changed" : "unavailable",
+          null,
+          false,
+          changedRows(applied, result.value),
+        );
+      else update(review);
     }
   };
   const stop = () => {
     const previous = stateRef.current;
     attempt.current = null;
     if (previous.kind === "Submitting")
-      feedback("Outcome unknown", messages.courseActivationUnknown, null);
+      feedback("Outcome unknown", "unknown", null);
     else if (previous.kind === "Checking")
-      feedback("Rejected", messages.preparationCheckFailed, null);
+      feedback("Rejected", "checkFailed", null);
     else if (previous.kind === "Reconciling") update(previous.previous);
   };
   const abandon = () => {
@@ -226,7 +268,11 @@ export function useCourseActivation(
     )
       return;
     // Abandonment never makes the current stale representation submit-ready.
-    feedback("Rejected", messages.courseActivationAbandoned, null);
+    feedback(
+      "Reviewing",
+      canFirstActivate(applied) ? "abandoned" : "unavailable",
+      null,
+    );
   };
   const unknown =
     state.kind === "Outcome unknown" ||
@@ -270,7 +316,8 @@ export function useCourseActivation(
     abandon,
     enabled:
       !pending && state.kind === "Reviewing" && canFirstActivate(applied),
-    feedback: settled?.feedback ?? null,
+    outcome: settled?.outcome ?? null,
+    changedRows: settled?.changedRows ?? [],
     error: settled?.error ?? null,
     canAbandon:
       !pending &&

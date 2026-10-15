@@ -115,6 +115,7 @@ export function CourseAdmissionSurface<T>({
   exit,
   copy = courseAdmissionCopy,
   hubCourse,
+  childCourse,
   children,
 }: {
   readonly state: HostState<T>;
@@ -124,6 +125,12 @@ export function CourseAdmissionSurface<T>({
   readonly hubCourse?: {
     readonly name: string;
     readonly state: "active" | "inactive";
+  };
+  readonly childCourse?: {
+    readonly id: CourseId;
+    readonly name: string;
+    readonly state: "active" | "inactive";
+    readonly route: "readiness" | "activation";
   };
   readonly children: ReactNode;
 }) {
@@ -146,7 +153,8 @@ export function CourseAdmissionSurface<T>({
     );
   if (state.kind !== "Ready")
     if (
-      route.headingMessage.id === messages.preparationHub.id &&
+      (route.headingMessage.id === messages.preparationHub.id ||
+        route.headingMessage.id === messages.courseReadinessHeading.id) &&
       state.kind === "Check failed" &&
       state.error?.kind === "http" &&
       state.error.disclosure.status === 503 &&
@@ -154,11 +162,19 @@ export function CourseAdmissionSurface<T>({
     )
       return (
         <ApplicationShell
-          titleMessage={messages.preparationHubTitle}
-          headingMessage={messages.preparationHub}
+          titleMessage={route.titleMessage}
+          headingMessage={route.headingMessage}
           courseHeader={{
-            breadcrumbs: <CourseHubHeader unavailable />,
-            heading: intl.formatMessage(messages.preparationHub),
+            breadcrumbs: (
+              <CourseHubHeader
+                unavailable
+                {...(route.headingMessage.id ===
+                messages.courseReadinessHeading.id
+                  ? { child: "readiness" as const }
+                  : {})}
+              />
+            ),
+            heading: intl.formatMessage(route.headingMessage),
           }}
         >
           <SessionWarning />
@@ -236,14 +252,39 @@ export function CourseAdmissionSurface<T>({
     <ApplicationShell
       titleMessage={route.titleMessage}
       headingMessage={route.headingMessage}
-      {...(hubCourse === undefined
+      {...(hubCourse === undefined && childCourse === undefined
         ? {}
         : {
-            courseHeader: {
-              breadcrumbs: <CourseHubHeader courseName={hubCourse.name} />,
-              heading: <bdi dir="auto">{hubCourse.name}</bdi>,
-              meta: <CourseHubHeader courseState={hubCourse.state} />,
-            },
+            courseHeader: childCourse
+              ? {
+                  breadcrumbs: (
+                    <CourseHubHeader
+                      hubPath={prepareCoursePath(childCourse.id)}
+                      readinessPath={prepareCoursePath(
+                        childCourse.id,
+                        "readiness",
+                      )}
+                      courseName={childCourse.name}
+                      child={childCourse.route}
+                    />
+                  ),
+                  heading: intl.formatMessage(route.headingMessage),
+                  ...(childCourse.route === "readiness"
+                    ? {
+                        meta: (
+                          <CourseHubHeader
+                            metaName={childCourse.name}
+                            courseState={childCourse.state}
+                          />
+                        ),
+                      }
+                    : { narrow: true }),
+                }
+              : {
+                  breadcrumbs: <CourseHubHeader courseName={hubCourse!.name} />,
+                  heading: <bdi dir="auto">{hubCourse!.name}</bdi>,
+                  meta: <CourseHubHeader courseState={hubCourse!.state} />,
+                },
           })}
     >
       <SessionWarning />
@@ -348,6 +389,18 @@ export function CourseResourceHost({
       state.kind === "Ready" &&
       state.resource.kind === "preparation"
         ? { hubCourse: state.resource.preparation.course }
+        : {})}
+      {...((route.resource === "readiness" ||
+        route.resource === "activation") &&
+      state.kind === "Ready" &&
+      (state.resource.kind === "readiness" ||
+        state.resource.kind === "activation")
+        ? {
+            childCourse: {
+              ...state.resource.preparation.course,
+              route: route.resource,
+            },
+          }
         : {})}
     >
       {state.kind === "Ready" ? (

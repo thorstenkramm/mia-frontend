@@ -11,8 +11,7 @@ import {
 
 test.use({ trace: "off", video: "off", screenshot: "off" });
 const hub = "/prepare/courses/course_1";
-const unknown =
-  "Activation outcome unknown. Refresh to check the current course; this does not confirm what happened to this attempt.";
+const unknown = "Activation outcome unknown";
 function eligible(control: Awaited<ReturnType<typeof courseRoutes>>) {
   control.scopeIds = ["course_1"];
   control.courseState = "inactive";
@@ -120,6 +119,29 @@ test(
 );
 
 test(
+  "readiness unavailable hides identity before explicit admission retry",
+  protectedJourney(async (page) => {
+    const control = await courseBackend(page);
+    eligible(control);
+    control.readUnavailable = true;
+    await page.goto(`${hub}/readiness`);
+    await mounted(page, "Course readiness");
+    await expect(
+      page.getByRole("heading", { name: "Readiness could not be checked" }),
+    ).toBeVisible();
+    expect(await contains(page, routeSecretFixture(page).courseName)).toBe(
+      false,
+    );
+    await routeHygieneCheckpoint(page, "readiness-unavailable");
+    control.readUnavailable = false;
+    await page.getByRole("button", { name: "Check again" }).click();
+    await expect(
+      page.getByRole("heading", { name: "Ready for activation" }),
+    ).toBeVisible();
+  }),
+);
+
+test(
   "activation definitive success survives failed hub read without guessing current acceptance",
   protectedJourney(async (page) => {
     const control = await courseBackend(page);
@@ -187,7 +209,7 @@ test(
     await mounted(page, "Course readiness");
     await scan(page);
     await page
-      .getByRole("link", { name: "Activate course", exact: true })
+      .getByRole("link", { name: "Continue to activation", exact: true })
       .focus();
     await page.keyboard.press("Enter");
     await mounted(page, "Activate course");
@@ -237,7 +259,13 @@ test(
     });
     await page.goto(`${hub}/readiness`);
     await mounted(page, "Course readiness");
-    await expect.poll(() => page.locator("main dl a").count()).toBe(4);
+    await expect
+      .poll(() =>
+        page
+          .locator('main section[aria-labelledby="course-blockers-heading"] a')
+          .count(),
+      )
+      .toBe(4);
     expect(
       (await page
         .locator('main a[href*="activate"], main a[href*="supervisors"]')
@@ -254,7 +282,11 @@ test(
       ["language", "Course language"],
       ["materials", "Course materials"],
     ]) {
-      await page.locator(`main dl a[href="${hub}/${slug}"]`).click();
+      await page
+        .locator(
+          `main section[aria-labelledby="course-blockers-heading"] a[href="${hub}/${slug}"]`,
+        )
+        .click();
       await mounted(page, label ?? "");
       await page.goto(`${hub}/readiness`);
       await mounted(page, "Course readiness");
@@ -268,15 +300,25 @@ test(
       control.blockers = [{ id: "qualifying_material", link }];
       await page.reload();
       await mounted(page, "Course readiness");
-      await expect.poll(() => page.locator("main dl").count()).toBe(1);
-      expect((await page.locator("main dl a").count()) === 0).toBe(true);
+      await expect
+        .poll(() =>
+          page
+            .locator('main section[aria-labelledby="course-blockers-heading"]')
+            .count(),
+        )
+        .toBe(1);
+      expect(
+        (await page
+          .locator('main section[aria-labelledby="course-blockers-heading"] a')
+          .count()) === 0,
+      ).toBe(true);
     }
     await page.goto(`${hub}/activate`);
     await mounted(page, "Activate course");
     expect(
       (await page
         .getByRole("button", { name: "Confirm activation" })
-        .getAttribute("aria-disabled")) === "true" && control.activations === 0,
+        .count()) === 0 && control.activations === 0,
     ).toBe(true);
   }),
 );
@@ -308,11 +350,11 @@ for (const state of ["active_not_accepting", "previously-active"] as const)
       expect(
         (await page
           .getByRole("button", { name: "Confirm activation" })
-          .getAttribute("aria-disabled")) === "true",
+          .count()) === 0,
       ).toBe(true);
       await scan(page);
       await page
-        .getByRole("link", { name: "Course preparation", exact: true })
+        .getByRole("link", { name: routeSecretFixture(page).courseName })
         .click();
       await mounted(page, "Course preparation");
       await expect.poll(() => page.locator("main dl").count()).toBe(1);
@@ -348,7 +390,7 @@ for (const outcome of [
         .poll(() =>
           contains(
             page,
-            outcome === "conflict" ? "Activation was not accepted." : unknown,
+            outcome === "conflict" ? "Activation was not accepted" : unknown,
           ),
         )
         .toBe(true);
@@ -360,8 +402,15 @@ for (const outcome of [
       ).toBe(true);
       await routeHygieneCheckpoint(page, "activation-outcome");
       await scan(page);
-      await page.getByRole("button", { name: "Refresh", exact: true }).click();
-      await expect.poll(() => control.detailReads.length === 3).toBe(true);
+      if (outcome !== "conflict") {
+        await page
+          .getByRole("button", { name: "Refresh course", exact: true })
+          .click();
+        await expect.poll(() => control.detailReads.length === 3).toBe(true);
+      } else
+        await expect(
+          page.getByRole("link", { name: "Review current readiness" }),
+        ).toBeVisible();
       expect(
         control.activations === 1 &&
           page.url().endsWith("/activate") &&
@@ -373,21 +422,14 @@ for (const outcome of [
         await page
           .getByRole("button", { name: "Abandon unknown attempt" })
           .click();
-        expect(
-          (await page
-            .getByRole("button", { name: "Confirm activation" })
-            .getAttribute("aria-disabled")) === "true",
-        ).toBe(true);
-        await page
-          .getByRole("button", { name: "Refresh", exact: true })
-          .click();
-        await expect
-          .poll(() =>
-            page
-              .getByRole("button", { name: "Confirm activation" })
-              .getAttribute("aria-disabled"),
-          )
-          .toBe("false");
+        await expect(
+          page.getByRole("heading", {
+            name: "The unknown attempt was abandoned locally, not cancelled on the server. Review current readiness before a new attempt.",
+          }),
+        ).toBeVisible();
+        await expect(
+          page.getByRole("button", { name: "Confirm activation" }),
+        ).toBeEnabled();
       }
       await routeHygieneCheckpoint(page, "activation-reconciled");
     }),
@@ -417,9 +459,11 @@ test(
     await routeHygieneCheckpoint(page, "activation-stopped");
     release();
     await expect.poll(() => control.courseState === "active").toBe(true);
-    await page.getByRole("button", { name: "Refresh", exact: true }).click();
+    await page
+      .getByRole("button", { name: "Refresh course", exact: true })
+      .click();
     await expect
-      .poll(() => contains(page, "Active — accepting new tutoring sessions"))
+      .poll(() => contains(page, "Activation outcome unknown"))
       .toBe(true);
     expect(
       control.activations === 1 &&
@@ -493,7 +537,13 @@ for (const locale of [
         ]) {
           await page.goto(`${hub}/${surface}`);
           await mounted(page, label ?? "");
-          await expect.poll(() => page.locator("main dl").count()).toBe(1);
+          await expect
+            .poll(() =>
+              page
+                .locator(surface === "readiness" ? "#readiness-how" : "main dl")
+                .count(),
+            )
+            .toBe(1);
           expect(
             (await page.locator("html").getAttribute("lang")) === locale,
           ).toBe(true);
@@ -519,7 +569,13 @@ for (const factor of [2, 4] as const)
         ]) {
           await page.goto(`http://127.0.0.1:4173${hub}/${surface}`);
           await mounted(page, label ?? "");
-          await expect.poll(() => page.locator("main dl").count()).toBe(1);
+          await expect
+            .poll(() =>
+              page
+                .locator(surface === "readiness" ? "#readiness-how" : "main dl")
+                .count(),
+            )
+            .toBe(1);
           await layout(page);
           await page.evaluate(() => {
             for (const node of document.querySelectorAll("main *")) {

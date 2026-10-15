@@ -166,6 +166,7 @@ export function ApplicationShell({
     readonly breadcrumbs: ReactNode;
     readonly heading: ReactNode;
     readonly meta?: ReactNode;
+    readonly narrow?: boolean;
   };
   readonly children: ReactNode;
 }) {
@@ -270,7 +271,15 @@ export function ApplicationShell({
               {courseHeader?.heading ?? intl.formatMessage(headingMessage)}
             </h1>
             {courseHeader?.meta}
-            <div className={courseHeader ? "mt-6 max-w-5xl" : "mt-6 max-w-lg"}>
+            <div
+              className={
+                courseHeader
+                  ? courseHeader.narrow
+                    ? "mt-6 max-w-3xl"
+                    : "mt-6 max-w-5xl"
+                  : "mt-6 max-w-lg"
+              }
+            >
               {children}
             </div>
             <BuildIdentifier className="mt-10 break-all text-sm/6 text-gray-500" />

@@ -223,6 +223,12 @@ export const routeHygieneCases = [
       "activation blocked readiness links resolve only implemented same-course prerequisites",
     checkpoints: ["complete"],
   },
+  {
+    id: "preparation-readiness-unavailable",
+    title:
+      "readiness unavailable hides identity before explicit admission retry",
+    checkpoints: ["readiness-unavailable", "complete"],
+  },
   ...["active_not_accepting", "previously-active"].map((state) => ({
     id: `preparation-activation-state-${state}`,
     title: `activation ${state} never becomes reactivation or viewer session eligibility`,

@@ -1,6 +1,193 @@
 import { defineMessages } from "react-intl";
 
 export const messages = defineMessages({
+  preparationBackToHub: {
+    id: "preparation.backToHub",
+    defaultMessage: "Back to course preparation",
+  },
+  readinessPanelBlockedHeading: {
+    id: "readiness.panel.blocked.heading",
+    defaultMessage: "Activation unavailable",
+  },
+  readinessPanelBlockedBody: {
+    id: "readiness.panel.blocked.body",
+    defaultMessage:
+      "MIA reports {count, plural, one {# unmet prerequisite} other {# unmet prerequisites}} for this course. Resolve them, then check again here.",
+  },
+  readinessPanelEligibleHeading: {
+    id: "readiness.panel.eligible.heading",
+    defaultMessage: "Ready for activation",
+  },
+  readinessPanelEligibleBody: {
+    id: "readiness.panel.eligible.body",
+    defaultMessage:
+      "MIA reports no unmet prerequisites. Activation is a separate step: on the next page you see what changes before you confirm.",
+  },
+  readinessPanelEligibleAction: {
+    id: "readiness.panel.eligible.action",
+    defaultMessage: "Continue to activation",
+  },
+  readinessUnmetHeading: {
+    id: "readiness.unmet.heading",
+    defaultMessage: "Unmet prerequisites",
+  },
+  readinessHowHeading: {
+    id: "readiness.how.heading",
+    defaultMessage: "How course readiness works",
+  },
+  readinessHowIntro: {
+    id: "readiness.how.intro",
+    defaultMessage:
+      "MIA evaluates readiness from the current course whenever this page loads or you refresh it. Activation needs all of the following:",
+  },
+  readinessHowGoals: {
+    id: "readiness.how.requirement.goals",
+    defaultMessage: "Learning goals",
+  },
+  readinessHowInstructions: {
+    id: "readiness.how.requirement.instructions",
+    defaultMessage: "AI instructions",
+  },
+  readinessHowLanguage: {
+    id: "readiness.how.requirement.language",
+    defaultMessage: "A valid course language",
+  },
+  readinessHowSupervisor: {
+    id: "readiness.how.requirement.supervisor",
+    defaultMessage: "At least one assigned supervisor",
+  },
+  readinessHowMaterial: {
+    id: "readiness.how.requirement.material",
+    defaultMessage:
+      "At least one course-wide material with files that is technically ready and educationally approved",
+  },
+  readinessHowTechnicalHeading: {
+    id: "readiness.how.technical.heading",
+    defaultMessage: "Technical readiness",
+  },
+  readinessHowTechnicalBody: {
+    id: "readiness.how.technical.body",
+    defaultMessage:
+      "When you finalize a material, MIA processes its files. The material is technically ready once processing has finished. If processing fails, the material stays unusable until you correct the draft and finalize it again.",
+  },
+  readinessHowApprovalHeading: {
+    id: "readiness.how.approval.heading",
+    defaultMessage: "Educational approval",
+  },
+  readinessHowApprovalBody: {
+    id: "readiness.how.approval.body",
+    defaultMessage:
+      "You review the generated brief and approve the material for teaching. Approval is separate from processing. A meaningful change to an approved brief removes the approval. Link materials such as websites or videos do not count.",
+  },
+  activationFormHeading: {
+    id: "activation.form.heading",
+    defaultMessage: "Activate {courseName}",
+  },
+  activationFormIntro: {
+    id: "activation.form.intro",
+    defaultMessage: "Check that this is the course you mean.",
+  },
+  activationFormCourse: {
+    id: "activation.form.course",
+    defaultMessage: "Course",
+  },
+  activationFormState: {
+    id: "activation.form.state",
+    defaultMessage: "Current state",
+  },
+  activationFormPrerequisites: {
+    id: "activation.form.prerequisites",
+    defaultMessage: "Unmet prerequisites",
+  },
+  activationFormNoneReported: {
+    id: "activation.form.noneReported",
+    defaultMessage: "None reported",
+  },
+  activationFormChangesHeading: {
+    id: "activation.form.changesHeading",
+    defaultMessage: "What changes",
+  },
+  activationFormChange1: {
+    id: "activation.form.change1",
+    defaultMessage: "The course becomes active.",
+  },
+  activationFormChange2: {
+    id: "activation.form.change2",
+    defaultMessage:
+      "Students in the course can start tutoring sessions, as long as the course stays ready.",
+  },
+  activationFormChange3: {
+    id: "activation.form.change3",
+    defaultMessage: "You can add students to the course.",
+  },
+  activationFormPrecheck: {
+    id: "activation.form.precheck",
+    defaultMessage:
+      "MIA checks the course once more right before activating it. If anything changed, you review it again first.",
+  },
+  activationCancel: { id: "activation.cancel", defaultMessage: "Cancel" },
+  activationConfirmPending: {
+    id: "activation.confirmPending",
+    defaultMessage: "Activating…",
+  },
+  activationChangedHeading: {
+    id: "activation.changed.heading",
+    defaultMessage: "Course facts changed",
+  },
+  activationChangedBody: {
+    id: "activation.changed.body",
+    defaultMessage:
+      "Review the current course before confirming again. The details below show the latest state.",
+  },
+  activationBadgeChanged: {
+    id: "activation.badge.changed",
+    defaultMessage: "Changed",
+  },
+  activationRejectedHeading: {
+    id: "activation.rejected.heading",
+    defaultMessage: "Activation was not accepted",
+  },
+  activationRejectedBody: {
+    id: "activation.rejected.body",
+    defaultMessage:
+      "The course is still inactive. Refresh current readiness before confirming again.",
+  },
+  activationRejectedAction: {
+    id: "activation.rejected.action",
+    defaultMessage: "Review current readiness",
+  },
+  activationUnknownHeading: {
+    id: "activation.unknown.heading",
+    defaultMessage: "Activation outcome unknown",
+  },
+  activationUnknownBody: {
+    id: "activation.unknown.body",
+    defaultMessage:
+      "MIA did not confirm whether this attempt went through. Refresh to see the current course; that shows its state now, not what happened to this attempt.",
+  },
+  activationUnknownRefresh: {
+    id: "activation.unknown.refresh",
+    defaultMessage: "Refresh course",
+  },
+  activationUnknownNote: {
+    id: "activation.unknown.note",
+    defaultMessage:
+      "Abandoning or leaving this page only drops this page's record of the attempt. It does not cancel anything on the server.",
+  },
+  activationUnavailableHeading: {
+    id: "activation.unavailable.heading",
+    defaultMessage: "Activation is unavailable",
+  },
+  activationUnavailableBody: {
+    id: "activation.unavailable.body",
+    defaultMessage:
+      "MIA currently reports unmet prerequisites for {courseName}. Review current readiness and resolve the reported items.",
+  },
+  activationUnavailableAction: {
+    id: "activation.unavailable.action",
+    defaultMessage: "Go to course readiness",
+  },
+
   learnGroup: { id: "learn.group", defaultMessage: "Learn" },
   learnMore: { id: "learn.more", defaultMessage: "Check more joined courses" },
   learnCoursesTitle: {
@@ -670,34 +857,10 @@ export const messages = defineMessages({
     id: "activation.confirm",
     defaultMessage: "Confirm activation",
   },
-  courseActivationEffect: {
-    id: "activation.effect",
-    defaultMessage:
-      "Activation makes this course active. New tutoring sessions require current course readiness and student eligibility.",
-  },
-  courseActivationMaterial: {
-    id: "activation.material",
-    defaultMessage:
-      "Qualifying material needs technical readiness and separate educational approval. Review the chosen material for details.",
-  },
   courseActivationSupervisor: {
     id: "activation.supervisor",
     defaultMessage:
       "An administrator must resolve supervisor assignment. Assignment management is not available here.",
-  },
-  courseActivationUnavailable: {
-    id: "activation.unavailable",
-    defaultMessage:
-      "Activation is unavailable. Review current readiness and resolve the reported requirements.",
-  },
-  courseActivationPrevious: {
-    id: "activation.previous",
-    defaultMessage:
-      "This course was previously activated. Reactivation is not available on this surface.",
-  },
-  courseActivationAssigned: {
-    id: "activation.assigned",
-    defaultMessage: "Activation requires an assigned supervisor.",
   },
   courseActivationChecking: {
     id: "activation.checking",
@@ -706,21 +869,6 @@ export const messages = defineMessages({
   courseActivationSending: {
     id: "activation.sending",
     defaultMessage: "Waiting for activation…",
-  },
-  courseActivationChanged: {
-    id: "activation.changed",
-    defaultMessage:
-      "Course facts changed. Review the current course before confirming again.",
-  },
-  courseActivationRejected: {
-    id: "activation.rejected",
-    defaultMessage:
-      "Activation was not accepted. Refresh current readiness before confirming again.",
-  },
-  courseActivationUnknown: {
-    id: "activation.unknown",
-    defaultMessage:
-      "Activation outcome unknown. Refresh to check the current course; this does not confirm what happened to this attempt.",
   },
   courseActivationAbandon: {
     id: "activation.abandon",
@@ -3583,10 +3731,6 @@ export const messages = defineMessages({
     id: "preparation.languageTitle",
     defaultMessage: "Course language | MIA",
   },
-  preparationReadiness: {
-    id: "preparation.readiness",
-    defaultMessage: "Preparation prerequisites",
-  },
   preparationIncomplete: {
     id: "preparation.incomplete",
     defaultMessage: "Inactive — preparation is incomplete",
@@ -3603,23 +3747,6 @@ export const messages = defineMessages({
     id: "preparation.blocked",
     defaultMessage:
       "Active — not accepting new tutoring sessions; existing sessions may finish",
-  },
-  preparationSupervisor: {
-    id: "preparation.supervisor",
-    defaultMessage: "At least one assigned supervisor is needed.",
-  },
-  preparationMaterial: {
-    id: "preparation.material",
-    defaultMessage:
-      "Approved, ready, file-backed course-wide material is needed. Processing readiness and educational approval are separate.",
-  },
-  preparationUnmet: {
-    id: "preparation.unmet",
-    defaultMessage: "This prerequisite is not satisfied.",
-  },
-  preparationNoBlockers: {
-    id: "preparation.noBlockers",
-    defaultMessage: "No unmet preparation prerequisites were reported.",
   },
   preparationTextHelp: {
     id: "preparation.textHelp",

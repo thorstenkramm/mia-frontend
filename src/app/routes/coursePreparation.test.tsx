@@ -452,6 +452,22 @@ it("hub blockers preserve server order and never turn API links into hrefs", asy
   courseUnitCheckpoint("hub-blockers");
 });
 
+it("hub renders display blockers only, never activation-only extras", async () => {
+  const { state } = backend();
+  state.blockers = [{ id: "learning_goals", link: "/api/v1/courses/course_1" }];
+  state.activationBlockers = ["learning_goals", "language"];
+  mount("/prepare/courses/course_1");
+  await screen.findByRole("heading", { level: 2, name: "Blocking activation" });
+  const blockers = document.querySelector(
+    'section[aria-labelledby="course-blockers-heading"]',
+  );
+  expect(
+    blockers?.querySelectorAll("h3").length === 1 &&
+      blockers.querySelector("h3")?.textContent === "Learning goals",
+  ).toBe(true);
+  courseUnitCheckpoint("hub-blockers");
+});
+
 it("hub readiness failure removes course identity and retries only by explicit admission", async () => {
   const { fixture, state } = backend();
   state.readFail = true;

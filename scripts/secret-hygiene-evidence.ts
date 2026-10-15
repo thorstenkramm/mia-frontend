@@ -532,6 +532,28 @@ export const courseUnitCases = [
   })),
   {
     title:
+      "readiness unavailable admission hides course identity and offers explicit retry",
+    file: "src/app/routes/courseActivation.test.tsx",
+    points: ["readiness-unavailable"],
+  },
+  ...[
+    "readiness counts display blockers only and shows action-only blockers without links",
+    "eligible readiness links to activation only after admitted first activation",
+  ].map((title) => ({
+    title,
+    file: "src/app/routes/courseActivation.test.tsx",
+    points: ["activation-blockers"],
+  })),
+  ...[
+    "activation checks current facts with native disabled confirmation and Cancel available",
+    "activation in flight changes label, disables submit and offers Stop waiting",
+  ].map((title) => ({
+    title,
+    file: "src/app/routes/courseActivation.test.tsx",
+    points: ["activation-success"],
+  })),
+  {
+    title:
       "readiness offers only implemented trusted blocker destinations and no local eligibility guess",
     file: "src/app/routes/courseActivation.test.tsx",
     points: ["activation-blockers"],
@@ -551,7 +573,7 @@ export const courseUnitCases = [
     file: "src/app/routes/courseActivation.test.tsx",
     points: ["activation-outcome", "activation-reconciled"],
   })),
-  ...["preflight", "post"].map((phase) => ({
+  ...["post"].map((phase) => ({
     title: `activation stopped ${phase} fences late completion and preserves applicable denial`,
     file: "src/app/routes/courseActivation.test.tsx",
     points: ["activation-hidden"],
@@ -569,7 +591,7 @@ export const courseUnitCases = [
   })),
   {
     title:
-      "activation preflight failure disables confirmation until a successful explicit read",
+      "activation preflight failure requires a new readiness review before another attempt",
     file: "src/app/routes/courseActivation.test.tsx",
     points: ["activation-read-failed"],
   },
@@ -840,6 +862,11 @@ export const courseUnitCases = [
   {
     title:
       "hub blockers preserve server order and never turn API links into hrefs",
+    file: "src/app/routes/coursePreparation.test.tsx",
+    points: ["hub-blockers"],
+  },
+  {
+    title: "hub renders display blockers only, never activation-only extras",
     file: "src/app/routes/coursePreparation.test.tsx",
     points: ["hub-blockers"],
   },

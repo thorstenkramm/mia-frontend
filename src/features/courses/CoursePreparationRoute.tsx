@@ -8,7 +8,7 @@ import {
 } from "@heroicons/react/20/solid";
 import clsx from "clsx";
 import { useState, type ReactNode } from "react";
-import { useIntl } from "react-intl";
+import { useIntl, type MessageDescriptor } from "react-intl";
 import {
   canFirstActivate,
   type CoursePreparation,
@@ -36,11 +36,19 @@ export const readinessMessages = {
 // alone reaches breadcrumb/meta; no sample menu, truncation, or extra request.
 export function CourseHubHeader({
   courseName,
+  hubPath,
+  readinessPath,
   courseState,
+  metaName,
+  child,
   unavailable = false,
 }: {
   readonly courseName?: string;
+  readonly hubPath?: string;
+  readonly readinessPath?: string;
   readonly courseState?: "inactive" | "active";
+  readonly metaName?: string;
+  readonly child?: "readiness" | "activation";
   readonly unavailable?: boolean;
 }) {
   const intl = useIntl();
@@ -48,6 +56,11 @@ export function CourseHubHeader({
   if (courseState !== undefined)
     return (
       <div className="mt-2 flex flex-wrap items-center gap-3">
+        {metaName === undefined ? null : (
+          <bdi dir="auto" className="font-medium text-gray-900 wrap-anywhere">
+            {metaName}
+          </bdi>
+        )}
         <span className="inline-flex items-center gap-1 rounded-full bg-gray-50 px-1.5 py-0.5 text-xs font-medium text-gray-700 inset-ring inset-ring-gray-500/30">
           <span aria-hidden="true">{courseState === "active" ? "●" : "○"}</span>
           {intl.formatMessage(
@@ -67,17 +80,49 @@ export function CourseHubHeader({
     >
       <RouteDepartureLink
         to="/prepare/courses"
-        className="rounded-sm focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-indigo-600"
+        className={clsx(
+          "rounded-sm focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-indigo-600",
+          child !== undefined && "inline-flex min-h-6 items-center",
+        )}
       >
         {intl.formatMessage(messages.coursesPrepareHeading)}
       </RouteDepartureLink>
       <span aria-hidden="true">›</span>
+      {unavailable ? null : child === undefined ||
+        hubPath === undefined ? null : (
+        <>
+          <RouteDepartureLink
+            to={hubPath}
+            className="inline-flex min-h-6 min-w-0 items-center rounded-sm wrap-anywhere focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-indigo-600"
+          >
+            <bdi dir="auto">{courseName}</bdi>
+          </RouteDepartureLink>
+          <span aria-hidden="true">›</span>
+        </>
+      )}
+      {child === "activation" && !unavailable && readinessPath !== undefined ? (
+        <>
+          <RouteDepartureLink
+            to={readinessPath}
+            className="inline-flex min-h-6 items-center rounded-sm focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-indigo-600"
+          >
+            {intl.formatMessage(messages.courseReadinessHeading)}
+          </RouteDepartureLink>
+          <span aria-hidden="true">›</span>
+        </>
+      ) : null}
       <span
         aria-current="page"
         className="min-w-0 font-medium text-gray-900 wrap-anywhere"
       >
-        {unavailable ? (
-          intl.formatMessage(messages.preparationHub)
+        {unavailable || child !== undefined ? (
+          intl.formatMessage(
+            child === "activation"
+              ? messages.courseActivationHeading
+              : child === "readiness"
+                ? messages.courseReadinessHeading
+                : messages.preparationHub,
+          )
         ) : (
           <bdi dir="auto">{courseName}</bdi>
         )}
@@ -89,26 +134,22 @@ export function CourseHubHeader({
 // Tailwind Plus: Application UI > Feedback > Alerts > With actions; Elements >
 // Badges > Small pill with border. Library 2026-09-13-083323, v4/react-light.jsx.
 // MIA: server-fact tone, h2 under the admitted shell h1, a single safe action.
-function CourseHubStatus({
-  preparation,
-  links,
+export function CourseStatusPanel({
+  tone,
+  heading,
+  body,
+  blockerCount,
+  activatedAt,
+  actions,
 }: {
-  readonly preparation: CoursePreparation;
-  readonly links: CourseRouteProps["links"];
+  readonly tone: "green" | "indigo" | "gray" | "yellow";
+  readonly heading: MessageDescriptor;
+  readonly body: MessageDescriptor;
+  readonly blockerCount: number;
+  readonly activatedAt: number | null;
+  readonly actions?: ReactNode;
 }) {
   const intl = useIntl();
-  const { state, blockers } = preparation.readiness;
-  const previous =
-    preparation.activatedAt !== null || preparation.deactivatedAt !== null;
-  const ready = canFirstActivate(preparation);
-  const tone =
-    state === "active_accepting"
-      ? "green"
-      : ready
-        ? "indigo"
-        : state === "inactive_activatable" && previous
-          ? "gray"
-          : "yellow";
   const Icon =
     tone === "green"
       ? CheckCircleIcon
@@ -117,26 +158,6 @@ function CourseHubStatus({
         : tone === "gray"
           ? InformationCircleIcon
           : ExclamationTriangleIcon;
-  const heading =
-    state === "inactive_incomplete"
-      ? messages.preparationPanelIncompleteHeading
-      : ready
-        ? messages.preparationPanelActivatableHeading
-        : state === "inactive_activatable"
-          ? messages.preparationPanelPreviousHeading
-          : state === "active_accepting"
-            ? messages.preparationPanelAcceptingHeading
-            : messages.preparationPanelNotAcceptingHeading;
-  const body =
-    state === "inactive_incomplete"
-      ? messages.preparationPanelIncompleteBody
-      : ready
-        ? messages.preparationPanelActivatableBody
-        : state === "inactive_activatable"
-          ? messages.preparationPanelPreviousBody
-          : state === "active_accepting"
-            ? messages.preparationPanelAcceptingBody
-            : messages.preparationPanelNotAcceptingBody;
   return (
     <section
       className={clsx(
@@ -168,15 +189,15 @@ function CourseHubStatus({
               tone === "yellow" && "text-yellow-900",
             )}
           >
-            {intl.formatMessage(heading, { count: blockers.length })}
+            {intl.formatMessage(heading, { count: blockerCount })}
           </h2>
           <p className="mt-2 text-sm/6 text-gray-800">
             {intl.formatMessage(body, {
-              count: blockers.length,
+              count: blockerCount,
               activatedAt:
-                preparation.activatedAt === null
+                activatedAt === null
                   ? ""
-                  : intl.formatDate(preparation.activatedAt, {
+                  : intl.formatDate(activatedAt, {
                       year: "numeric",
                       month: "short",
                       day: "numeric",
@@ -186,25 +207,77 @@ function CourseHubStatus({
                     }),
             })}
           </p>
-          <div className="mt-4">
-            <RouteDepartureLink
-              to={links.readiness(preparation.course.id)}
-              className={
-                ready
-                  ? courseActionClass
-                  : "inline-flex min-h-6 items-center rounded-sm text-sm font-semibold underline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-indigo-600"
-              }
-            >
-              {intl.formatMessage(
-                ready
-                  ? messages.preparationPanelActivatableAction
-                  : messages.preparationOpenReadiness,
-              )}
-            </RouteDepartureLink>
-          </div>
+          {actions === undefined ? null : <div className="mt-4">{actions}</div>}
         </div>
       </div>
     </section>
+  );
+}
+
+function CourseHubStatus({
+  preparation,
+  links,
+}: {
+  readonly preparation: CoursePreparation;
+  readonly links: CourseRouteProps["links"];
+}) {
+  const intl = useIntl();
+  const { state, blockers } = preparation.readiness;
+  const previous =
+    preparation.activatedAt !== null || preparation.deactivatedAt !== null;
+  const ready = canFirstActivate(preparation);
+  const tone =
+    state === "active_accepting"
+      ? "green"
+      : ready
+        ? "indigo"
+        : state === "inactive_activatable" && previous
+          ? "gray"
+          : "yellow";
+  const heading =
+    state === "inactive_incomplete"
+      ? messages.preparationPanelIncompleteHeading
+      : ready
+        ? messages.preparationPanelActivatableHeading
+        : state === "inactive_activatable"
+          ? messages.preparationPanelPreviousHeading
+          : state === "active_accepting"
+            ? messages.preparationPanelAcceptingHeading
+            : messages.preparationPanelNotAcceptingHeading;
+  const body =
+    state === "inactive_incomplete"
+      ? messages.preparationPanelIncompleteBody
+      : ready
+        ? messages.preparationPanelActivatableBody
+        : state === "inactive_activatable"
+          ? messages.preparationPanelPreviousBody
+          : state === "active_accepting"
+            ? messages.preparationPanelAcceptingBody
+            : messages.preparationPanelNotAcceptingBody;
+  return (
+    <CourseStatusPanel
+      tone={tone}
+      heading={heading}
+      body={body}
+      blockerCount={blockers.length}
+      activatedAt={preparation.activatedAt}
+      actions={
+        <RouteDepartureLink
+          to={links.readiness(preparation.course.id)}
+          className={
+            ready
+              ? courseActionClass
+              : "inline-flex min-h-6 items-center rounded-sm text-sm font-semibold underline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-indigo-600"
+          }
+        >
+          {intl.formatMessage(
+            ready
+              ? messages.preparationPanelActivatableAction
+              : messages.preparationOpenReadiness,
+          )}
+        </RouteDepartureLink>
+      }
+    />
   );
 }
 

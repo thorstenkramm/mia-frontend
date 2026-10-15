@@ -209,6 +209,54 @@ async function submit() {
   return user;
 }
 
+it("activation checks current facts with native disabled confirmation and Cancel available", async () => {
+  const { control } = backend();
+  mount();
+  await confirm();
+  let release = () => {};
+  control.readRelease = new Promise<void>((resolve) => {
+    release = resolve;
+  });
+  await submit();
+  await waitFor(() => expect(control.reads === 2).toBe(true));
+  expect(((await confirm()) as HTMLButtonElement).disabled).toBe(true);
+  expect(
+    document
+      .querySelector("main form")
+      ?.textContent?.includes("Checking current course before activation…"),
+  ).toBe(true);
+  expect(screen.getByRole("link", { name: "Cancel" })).toBeTruthy();
+  expect(
+    screen
+      .getByRole("heading", { level: 2, name: `Activate ${control.name}` })
+      .getAttribute("tabindex"),
+  ).toBe("-1");
+  release();
+  await screen.findByRole("heading", { level: 1, name: control.name });
+  courseUnitCheckpoint("activation-success");
+});
+
+it("activation in flight changes label, disables submit and offers Stop waiting", async () => {
+  const { control } = backend();
+  let release = () => {};
+  control.postRelease = new Promise<void>((resolve) => {
+    release = resolve;
+  });
+  mount();
+  await submit();
+  await waitFor(() => expect(control.posts === 1).toBe(true));
+  expect(
+    (screen.getByRole("button", { name: "Activating…" }) as HTMLButtonElement)
+      .disabled,
+  ).toBe(true);
+  expect(screen.getByText("Waiting for activation…")).toBeTruthy();
+  expect(screen.getByRole("button", { name: "Stop waiting" })).toBeTruthy();
+  expect(screen.queryByRole("link", { name: "Cancel" })).toBeNull();
+  release();
+  await screen.findByRole("heading", { level: 1, name: control.name });
+  courseUnitCheckpoint("activation-success");
+});
+
 for (const path of ["readiness", "activate"])
   it(`activation ${path} requires exact assigned scope before course discovery`, async () => {
     const { control } = backend();
@@ -218,6 +266,27 @@ for (const path of ["readiness", "activate"])
     expect(control.reads === 0 && control.posts === 0).toBe(true);
     courseUnitCheckpoint("activation-gate");
   });
+
+it("readiness unavailable admission hides course identity and offers explicit retry", async () => {
+  const { control, fixture } = backend();
+  control.readFail = true;
+  mount("/prepare/courses/course_1/readiness");
+  await screen.findByRole("heading", { level: 1, name: "Course readiness" });
+  await screen.findByRole("heading", {
+    name: "Readiness could not be checked",
+  });
+  expect(
+    !document.querySelector("main")?.textContent?.includes(fixture.name) &&
+      control.reads === 1,
+  ).toBe(true);
+  courseUnitCheckpoint("readiness-unavailable");
+  control.readFail = false;
+  await userEvent
+    .setup()
+    .click(screen.getByRole("button", { name: "Check again" }));
+  await screen.findByRole("heading", { name: "Ready for activation" });
+  expect(control.reads === 2).toBe(true);
+});
 
 it("readiness offers only implemented trusted blocker destinations and no local eligibility guess", async () => {
   const { control } = backend();
@@ -238,11 +307,22 @@ it("readiness offers only implemented trusted blocker destinations and no local 
   await screen.findByRole("heading", { level: 1, name: "Course readiness" });
   await waitFor(() =>
     expect(
-      document.querySelectorAll("main dl a").length === 2 &&
-        screen.queryByRole("link", { name: "Activate course" }) === null &&
+      document.querySelectorAll("#course-blockers-heading + div a").length ===
+        2 &&
+        screen.queryByRole("link", { name: "Continue to activation" }) ===
+          null &&
         includes("An administrator must resolve supervisor assignment."),
     ).toBe(true),
   );
+  expect(
+    screen.getByRole("heading", { name: "Activation unavailable" }),
+  ).toBeTruthy();
+  expect(
+    screen.getByRole("heading", { name: "How course readiness works" }),
+  ).toBeTruthy();
+  expect(
+    screen.queryByRole("heading", { name: "AI instructions" }) !== null,
+  ).toBe(true);
   const user = userEvent.setup();
   control.blockers = [];
   control.actionBlockers = ["assigned_supervisor_required"];
@@ -250,10 +330,44 @@ it("readiness offers only implemented trusted blocker destinations and no local 
   await screen.findByRole("heading", { level: 1, name: "Course readiness" });
   await waitFor(() =>
     expect(
-      screen.queryByRole("link", { name: "Activate course" }) === null &&
-        includes("No unmet preparation prerequisites were reported."),
+      screen.queryByRole("link", { name: "Continue to activation" }) === null &&
+        includes("Activation unavailable"),
     ).toBe(true),
   );
+  courseUnitCheckpoint("activation-blockers");
+});
+
+it("readiness counts display blockers only and shows action-only blockers without links", async () => {
+  const { control } = backend();
+  control.readiness = "inactive_incomplete";
+  control.eligible = false;
+  control.actionBlockers = ["language"];
+  mount("/prepare/courses/course_1/readiness");
+  await screen.findByRole("heading", { name: "Activation unavailable" });
+  expect(
+    screen.getByText(
+      "MIA reports 0 unmet prerequisites for this course. Resolve them, then check again here.",
+    ),
+  ).toBeTruthy();
+  expect(screen.getByRole("heading", { name: "Course language" })).toBeTruthy();
+  expect(
+    document.querySelectorAll(
+      'section[aria-labelledby="course-blockers-heading"] a',
+    ).length,
+  ).toBe(0);
+  courseUnitCheckpoint("activation-blockers");
+});
+
+it("eligible readiness links to activation only after admitted first activation", async () => {
+  const { control } = backend();
+  mount("/prepare/courses/course_1/readiness");
+  await screen.findByRole("heading", { name: "Ready for activation" });
+  expect(
+    screen
+      .getByRole("link", { name: "Continue to activation" })
+      .getAttribute("href"),
+  ).toBe("/prepare/courses/course_1/activate");
+  expect(control.reads === 1 && control.posts === 0).toBe(true);
   courseUnitCheckpoint("activation-blockers");
 });
 
@@ -320,9 +434,15 @@ for (const change of ["name", "teaching", "eligibility", "lifecycle"])
     }
     await submit();
     await screen.findByRole("heading", {
-      name: "Course facts changed. Review the current course before confirming again.",
+      name:
+        change === "name" || change === "teaching"
+          ? "Course facts changed"
+          : "Activation is unavailable",
     });
     expect(control.posts === 0 && control.reads === 2).toBe(true);
+    if (change === "name")
+      expect(screen.getAllByText("Changed").length).toBe(1);
+    if (change === "teaching") expect(screen.queryByText("Changed")).toBeNull();
     if (change === "name" || change === "teaching") {
       await submit();
       await screen.findByRole("heading", {
@@ -331,9 +451,9 @@ for (const change of ["name", "teaching", "eligibility", "lifecycle"])
       });
       expect(control.posts === 1).toBe(true);
     } else
-      expect((await confirm()).getAttribute("aria-disabled") === "true").toBe(
-        true,
-      );
+      expect(
+        screen.queryByRole("button", { name: "Confirm activation" }),
+      ).toBeNull();
     courseUnitCheckpoint("activation-changed");
   });
 
@@ -346,12 +466,28 @@ for (const outcome of ["conflict", "already", "lose", "malformed", "server"])
     const unknown = !["conflict", "already"].includes(outcome);
     await screen.findByRole("heading", {
       name: unknown
-        ? "Activation outcome unknown. Refresh to check the current course; this does not confirm what happened to this attempt."
-        : "Activation was not accepted. Refresh current readiness before confirming again.",
+        ? "Activation outcome unknown"
+        : "Activation was not accepted",
     });
+    expect(
+      screen.queryByRole("button", { name: "Confirm activation" }),
+    ).toBeNull();
+    if (!unknown) {
+      expect(screen.getByText("Technical details")).toBeTruthy();
+      expect(
+        screen.getByText(
+          "The course is still inactive. Refresh current readiness before confirming again.",
+        ),
+      ).toBeTruthy();
+    }
     courseUnitCheckpoint("activation-outcome");
-    await user.click(screen.getByRole("button", { name: "Refresh" }));
-    await waitFor(() => expect(control.reads === 3).toBe(true));
+    if (unknown) {
+      await user.click(screen.getByRole("button", { name: "Refresh course" }));
+      await waitFor(() => expect(control.reads === 3).toBe(true));
+    } else
+      expect(
+        screen.getByRole("link", { name: "Review current readiness" }),
+      ).toBeTruthy();
     expect(
       control.posts === 1 &&
         window.location.pathname.endsWith("activate") &&
@@ -361,22 +497,25 @@ for (const outcome of ["conflict", "already", "lose", "malformed", "server"])
       await user.click(
         await screen.findByRole("button", { name: "Abandon unknown attempt" }),
       );
-      expect((await confirm()).getAttribute("aria-disabled") === "true").toBe(
-        true,
-      );
-      await user.click(screen.getByRole("button", { name: "Refresh" }));
+      expect(
+        await screen.findByRole("heading", {
+          name: "The unknown attempt was abandoned locally, not cancelled on the server. Review current readiness before a new attempt.",
+        }),
+      ).toBeTruthy();
       await waitFor(() =>
         expect(
-          screen
-            .getByRole("button", { name: "Confirm activation" })
-            .getAttribute("aria-disabled") === "false",
+          (
+            screen.getByRole("button", {
+              name: "Confirm activation",
+            }) as HTMLButtonElement
+          ).disabled === false,
         ).toBe(true),
       );
     }
     courseUnitCheckpoint("activation-reconciled");
   });
 
-for (const phase of ["preflight", "post"])
+for (const phase of ["post"])
   it(`activation stopped ${phase} fences late completion and preserves applicable denial`, async () => {
     const { control, fixture } = backend();
     mount();
@@ -420,9 +559,9 @@ it("activation Stop waiting keeps late success unknown and reconciliation never 
   await user.click(screen.getByRole("button", { name: "Stop waiting" }));
   await act(async () => release());
   await waitFor(() => expect(control.state === "active").toBe(true));
-  await user.click(screen.getByRole("button", { name: "Refresh" }));
+  await user.click(screen.getByRole("button", { name: "Refresh course" }));
   await waitFor(() =>
-    expect(includes("Active — accepting new tutoring sessions")).toBe(true),
+    expect(includes("Activation outcome unknown")).toBe(true),
   );
   expect(
     control.posts === 1 &&
@@ -459,7 +598,7 @@ for (const loss of ["csrf", "expired", "restricted", "lifecycle"])
     courseUnitCheckpoint("activation-teardown");
   });
 
-it("activation preflight failure disables confirmation until a successful explicit read", async () => {
+it("activation preflight failure requires a new readiness review before another attempt", async () => {
   const { control } = backend();
   mount();
   await confirm();
@@ -470,17 +609,14 @@ it("activation preflight failure disables confirmation until a successful explic
   });
   expect(
     control.posts === 0 &&
-      (await confirm()).getAttribute("aria-disabled") === "true",
+      screen.queryByRole("button", { name: "Confirm activation" }) === null,
   ).toBe(true);
   control.readFail = false;
-  await user.click(screen.getByRole("button", { name: "Refresh" }));
-  await waitFor(() =>
-    expect(
-      screen
-        .getByRole("button", { name: "Confirm activation" })
-        .getAttribute("aria-disabled") === "false",
-    ).toBe(true),
+  await user.click(
+    screen.getByRole("link", { name: "Review current readiness" }),
   );
+  await screen.findByRole("heading", { level: 1, name: "Course readiness" });
+  expect(control.posts).toBe(0);
   courseUnitCheckpoint("activation-read-failed");
 });
 
@@ -516,12 +652,13 @@ it("activation stopped preflight cannot dispatch after a late eligible read", as
   });
   const user = await submit();
   await waitFor(() => expect(control.reads === 2).toBe(true));
-  await user.click(screen.getByRole("button", { name: "Stop waiting" }));
+  await user.click(screen.getByRole("link", { name: "Cancel" }));
+  await user.click(
+    await screen.findByRole("button", { name: "Discard and leave" }),
+  );
   await act(async () => release());
   expect(
-    control.posts === 0 &&
-      window.location.pathname.endsWith("activate") &&
-      (await confirm()).getAttribute("aria-disabled") === "true",
+    control.posts === 0 && window.location.pathname.endsWith("readiness"),
   ).toBe(true);
   courseUnitCheckpoint("activation-preflight-stopped");
 });
@@ -554,15 +691,15 @@ it("activation unknown departure asks before dropping attempt and security loss 
   mount();
   const user = await submit();
   await screen.findByRole("heading", {
-    name: "Activation outcome unknown. Refresh to check the current course; this does not confirm what happened to this attempt.",
+    name: "Activation outcome unknown",
   });
-  await user.click(screen.getByRole("link", { name: "Course preparation" }));
+  await user.click(screen.getByRole("link", { name: control.name }));
   await screen.findByRole("dialog");
   await user.click(screen.getByRole("button", { name: "Stay on this page" }));
   expect(
     window.location.pathname.endsWith("activate") && control.posts === 1,
   ).toBe(true);
-  await user.click(screen.getByRole("link", { name: "Course preparation" }));
+  await user.click(screen.getByRole("link", { name: control.name }));
   await screen.findByRole("dialog");
   act(() => window.dispatchEvent(new Event("focus")));
   await screen.findByRole("button", { name: "Refresh" });
@@ -579,13 +716,16 @@ it("activation direct previously activated course stays unavailable even with se
   control.activated = "2026-10-08T12:00:00.000000Z";
   control.deactivated = "2026-10-09T10:00:00.000000Z";
   mount();
-  const user = await submit();
+  await screen.findByRole("heading", { name: "Activation is unavailable" });
   expect(
     control.posts === 0 &&
       control.reads === 1 &&
-      includes("Reactivation is not available on this surface."),
+      includes("This course was active before."),
   ).toBe(true);
-  await user.click(screen.getByRole("link", { name: "Cancel" }));
+  const user = userEvent.setup();
+  await user.click(
+    screen.getByRole("link", { name: "Go to course readiness" }),
+  );
   await screen.findByRole("heading", { level: 1, name: "Course readiness" });
   expect(control.posts === 0).toBe(true);
   courseUnitCheckpoint("activation-previously-active");

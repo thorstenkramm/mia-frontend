@@ -35,7 +35,7 @@
 # - Epic 1 remains in-progress for recorded acceptance follow-up; do not restart its done stories.
 # - Unstarted story IDs were replaced; planning-artifacts/sprint-change-proposal-2026-10-06.md owns the map.
 generated: 09-19-2026 13:57
-last_updated: 10-15-2026 10:05
+last_updated: 10-15-2026 09:29
 project: mia-frontend
 project_key: NOKEY
 tracking_system: file-system
@@ -92,7 +92,7 @@ development_status:
   # Later scope: select only after the student-tutoring MVP milestone or a new owner decision.
   epic-7: in-progress
   7-1-status-first-preparation-hub: done
-  7-2-readiness-review-and-activation-confirmation: backlog
+  7-2-readiness-review-and-activation-confirmation: in-progress
   7-3-move-the-build-identifier-into-the-sidebar-footer: backlog
   epic-7-retrospective: optional
 

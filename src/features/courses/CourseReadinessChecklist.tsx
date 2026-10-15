@@ -1,21 +1,11 @@
 import { useIntl } from "react-intl";
 import type { CoursePreparation } from "../../platform/api/courses";
-import { canFirstActivate } from "../../platform/api/courses";
 import { messages } from "../../platform/i18n/messages";
 import { RouteDepartureLink } from "../../platform/ui/RouteDepartureLink";
 import type { CourseRouteProps } from "./CourseRouteProps";
 import { courseActionClass } from "./CourseListRoute";
-import { courseTeachingFields } from "./courseTeachingFields";
 import { useSessionActions } from "../../platform/data/EntryDataProvider";
 import { ExclamationCircleIcon } from "@heroicons/react/20/solid";
-
-const blockerMessages = {
-  learning_goals: messages.preparationGoals,
-  ai_tutor_instructions: messages.preparationInstructions,
-  language: messages.preparationLanguage,
-  supervisor_presence: messages.preparationSupervisor,
-  qualifying_material: messages.preparationMaterial,
-} as const;
 
 // Tailwind Plus: Application UI > Layout > Cards > Card with header;
 // Elements > Badges > Small pill with border. Library 2026-09-13-083323,
@@ -24,12 +14,30 @@ const blockerMessages = {
 export function CourseHubBlockers({
   preparation,
   links,
+  heading,
+  includeExtras = false,
 }: {
   readonly preparation: CoursePreparation;
   readonly links: CourseRouteProps["links"];
+  readonly heading?: (typeof messages)[keyof typeof messages];
+  // The readiness review alone keeps the 4.5 defense of showing action-only
+  // blockers that are absent from the server display list; the hub renders
+  // display blockers exactly as reported.
+  readonly includeExtras?: boolean;
 }) {
   const intl = useIntl();
   const active = preparation.course.state === "active";
+  const displayed = preparation.readiness.blockers;
+  const extras = (
+    includeExtras
+      ? preparation.readiness.activation.blockers.filter(
+          (id) =>
+            id !== "assigned_supervisor_required" &&
+            id !== "course_already_active" &&
+            !displayed.some((item) => item.id === id),
+        )
+      : []
+  ) as (keyof typeof blockerCopy)[];
   const blockerCopy = {
     learning_goals: [
       messages.preparationBlockerLearningGoalsName,
@@ -66,16 +74,21 @@ export function CourseHubBlockers({
         className="text-base/7 font-semibold text-gray-900"
       >
         {intl.formatMessage(
-          active
-            ? messages.preparationBlockersHeadingActive
-            : messages.preparationBlockersHeadingInactive,
+          heading ??
+            (active
+              ? messages.preparationBlockersHeadingActive
+              : messages.preparationBlockersHeadingInactive),
         )}
       </h2>
       <div className="mt-4 space-y-4">
-        {preparation.readiness.blockers.map((blocker) => {
+        {[
+          ...displayed,
+          ...extras.map((id) => ({ id, field: null, materials: false })),
+        ].map((blocker) => {
           const [name, body, action] = blockerCopy[blocker.id];
-          const destination =
-            blocker.field !== null
+          const destination = extras.includes(blocker.id)
+            ? null
+            : blocker.field !== null
               ? links.preparation(preparation.course.id, blocker.field)
               : blocker.materials
                 ? links.materials(preparation.course.id)
@@ -137,102 +150,3 @@ export function CourseReadinessRefresh() {
 // Tailwind Plus: Application UI > Data Display > Description Lists >
 // Left-aligned with inline actions; 2026-09-13-083323, v4/react-light.jsx.
 // MIA: server blocker rows, wrapped text, trusted implemented destinations only.
-export function CourseReadinessChecklist({
-  preparation,
-  links,
-}: {
-  readonly preparation: CoursePreparation;
-  readonly links: CourseRouteProps["links"];
-}) {
-  const intl = useIntl();
-  // Action-specific prerequisite blockers remain visible even when the server's
-  // separate preparation display list is empty. No resolver is guessed for them.
-  const blockers = [
-    ...preparation.readiness.blockers,
-    ...preparation.readiness.activation.blockers.flatMap((id) =>
-      id === "assigned_supervisor_required" ||
-      id === "course_already_active" ||
-      preparation.readiness.blockers.some((item) => item.id === id)
-        ? []
-        : [{ id, field: null, materials: false }],
-    ),
-  ];
-  return (
-    <>
-      <h2 className="mt-6 text-base/7 font-semibold text-gray-900">
-        {intl.formatMessage(messages.preparationReadiness)}
-      </h2>
-      <p className="mt-2 text-sm/6 text-gray-700">
-        {intl.formatMessage(messages.courseActivationMaterial)}
-      </p>
-      <dl className="mt-6 divide-y divide-gray-200 border-t border-gray-200">
-        {blockers.map((blocker) => (
-          <div
-            key={blocker.id}
-            className="py-6 sm:grid sm:grid-cols-3 sm:gap-4"
-          >
-            <dt className="text-sm/6 font-medium text-gray-900">
-              {intl.formatMessage(blockerMessages[blocker.id])}
-            </dt>
-            <dd className="mt-1 flex min-w-0 flex-wrap gap-3 text-sm/6 text-gray-700 sm:col-span-2 sm:mt-0">
-              <span>{intl.formatMessage(messages.preparationUnmet)}</span>
-              {blocker.field !== null ? (
-                <RouteDepartureLink
-                  className={courseActionClass}
-                  to={links.preparation(preparation.course.id, blocker.field)}
-                >
-                  {intl.formatMessage(
-                    courseTeachingFields[blocker.field].heading,
-                  )}
-                </RouteDepartureLink>
-              ) : blocker.materials ? (
-                <RouteDepartureLink
-                  className={courseActionClass}
-                  to={links.materials(preparation.course.id)}
-                >
-                  {intl.formatMessage(messages.materialsHeading)}
-                </RouteDepartureLink>
-              ) : null}
-              {blocker.id === "supervisor_presence" ? (
-                <span>
-                  {intl.formatMessage(messages.courseActivationSupervisor)}
-                </span>
-              ) : null}
-            </dd>
-          </div>
-        ))}
-      </dl>
-      {blockers.length === 0 ? (
-        <p className="mt-3 text-sm text-gray-700">
-          {intl.formatMessage(messages.preparationNoBlockers)}
-        </p>
-      ) : null}
-      {preparation.readiness.activation.blockers.includes(
-        "assigned_supervisor_required",
-      ) ? (
-        <p className="mt-3 text-sm/6 text-gray-700">
-          {intl.formatMessage(messages.courseActivationAssigned)}
-        </p>
-      ) : null}
-    </>
-  );
-}
-
-export function CourseActivationAvailability({
-  preparation,
-}: {
-  readonly preparation: CoursePreparation;
-}) {
-  const intl = useIntl();
-  if (preparation.course.state === "active" || canFirstActivate(preparation))
-    return null;
-  return (
-    <p className="mt-3 text-sm/6 text-gray-700">
-      {intl.formatMessage(
-        preparation.activatedAt !== null || preparation.deactivatedAt !== null
-          ? messages.courseActivationPrevious
-          : messages.courseActivationUnavailable,
-      )}
-    </p>
-  );
-}
