@@ -41,7 +41,7 @@ project_key: NOKEY
 tracking_system: file-system
 delivery_plan: _bmad-output/planning-artifacts/epics.md
 current_milestone: student-tutoring-mvp
-next_story: 7-2-readiness-review-and-activation-confirmation
+next_story: 7-3-move-the-build-identifier-into-the-sidebar-footer
 story_location: |
   /Users/thorsten/projects/thorsten/mia-frontend/_bmad-output/implementation-artifacts
 development_status:
@@ -92,7 +92,7 @@ development_status:
   # Later scope: select only after the student-tutoring MVP milestone or a new owner decision.
   epic-7: in-progress
   7-1-status-first-preparation-hub: done
-  7-2-readiness-review-and-activation-confirmation: in-progress
+  7-2-readiness-review-and-activation-confirmation: done
   7-3-move-the-build-identifier-into-the-sidebar-footer: backlog
   epic-7-retrospective: optional
 

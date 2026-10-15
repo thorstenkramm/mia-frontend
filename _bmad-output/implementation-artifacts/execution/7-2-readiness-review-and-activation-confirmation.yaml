@@ -46,8 +46,8 @@ repair_queue:
   root_cause: two clones introduced by 7-2 files: CoursePreparationRoute/CourseReadinessRoute shared the status-panel message formatting (count + activatedAt), and 7-2's gray-tone extension of RouteRecoveryPanel aligned its actions slot with InvitationStatus's
   disposition: CourseStatusPanel now owns the heading/body message formatting (both call sites pass descriptors + values); the RouteRecoveryPanel/InvitationStatus pair is marked jscpd:ignore as two independent Tailwind Plus alert-with-actions blueprint instances, with the required cross-note at the other site
   evidence: scripts/check-duplication.sh reports 0 clones; 52/52 focused course tests pass; typecheck/lint/prettier clean
-last_verification: flake repairs and duplication fix validated by focused checks; full gate pending on HEAD 903ebf6 + story files + duplication fix
+last_verification: full gate green (run 6, exit 0, gate-final3.log) — all stages including 445/445 hygiene probes and 0-clone duplication
 resume_attempts: 0
-commit: null
-next_action: Full gate; on green, worker commits tracker+spec+story files
+commit: f5082d92f8c5d708863a8ab0d1798769aeb5891a
+next_action: none — story done; next_story set to 7-3-move-the-build-identifier-into-the-sidebar-footer
 blocked_on: null
