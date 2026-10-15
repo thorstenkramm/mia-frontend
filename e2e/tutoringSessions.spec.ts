@@ -1004,7 +1004,16 @@ test(
     control.workState = "generating";
     control.workGenerating = true;
     await page.goto(workspace);
-    await ready(page, "Tutoring session");
+    // 6.4: transport loss only marks revalidation needed — the neutral
+    // privacy cover replaces the workspace without any automatic request.
+    // Wait for the settled cover; racing the brief workspace mount made this
+    // probe flaky.
+    const cover = page.getByRole("heading", {
+      level: 1,
+      name: "Content hidden",
+    });
+    await expect(cover).toBeVisible();
+    await expect(cover).toBeFocused();
     await expect(
       page.getByRole("button", { name: "Refresh", exact: true }),
     ).toBeVisible();
