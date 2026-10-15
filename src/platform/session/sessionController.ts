@@ -299,6 +299,11 @@ export class SessionController {
   private monotonicSample = performance.now();
   private clockAnchor = this.clockSample;
   private monotonicAnchor = this.monotonicSample;
+  // Wake/rollback judgment begins only after the first watchdog interval has
+  // been observed: a stalled initial callback under event-loop load is not a
+  // sleep or a clock rollback. Deadline expiry is enforced from the first
+  // sample regardless.
+  private clockTrusted = false;
   private readonly securityTeardowns = new Set<SecurityTeardown>();
   private access: AuthenticatedAccess | null = null;
   private securityEpoch = 0;
@@ -655,7 +660,7 @@ export class SessionController {
     this.deadlineTimer = null;
   }
 
-  private checkDeadline = (): void => {
+  private checkDeadline = (fromTimer = false): void => {
     this.clearDeadlineTimer();
     if (this.deadlines === null) return;
     const now = Date.now();
@@ -672,20 +677,25 @@ export class SessionController {
     );
     // Both clocks are checked: sleep/late callbacks and wall-clock rollback
     // cannot grant a longer lifetime. The one-second watchdog does no I/O.
-    if (
-      now < this.clockSample ||
-      now - this.clockSample > 2000 ||
-      monotonic - this.monotonicSample > 2000 ||
-      monotonic < this.monotonicSample ||
-      effectiveNow >= deadline
-    ) {
-      this.shield(effectiveNow >= deadline ? "deadline" : "lifecycle");
+    // Deadline expiry is always enforced; wake/rollback judgment waits for one
+    // trusted interval after each install so that a watchdog callback stalled
+    // by ordinary event-loop load is not misread as a sleep.
+    const expired = effectiveNow >= deadline;
+    const anomalous =
+      this.clockTrusted &&
+      (now < this.clockSample ||
+        now - this.clockSample > 2000 ||
+        monotonic - this.monotonicSample > 2000 ||
+        monotonic < this.monotonicSample);
+    if (expired || anomalous) {
+      this.shield(expired ? "deadline" : "lifecycle");
       return;
     }
     this.clockSample = now;
     this.monotonicSample = monotonic;
     this.clockAnchor = effectiveNow;
     this.monotonicAnchor = monotonic;
+    if (fromTimer) this.clockTrusted = true;
     if (
       this.state.kind === "Authenticated" &&
       this.state.lifecycle !== "Continue dispatching" &&
@@ -708,7 +718,7 @@ export class SessionController {
     }
     const warningIn = deadline - effectiveNow - 5 * 60_000;
     this.deadlineTimer = setTimeout(
-      this.checkDeadline,
+      () => this.checkDeadline(true),
       Math.min(1000, warningIn > 0 ? warningIn : deadline - effectiveNow),
     );
   };
@@ -1843,6 +1853,7 @@ export class SessionController {
     this.deadlines = session.kind === "anonymous" ? null : session;
     this.clockSample = Date.now();
     this.monotonicSample = performance.now();
+    this.clockTrusted = false;
     // Explicit discovery is authoritative about deadlines, not permission to
     // forget elapsed time already observed before a wall-clock adjustment.
     this.clockAnchor = Math.max(

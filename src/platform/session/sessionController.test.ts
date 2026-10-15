@@ -1016,6 +1016,10 @@ describe("authoritative session lifecycle", () => {
           controller.getSnapshot().kind,
         ),
       );
+      // Wake/rollback judgment starts only after one trusted watchdog
+      // interval: let the real one-second watchdog establish its baseline
+      // before jumping the wall clock.
+      await new Promise((resolve) => setTimeout(resolve, 1200));
       vi.setSystemTime(
         now +
           (reason === "rollback"
