@@ -38,11 +38,14 @@ The solver owns sprint status and checkpoint writes; you own the story spec, cod
 - **fix:** repair the supplied evidence-backed findings in root-cause batches. Preserve correct work and settled intent.
   Re-derive only if the current structure demonstrably cannot satisfy the contract; report that reason first. Run affected
   regressions, not the entire suite after every repair. Return each finding's disposition/evidence.
-- **verify:** inspect the current diff, then run the applicable authoritative gate once for the final code/config state.
+- **verify:** inspect the current diff, then run the local affected verification once for the final code/config state,
+  naming the selected browser specs and any grep explicitly. The non-browser stages remain complete; zero selected
+  browser tests is a failure. The bare complete gate is retained for deliberate complete runs.
   For documentation-only changes follow AGENTS.md exemptions. Never overlap tests/builds. Name failures and skipped tools;
   skipped is not passed. Record baseline plus content fingerprint of verified application/test/script/config/dependency
   inputs (including new files), commands, logs and results. A source/config change invalidates this evidence; reporting-only
-  edits do not. Report `verified` only when required components passed; unavailable components require explicit disposition.
+  edits do not. Report `verified` only when required local components passed; unavailable components require explicit
+  disposition. Remote QA is post-commit and does not count as local verification.
 - **commit:** require user authorization carried by solver and successful current verification/review evidence. Reconcile
   git history first after an interrupted commit; never blindly commit twice. Stage only the explicit story manifest and
   solver-approved tracking/spec files; inspect the staged diff and ensure unrelated staged files are excluded without

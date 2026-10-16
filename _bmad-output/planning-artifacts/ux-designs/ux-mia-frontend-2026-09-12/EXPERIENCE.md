@@ -442,7 +442,8 @@ accessibility checks, and result. Product Owner manual Safari evidence is mandat
 proactively blocked; reports are change requests unless they expose a general standards, accessibility, or security
 defect.
 
-Playwright E2E uses bundled Chromium on developer macOS. It does not substitute for the explicit manual evidence
+Playwright E2E uses bundled Chromium on macOS for exact-revision epic/GitHub full-matrix evidence, and on a private
+Ubuntu runner for asynchronous complete-matrix per-commit QA. Ubuntu does not replace macOS. Automation does not substitute for the explicit manual evidence
 required for other supported browser/OS pairings. `ACCESSIBILITY-ACCEPTANCE.md` owns the release evidence matrix.
 
 Layouts must tolerate operating-system font metric variation through intrinsic sizing and reflow rather than pixel

@@ -886,9 +886,9 @@ in current Chrome, Edge, and Safari within the confirmed platform matrix.
 
 ### Confirmed Browser and Platform Matrix
 
-Release-one automated E2E runs use only Playwright bundled Chromium on developer macOS. The project MUST NOT add or
-claim required non-macOS automation, Playwright Firefox, Playwright WebKit, Edge-channel automation, Cypress, or
-Electron.
+Release-one automated E2E uses Playwright bundled Chromium on macOS for exact-revision full-matrix epic/GitHub
+evidence and on a private Ubuntu runner for asynchronous per-commit complete-matrix QA. Ubuntu does not replace
+macOS evidence. The project MUST NOT add Playwright Firefox, Playwright WebKit, Edge-channel automation, Cypress, or Electron.
 
 Current Chrome and Edge are supported and receive repeatable Product Owner manual testing on available actual
 environments. Current Safari is supported through repeatable Product Owner manual testing on macOS. Firefox is
@@ -899,7 +899,8 @@ Required evidence is:
 
 | Evidence lane | Environment | Required coverage |
 | --- | --- | --- |
-| Automated E2E | Bundled Chromium, developer macOS | Semantics, flows, states, reflow, media emulation |
+| Automated E2E | Bundled Chromium, macOS (epic/GitHub) | Complete matrix, semantics, flows, states, reflow, media emulation |
+| Remote QA | Bundled Chromium, private Ubuntu | Per-commit complete matrix; no macOS substitution |
 | PO manual | Current Chrome, available actual environment | Critical processes and native controls |
 | PO manual | Current Edge, available actual environment | Critical processes and native controls |
 | PO manual | Current Safari, macOS | Critical processes, VoiceOver, zoom, audio, forms |
@@ -1435,7 +1436,7 @@ exception rationale, the row fails and the deletion design requires a Product Ow
 
 Residual risks describe evidence limits, not exceptions to conformance:
 
-- Automation exercises Playwright bundled Chromium only on developer macOS.
+- Automation exercises Playwright bundled Chromium on macOS and private Ubuntu; only macOS evidence satisfies the epic/GitHub gate.
 - Safari conformance evidence depends on repeatable Product Owner manual testing, including VoiceOver.
 - Chrome and Edge manual evidence covers only Product Owner environments actually available and recorded for release.
 - Uncovered Chrome and Edge platform or accessibility-API combinations remain named platform coverage risks.
@@ -1446,7 +1447,7 @@ Residual risks describe evidence limits, not exceptions to conformance:
 - Automated scanners cannot establish complete WCAG 2.2 AA conformance or live-region usability.
 
 A residual risk MUST name its owner, impact, mitigation, evidence gap, and review date. It MUST NOT be used to close an
-observed A/AA failure, mark an untested criterion Pass, or imply non-macOS automation.
+observed A/AA failure, mark an untested criterion Pass, or imply Ubuntu QA replaces required macOS or manual evidence.
 
 ## Open Acceptance Dependencies (AC-019)
 

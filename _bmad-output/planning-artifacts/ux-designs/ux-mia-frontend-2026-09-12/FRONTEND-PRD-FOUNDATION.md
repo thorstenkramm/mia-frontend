@@ -659,7 +659,8 @@ supported only when manual release evidence records browser and OS versions, dat
 accessibility checks, and result. Product Owner Safari evidence is mandatory. Firefox is unsupported but not
 proactively blocked.
 
-Playwright E2E uses bundled Chromium on developer macOS. It does not replace required manual evidence for other
+Playwright E2E uses bundled Chromium on macOS for exact-revision epic/GitHub full-matrix evidence and on a private
+Ubuntu runner for asynchronous per-commit complete-matrix QA. Ubuntu cannot replace macOS or required manual evidence for other
 supported browser/OS pairings. The accessibility companion owns the evidence matrix.
 
 Intrinsic sizing, reflow, and system-font tolerance are required, but cross-platform rendering remains a documented
@@ -700,7 +701,7 @@ progress, and never fabricates a percentage.
 
 - Component tests cover authorization-driven visibility, field preservation, state rendering, and destructive friction.
 - Integration tests exercise implemented OpenAPI contracts with local backend or protocol fakes, never paid providers.
-- Playwright's bundled Chromium on developer macOS covers the four key flows `KF-1` through `KF-4` defined in
+- Playwright's bundled Chromium on macOS and private Ubuntu QA covers the four key flows `KF-1` through `KF-4` defined in
   `REQUIREMENT-FLOW-MATRIX.md`, plus the `CP-01` and `CP-02` authentication and shared-device recovery processes.
 - Playwright uses isolated contexts and reusable fixtures for multi-role and cross-device scenarios.
 - Accessibility automation and manual evidence follow the complete `ACCESSIBILITY-ACCEPTANCE.md` matrix.
@@ -830,7 +831,7 @@ dependencies, not permission to invent transport. The implemented OpenAPI contra
 
 - Age-adaptive student presentation based on optional `year_of_birth`; release one has no age differentiation.
 - Structured tutor-supplied answer choices using a future bounded trusted backend schema; release one has none.
-- Dark theme, phone-browser workflows, custom breakpoints, and automated non-macOS browser execution.
+- Dark theme, phone-browser workflows, and custom breakpoints.
 - Mascot implementation unless an age-inclusive, cross-locale concept is validated and approved.
 - UX refinement beyond functional consistency for administration and mentoring.
 

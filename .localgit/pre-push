@@ -1,0 +1,41 @@
+#!/usr/bin/env bash
+# Install in .git/hooks/pre-push (or chain from an existing hook).
+set -euo pipefail
+name=${1:-} url=${2:-}
+[[ -n "$name" && -n "$url" ]] || exit 2
+# Private QA destination is intentionally exempt. An alias alone is not an exemption.
+[[ "$url" != git@odroid:mia-frontend.git ]] || exit 0
+lower_url=$(printf '%s' "$url" | tr '[:upper:]' '[:lower:]')
+if [[ "$lower_url" =~ ^([^/@]+@)?([^/:]+):[^/] ]]; then
+  host=${BASH_REMATCH[2]}
+  ssh_destination=1
+elif [[ "$lower_url" =~ ^(ssh|git|https?|git\+ssh):// ]]; then
+  authority=${lower_url#*://}
+  authority=${authority%%/*}
+  host=${authority##*@}
+  host=${host%%:*}
+  ssh_destination=0
+  [[ "$lower_url" != ssh://* && "$lower_url" != git+ssh://* ]] || ssh_destination=1
+else
+  exit 0
+fi
+if [[ "$ssh_destination" == 1 && "$host" != github.com ]]; then
+  resolved=$(ssh -G "$host" 2>/dev/null | awk '$1 == "hostname" { print tolower($2); exit }') || resolved=''
+  [[ -z "$resolved" ]] || host=$resolved
+fi
+[[ "$host" == github.com ]] || exit 0
+root=$(git rev-parse --show-toplevel)
+evidence=${MIA_MACOS_EVIDENCE_HOME:-"$HOME/.local/share/mia-qa/macos"}
+while read -r local_ref local_oid remote_ref remote_oid; do
+  [[ "$local_oid" != 0000000000000000000000000000000000000000 ]] || continue
+  [[ -n "$local_ref" && "$remote_ref" == refs/* && "$remote_oid" =~ ^[0-9a-f]{40}$ ]] || exit 2
+  sha=$(git rev-parse --verify "$local_oid^{commit}") || { echo 'Cannot verify outgoing revision.' >&2; exit 1; }
+  receipt="$evidence/$sha.receipt"
+  if [[ ! -f "$receipt" ]] || ! grep -qx "revision=$sha" "$receipt" ||
+     ! grep -qx 'status=passed' "$receipt" || ! grep -qx 'mode=full' "$receipt" ||
+     ! grep -q '^platform=macOS-' "$receipt"; then
+    echo "GitHub push blocked: no exact-revision macOS full-matrix pass for $sha." >&2
+    echo "Run $root/scripts/verify-macos-e2e.sh $sha first." >&2
+    exit 1
+  fi
+done

@@ -1,5 +1,5 @@
 [workflow]
-persistent_facts = ["The read-only rules in .opencode/review-contract.md apply to review-layer agents only. Zero findings is valid."]
+persistent_facts = ["The read-only rules in .opencode/review-contract.md apply to review-layer agents only. Zero findings is valid.", "Epic-agent review and remote QA cadence follow .opencode/story-execution.md; QA pending is not done, and Ubuntu never substitutes for exact-revision macOS full-matrix evidence."]
 
 [[workflow.review_layers]]
 id = "blind-hunter"

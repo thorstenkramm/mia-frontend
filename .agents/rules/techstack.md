@@ -48,8 +48,9 @@ and are not part of the Tailwind Plus download.
 Release one supports current stable Chrome and Edge, and current stable Safari on macOS. Firefox is unsupported and is
 not proactively blocked.
 
-Automated E2E runs use only Playwright's bundled Chromium on developer macOS. Chrome, Edge, and Safari coverage is
-Product Owner manual evidence. Safari evidence is mandatory for release. See `.agents/rules/testing.md`.
+Automated E2E uses bundled Chromium for remote Ubuntu per-commit QA and exact-revision full-matrix macOS epic/GitHub
+gates. Chrome, Edge, and Safari coverage is Product Owner manual evidence; Safari evidence is mandatory for release.
+See `.agents/rules/testing.md`.
 
 ## Platforms
 

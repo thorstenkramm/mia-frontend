@@ -28,14 +28,22 @@ login/session reflow also retains pt-PT. All selected locales run all three text
 character-length-informed proxies do not measure rendered width. Mixed security/presentation journeys, all security
 and privacy assertions, every selected surface and actual browser zoom remain complete. Run `./run-all-tests.sh
 --full-matrix` at epic/release boundaries to exercise the original complete presentation matrices. Standalone
-Playwright defaults to full. CI selects story mode; nightly scheduling is deferred.
+Playwright defaults to full. CI selects the complete matrix. Nightly scheduling is deferred.
+
+Per-story local verification uses `./run-all-tests.sh --affected-e2e <explicit spec paths> [--grep PATTERN]`:
+all non-browser gate stages remain complete, and the selected Chromium tests run against the same build. Name the
+affected files and any grep before running; zero selected browser tests fails. Shared changes require broader affected
+coverage. The bare command retains its complete browser suite for deliberate full runs. Remote QA then runs the full
+presentation matrix against the committed SHA.
 
 ## Playwright scope is fixed
 
-Release-one automated E2E runs use **only Playwright's bundled Chromium on developer macOS**.
+Release-one automated E2E uses **Playwright's bundled Chromium**. A private Ubuntu runner performs complete-matrix
+per-commit QA asynchronously after review; a passing job is attributed only to its exact revision. Full-matrix macOS
+Chromium evidence for the exact revision is required before epic completion and before pushing to GitHub. Ubuntu QA
+does not replace macOS or manual release evidence. A missing, failed, or canceled remote job is not a pass.
 
-The project must not add or claim required non-macOS automation, Playwright Firefox, Playwright WebKit, Edge-channel
-automation, Cypress, or Electron.
+Do not add Playwright Firefox, Playwright WebKit, Edge-channel automation, Cypress, or Electron.
 
 Chrome, Edge, and Safari support comes from repeatable Product Owner manual evidence on actual environments. Safari
 evidence on macOS is mandatory for release. Firefox is unsupported and not proactively blocked.

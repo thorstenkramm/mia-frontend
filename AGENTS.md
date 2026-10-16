@@ -194,18 +194,25 @@ verification was not applicable rather than inventing project setup.
 
 ### Full project check
 
-`./run-all-tests.sh` is the complete suite and the authoritative gate. The commands above are the fast subset for
-iterating; they are not sufficient on their own, because the script also enforces checks that no npm script covers.
-Run it before reporting work complete whenever a change touches application source, tests, executable scripts,
-build/test configuration, or dependencies.
+`./run-all-tests.sh` is the complete local suite and remains available unchanged. For per-story changes to application
+source, tests, scripts, build/test configuration or dependencies, run
+`./run-all-tests.sh --affected-e2e e2e/NAME.spec.ts [e2e/OTHER.spec.ts ...] [--grep PATTERN]` before local verification.
+The worker names affected specs (and optional grep) explicitly; there is no inferred or zero-test selection. This mode
+runs every non-browser gate stage and the selected browser tests against its one build, but **not** the complete browser
+suite. Record its selected count and command. Shared changes require a broader affected selection. The commands above
+are a fast subset for iteration, not this local verification. After reviewed story changes are committed, remote
+complete-matrix Ubuntu QA runs against the immutable commit and remains independently pending until its result is known.
+An epic or GitHub push additionally requires successful full-matrix macOS E2E for the exact outgoing revision. Ubuntu
+QA cannot substitute for macOS evidence; neither replaces Safari/manual release evidence. Remote unavailability does
+not block local editing or tests. See `.opencode/story-execution.md` and `README.md` for dispatch and status.
 
 Documentation-only changes, including Markdown, agent instructions, and planning or sprint-tracking files, require
 only applicable Markdown lint and planning-consistency checks. Respect the Markdown rule's directory exemptions.
 Do not run application tests or builds for these changes. Updating verification notes after a completed full gate
 does not require rerunning that gate unless executable code, configuration, or dependencies also changed.
 
-GitHub Actions (`.github/workflows/checks.yml`) mirrors the gate stage by stage, but only after a push. It does not
-replace running the script before reporting work complete. On the backend, skipping the equivalent script is how the
+GitHub Actions (`.github/workflows/checks.yml`) mirrors the complete gate stage by stage, but only after a push. It does
+not replace local affected verification. On the backend, skipping the equivalent script is how the
 duplication gate stayed red across four consecutive stories. When a gate stage changes, update `run-all-tests.sh` and
 the workflow together.
 

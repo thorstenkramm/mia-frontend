@@ -1,5 +1,6 @@
 [workflow]
 persistent_facts = [
+  "Epic-agent execution follows .opencode/story-execution.md: affected local checks, post-commit immutable Ubuntu QA pending, and exact-revision macOS full-matrix before epic completion/GitHub push. Do not mark QA pending done.",
   "The read-only rules in .opencode/review-contract.md apply to review-layer agents only, not the implementing workflow. Zero findings is valid.",
   "Owner-approved 2026-10-06: preserve correct work; propose a local root-cause repair before considering re-derivation. A rewrite needs a concrete structural reason. Do not invent intent gaps from optional improvements.",
 ]

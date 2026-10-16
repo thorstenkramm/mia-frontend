@@ -10,6 +10,8 @@
 #   - ready-for-dev: Story file created, ready for development
 #   - in-progress: Developer actively working on implementation
 #   - review: Implementation complete, ready for review
+#   - qa-pending: Reviewed/verified commit awaiting exact-revision private QA; not done
+#   - qa-failed: Private QA failed, canceled or missing; repair requires a new verified commit
 #   - done: Story completed
 
 # Retrospective Status:
@@ -25,7 +27,8 @@
 # ===============
 # - Epic transitions to 'in-progress' automatically when its first story starts (via build's sprint sync)
 # - Stories can be worked in parallel if team capacity allows
-# - Developer typically creates the next story after the previous one is 'done' to incorporate learnings
+# - The next independent story may begin after the previous reviewed/verified commit is QA pending;
+#   dependent work accounts for pending or failed QA. Only a matching passed result permits 'done'.
 # - Dev moves story to 'review', then runs code-review (fresh context, different LLM recommended)
 # - Retrospective appends its action items to action_items; the status view surfaces open ones
 # - Tutoring-first replan 2026-10-06: execute Epics 2 -> 3 -> 4 -> 5 -> 6.

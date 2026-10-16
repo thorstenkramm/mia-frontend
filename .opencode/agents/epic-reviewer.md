@@ -36,7 +36,8 @@ permissions:
 
 Read `.opencode/story-execution.md`, the supplied current spec, scoped diff (including new files), relevant contracts and
 check evidence. Review one story directly. No nested workflows, skills, writes, subagents or duplicate full suite.
-The only permitted shell command is Pushover notification delivery; never run shell inspection or tests.
+This reviewer has read tools only. Assess the worker's affected-test selection and, when needed, request a precise
+reproduction for the worker to run. Never run shell checks, the full gate, or modify files.
 If the solver did not provide a readable complete scoped diff and manifest, request them; never infer a clean review.
 Read changed files and adjacent responsibilities independently of the worker's conclusions. Do not review unrelated
 pre-existing changes. Check tracker/spec consistency at closure without expanding into other stories.

@@ -1,6 +1,6 @@
 # Lean story execution
 
-This protocol is the single execution contract shared by the three epic agents. The current `epics.md` and sprint tracker
+This protocol is the single execution contract shared by the epic agents. The current `epics.md` and sprint tracker
 own story identity and priority; binding product companions own behavior. This protocol never waives product requirements.
 Use these agents instead of nesting complete BMAD build/review loops. Standalone BMAD skills remain separately available.
 
@@ -64,20 +64,32 @@ the parent/operator must handle observed runtime failures under the interruption
 
 1. Solver selects `next_story` or explicit user selection. Worker prepares only that story's detailed spec and prerequisites.
 2. Solver records ready decisions, sets in-progress, dispatches worker implementation and obtains the scoped diff/manifest.
-3. Independent reviewer evaluates the spec, actual diff and evidence once. No mandatory extra review lenses.
+3. Independent reviewer evaluates the spec, actual diff and affected-check selection once. Reviewer may request and
+   run focused verification where permitted; no mandatory extra review lenses.
 4. Solver groups genuine findings by root cause; same worker repairs, same reviewer checks the affected boundaries.
    At most two unsuccessful repair batches per blocker, then checkpoint/escalate. Do not auto-accept blockers.
-5. Worker runs one authoritative final verification for the final input fingerprint. Evidence is reusable while those
-   inputs are unchanged. If fixes change inputs, targeted checks precede a new final gate. No simultaneous checks.
-6. On successful review and verification, solver prepares a `commit-pending` checkpoint. If committing is authorized,
-   solver sets the story done in the working tracker, worker commits that tracker/spec plus story files as one change,
+5. Worker runs one local affected verification (`./run-all-tests.sh --affected-e2e` with explicit selected specs and
+   optional grep) for the final input fingerprint. Every non-browser stage stays complete; the selected browser count
+   and command are recorded. Evidence is reusable while inputs are unchanged. If fixes change inputs, affected checks
+   precede a new local verification. No simultaneous checks.
+6. On successful review and affected local verification, solver prepares a `commit-pending` checkpoint. If committing
+   is authorized, solver sets the story QA pending in the working tracker, worker commits that tracker/spec plus story files,
    and returns the full SHA. Until the commit is confirmed the execution state remains commit-pending and no next story
    starts. On known commit failure restore story review status. On uncertain outcome inspect log/diff before retry.
-   On resume reconcile a done tracker against the pending commit and actual history, never treating it alone as closure.
+   On resume reconcile a QA-pending tracker against the pending commit and actual history, never treating it alone as closure.
    If commits were not authorized, leave story review and report verified/uncommitted instead of asking repeatedly.
-7. After commit confirmation, solver writes committed SHA to the operational checkpoint and updates `next_story` to the
-   next unfinished story within the approved batch/milestone. Tracking-only updates need planning consistency, no full gate.
-   Checkpoint bookkeeping may remain dirty; it is not application work or a reason to stage unrelated files.
+7. After commit confirmation, solver records the exact SHA as QA pending and dispatches the read-only `epic-qa` agent
+   to enqueue complete-matrix Ubuntu E2E. Only a matching passed remote result resolves QA pending; failed, canceled,
+   or missing receipts require repair, a new reviewed and verified commit, and a new job. After matching success the
+   solver marks the story done with its QA revision. The next independent story may start while QA is pending: update
+   `next_story` after confirmed commit and account for failures in dependent work. Record remote queue and execution
+   times, environment, checks and skipped inputs.
+   Tracking-only updates need planning consistency, no full gate. Checkpoint bookkeeping may remain dirty; it is not
+   application work or a reason to stage unrelated files.
+8. Before marking an epic complete, have the worker run `scripts/verify-macos-e2e.sh <exact-committed-SHA>` and inspect
+   its matching pass receipt; a successful Ubuntu job cannot substitute. The local pre-push guard enforces the same
+   exact-revision macOS Chromium full matrix for normal GitHub pushes, including tags and direct URLs. Manual Safari
+   and other release-browser evidence remains separately required. A GitHub push is not evidence that its CI passed.
 
 ## Persistent checkpoint and interruption recovery
 
@@ -85,7 +97,7 @@ Solver owns `_bmad-output/implementation-artifacts/execution/<full-story-key>.ya
 
 ```yaml
 story: <full-story-key>
-phase: prepare # prepare | implement | review | fix | verify | commit-pending | complete | blocked
+phase: prepare # prepare | implement | review | fix | verify | commit-pending | qa-pending | complete | blocked
 spec: <path>
 baseline_commit: <full-sha>
 pre_existing_changes: []
@@ -98,6 +110,8 @@ repair_queue: [] # finding, root cause, disposition, evidence
 last_verification: null # input fingerprint, commands, pass/fail/skip, log paths
 resume_attempts: 0
 commit: null # intended message then confirmed full SHA
+qa: null # exact commit, queued/start/end, environment, selected checks, result and log path; pending is not complete
+macos_e2e: null # exact revision, complete-matrix pass receipt before epic completion or GitHub push
 next_action: <one concrete action>
 blocked_on: null
 ```
@@ -153,10 +167,12 @@ the model cannot observe an undelivered retry event. Do not claim autonomous eve
 Prepare checks tools once per batch. Install dependencies only when missing or lockfile changes; install Chromium before
 the first browser run. Use local cached tooling where available; network failures are infrastructure failures, not product
 decisions. Do not kill an unknown preview server to free a port. Report it or use a deliberately configured isolated port.
-The reviewer may run only the Pushover notification command, not inspection/test shell commands: the worker supplies
-scoped diff and reproducible check evidence. This is read-only code isolation,
-not a claim that worker evidence is independently executed. The reviewer must inspect test quality and missing boundaries.
+The reviewer has read tools only and cannot run shell checks. It assesses the explicit affected-test selection and
+requests a precise worker reproduction if evidence is missing. The worker executes it sequentially and returns the
+result for review. No reviewer runs the full gate.
 
-`AGENTS.md` owns the gate. Documentation-only changes use applicable lint/consistency checks; application changes get the
-final full gate. Build once inside that gate, reuse it only within the same invocation, and preserve self-contained public
-standalone commands. Skipped tooling stays explicit; no model or coordinator can convert it into a pass.
+`AGENTS.md` owns the local gate. Documentation-only changes use applicable lint/consistency checks; application changes
+get the final affected-local mode (complete non-browser stages plus explicitly selected E2E) before commit. The bare
+complete gate remains available. Build once inside a gate invocation, and preserve self-contained public standalone
+commands. Skipped tooling stays explicit; no model or
+coordinator can convert it into a pass. Remote QA is independent and asynchronous, never a local gate replacement.

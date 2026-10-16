@@ -1,6 +1,7 @@
 name: Checks
 
-# Mirrors ./run-all-tests.sh stage by stage. Keep both in sync when a stage changes.
+# Mirrors the complete ./run-all-tests.sh stages. --affected-e2e is local per-story only;
+# CI keeps the complete macOS presentation matrix. Keep stages in sync.
 
 on:
   push:
@@ -50,7 +51,7 @@ jobs:
 
   build-and-browser:
     name: Build, bundle budget, and E2E
-    # Automated E2E runs only on bundled Chromium on macOS (.agents/rules/testing.md).
+    # Keep the macOS lane; remote Ubuntu QA cannot substitute for it.
     runs-on: macos-latest
     timeout-minutes: 60
     steps:
@@ -69,7 +70,7 @@ jobs:
         run: npm run check:bundle-size
       - name: Owned E2E against this build
         env:
-          MIA_PRESENTATION_MATRIX: story # Same selection as bare local gate.
+          MIA_PRESENTATION_MATRIX: full # Exact GitHub revision, complete matrix.
         run: npm run check:browser-gate:built
 
   duplication:

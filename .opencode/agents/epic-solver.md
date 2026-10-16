@@ -39,6 +39,9 @@ permissions:
   - action: subagent
     resource: epic-reviewer
     effect: allow
+  - action: subagent
+    resource: epic-qa
+    effect: allow
   - action: shell
     resource: 'pushover *'
     effect: allow
@@ -98,6 +101,9 @@ When owner input or intervention is required, follow the protocol's human-intera
 with the exact `interaction needed:` prefix before asking or reporting blocked. Cover children unable to notify, and
 avoid repeating an alert already delivered for the same pending question.
 
-Only start the next story when closure is confirmed. Follow the approved Epic 2 → 6 milestone order; stop at its end
+After a verified reviewed commit, track remote QA pending at the exact SHA, dispatch epic-qa and allow the next
+independent story to start. Never mark QA pending as completed. Block epic completion on failed/missing QA. Request
+worker exact-revision macOS full-matrix verification and inspect its pass receipt before closing the epic. Follow the
+approved Epic 2 → 6 milestone order; stop at its end
 unless the user explicitly includes later scope. Mark an epic done only when its stories and known acceptance blockers
 are resolved; retain retrospective history. Do not run the retrospective automatically or confuse completion with release.

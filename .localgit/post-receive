@@ -1,0 +1,44 @@
+#!/usr/bin/env bash
+# Install in the private bare repository's hooks directory; never on GitHub.
+set -euo pipefail
+umask 077
+repo=$(git rev-parse --absolute-git-dir)
+home=${MIA_QA_HOME:-"$HOME/.local/share/mia-qa"}
+mkdir -p "$home/queue" "$home/results"
+while read -r old sha ref; do
+  [[ "$sha" =~ ^[0-9a-f]{40}$ && "$ref" =~ ^refs/qa/commits/([0-9a-f]{40})$ ]] || continue
+  [[ "$sha" == "${BASH_REMATCH[1]}" && "$old" == 0000000000000000000000000000000000000000 ]] || continue
+  [[ "$(git --git-dir="$repo" cat-file -t "$sha")" == commit ]] || continue
+  (
+    flock -x 9
+    if [[ -e "$home/results/$sha.receipt" ]]; then exit 0; fi
+    seq=0
+    [[ ! -f "$home/sequence" ]] || read -r seq < "$home/sequence"
+    seq=$((seq + 1))
+    printf '%s\n' "$seq" > "$home/sequence.tmp"
+    mv "$home/sequence.tmp" "$home/sequence"
+    job=$(printf '%012d' "$seq")
+    printf '%s %s\n' "$sha" "$ref" > "$home/queue/$job.tmp"
+    mv "$home/queue/$job.tmp" "$home/queue/$job"
+    printf 'revision=%s\nref=%s\njob=%s\nqueued=%s\nqueued_epoch=%s\n' \
+      "$sha" "$ref" "$job" "$(date -u +%FT%TZ)" "$(date +%s)" > "$home/results/$sha.receipt.tmp"
+    mv "$home/results/$sha.receipt.tmp" "$home/results/$sha.receipt"
+    printf 'status=queued\nrevision=%s\njob=%s\n' "$sha" "$job" > "$home/results/$sha.status.tmp"
+    mv "$home/results/$sha.status.tmp" "$home/results/$sha.status"
+  ) 9>"$home/queue.lock"
+  job=$(sed -n 's/^job=//p' "$home/results/$sha.receipt")
+  # atd survives SSH logout. A failed submission cannot undo Git acceptance:
+  # the client checks the receipt AND status rather than trusting push output.
+  if ! printf '%q %q --drain\n' "$repo/hooks/qa-worker.sh" "$repo" | at now 2>/dev/null; then
+    (
+      flock -x 9
+      if [[ -f "$home/queue/$job" ]] && grep -qx 'status=queued' "$home/results/$sha.status"; then
+        rm -- "$home/queue/$job"
+        printf 'status=failed\nrevision=%s\nreason=dispatch-failed\n' "$sha" > "$home/results/$sha.status.tmp"
+        mv "$home/results/$sha.status.tmp" "$home/results/$sha.status"
+      fi
+    ) 9>"$home/queue.lock"
+    echo 'Private QA dispatch failed; inspect status and re-dispatch.' >&2
+    exit 1
+  fi
+done

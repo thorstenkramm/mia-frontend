@@ -1,0 +1,15 @@
+#!/usr/bin/env bash
+# Enforce immutable SHA-named private QA refs before the ref is accepted.
+set -euo pipefail
+[[ $# == 3 ]] || exit 2
+ref=$1 old=$2 new=$3
+case "$ref" in
+  refs/qa/commits/*)
+    [[ "$ref" == "refs/qa/commits/$new" && "$new" =~ ^[0-9a-f]{40}$ &&
+       "$old" == 0000000000000000000000000000000000000000 ]] || {
+      echo 'Private QA refs are immutable SHA-named commits.' >&2
+      exit 1
+    }
+    [[ "$(git cat-file -t "$new")" == commit ]]
+    ;;
+esac
