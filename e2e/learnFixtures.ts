@@ -5,7 +5,7 @@ import {
   learnMaterialRow,
 } from "../test/learnFixtures";
 import { routeBackend } from "./routeFixtures";
-import { routeSecretFixture } from "./routeSecretHygiene";
+import { routeSecretFixture } from "./routeTestFixtures";
 
 const json = (route: Route, body: unknown, status = 200) =>
   route.fulfill({

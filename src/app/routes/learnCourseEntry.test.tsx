@@ -16,10 +16,7 @@ import {
   learnMaterialRow,
 } from "../../../test/learnFixtures";
 import { authenticatedSessionResponse } from "../../../test/mfaFixtures";
-import {
-  courseUnitCheckpoint,
-  courseUnitFixture,
-} from "../../../scripts/secret-hygiene-evidence";
+import { courseUnitFixture } from "../../../test/courseUnitFixture";
 import { App } from "../App";
 import { AnnouncementProvider } from "../../platform/announcer/AnnouncementRegion";
 import { MiaIntlProvider } from "../../platform/i18n/MiaIntlProvider";
@@ -198,7 +195,6 @@ it("Learn ordered admission withholds resource and metadata until capability and
         !document.body.textContent?.includes(seed.rawError) &&
         screen.queryByRole("button", { name: /Start/u }) === null,
     ).toBe(true);
-    courseUnitCheckpoint("learn-admitted");
   } finally {
     releaseCapabilities();
     releaseCourse();
@@ -226,7 +222,6 @@ it("Learn joined discovery never unions staff scope and empty success is not a f
       screen.queryByText("No joined active courses were found.") !== null &&
       !document.body.textContent?.includes(seed.name),
   ).toBe(true);
-  courseUnitCheckpoint("learn-list");
 });
 
 it("Learn revoked scope and inactive or hidden courses use one neutral primary presentation", async () => {
@@ -274,7 +269,6 @@ it("Learn revoked scope and inactive or hidden courses use one neutral primary p
     view.unmount();
   }
   expect(control.courseReads).toBe(4);
-  courseUnitCheckpoint("learn-hidden");
 });
 
 it("Learn metadata pagination is explicit and dependent denial clears course and entire shell", async () => {
@@ -312,7 +306,6 @@ it("Learn metadata pagination is explicit and dependent denial clears course and
       screen.queryByRole("navigation", { name: "Application navigation" }) ===
         null,
   ).toBe(true);
-  courseUnitCheckpoint("learn-page-denial");
 });
 
 it("Learn lifecycle fences delayed course truth and return issues no read until explicit Refresh", async () => {
@@ -349,7 +342,6 @@ it("Learn lifecycle fences delayed course truth and return issues no read until 
         control.materialReads === 0 &&
         control.capabilityReads === 2,
     ).toBe(true);
-    courseUnitCheckpoint("learn-lifecycle");
   } finally {
     release();
   }
@@ -382,5 +374,4 @@ it("Learn fresh revalidation rediscovers membership and never interprets read fa
       control.courseReads === 2 &&
       control.materialReads === 1,
   ).toBe(true);
-  courseUnitCheckpoint("learn-revalidation");
 });

@@ -10,6 +10,19 @@
 #
 set -euo pipefail
 
+if [[ $# -gt 1 || ( $# -eq 1 && "$1" != "--full-matrix" ) ]]; then
+  echo 'Usage: ./run-all-tests.sh [--full-matrix]' >&2
+  exit 2
+fi
+mode=story
+if [[ $# -eq 1 ]]; then mode=full; fi
+if [[ -n "${MIA_PRESENTATION_MATRIX+x}" && "${MIA_PRESENTATION_MATRIX}" != "$mode" ]]; then
+  echo 'Conflicting presentation matrix mode.' >&2
+  exit 2
+fi
+export MIA_PRESENTATION_MATRIX="$mode" MIA_AUTHORITATIVE_GATE=1
+echo "GATE presentation matrix: $mode."
+
 skipped=()
 
 # Content-free per-stage timing (measurement for the test-suite speedup plan in
@@ -46,18 +59,11 @@ else
     npm ci
   fi
 
-  if has_script "test:hygiene-runner"; then
-    time_stage "npm:test:hygiene-runner"
-    npm run test:hygiene-runner
+  if has_script "test:preview-runner"; then
+    time_stage "npm:test:preview-runner"
+    npm run test:preview-runner
   else
-    skip "npm run test:hygiene-runner (script not defined)"
-  fi
-
-  if has_script "check:hygiene-inventory"; then
-    time_stage "npm:check:hygiene-inventory"
-    npm run check:hygiene-inventory
-  else
-    skip "npm run check:hygiene-inventory (script not defined)"
+    skip "npm run test:preview-runner (script not defined)"
   fi
 
   built=0
@@ -74,7 +80,7 @@ else
 
   # End-to-end tests need browsers installed; keep them a separate, explicit component.
   if [[ "$built" -eq 0 ]]; then
-    skip "E2E and secret hygiene (no build produced by this gate)"
+    skip "E2E (no build produced by this gate)"
   else
     if has_script "check:browser-gate:built"; then
       echo "Running npm run check:browser-gate:built (using this gate's build) ..."

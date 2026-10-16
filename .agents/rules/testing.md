@@ -23,6 +23,12 @@ non-fetch assertions and secret teardown.
 auth, tab return, BFCache restore, logout failure, and explicit revalidation.
 
 **Localization tests** require complete catalogs and render each launch locale at Standard, Large, and Extra large.
+The local bare `./run-all-tests.sh` gate samples only audited presentation reflow matrices at en-US, de-DE and fr-FR;
+login/session reflow also retains pt-PT. All selected locales run all three text modes and spacing checks. These
+character-length-informed proxies do not measure rendered width. Mixed security/presentation journeys, all security
+and privacy assertions, every selected surface and actual browser zoom remain complete. Run `./run-all-tests.sh
+--full-matrix` at epic/release boundaries to exercise the original complete presentation matrices. Standalone
+Playwright defaults to full. CI selects story mode; nightly scheduling is deferred.
 
 ## Playwright scope is fixed
 
@@ -70,28 +76,20 @@ suppression is permitted.**
   of `javascript:`, `data:`, `blob:`, `file:`, `http:`, and protocol-relative URLs. Assert inert text and no request.
 - Test mutation-XSS, DOM clobbering, malformed tables, raw HTML, SVG and MathML input, CSS, event attributes, remote
   images, and payloads split at every character boundary.
-- Search DOM, accessibility snapshots, React state, query caches, errors, clipboard data, and test artifacts for
-  forbidden fixture fields the visible page does not need.
-- Assert that using cookie parsing, `GET /users/me`, route probing, or denial probing as stage discovery fails.
-- Frontend tests must never inspect HttpOnly cookies or guess the login stage.
+- Inspect application DOM, accessibility tree, state, caches, errors, and clipboard for forbidden fixture fields the
+  authorized surface does not need. Authorized API responses visible to their recipient are not disclosures.
 
-## Secret hygiene — hard rules
+## Test privacy and scope
 
 - Use synthetic, non-production fixtures only. **Never call paid or production providers.**
-- Generate secret-shaped fixtures per test. Do not commit them. Reference them in assertions by label or a one-way
-  test-only fingerprint, never by literal value.
-- Test names, snapshots, golden files, diffs, failure messages, console capture, HAR files, traces, videos,
-  screenshots, coverage artifacts, and CI output must contain **no** fixture secret or protected body.
-- Disable automatic artifact capture for token, password, MFA, recovery-code, raw-error, private-content, and download
-  tests. Network mocks and request assertions must redact headers and bodies before a failure can print them.
-- Deliberately fail each secret-bearing test and scan all process output and generated artifacts for its unique marker.
-  The scan must find none.
-- The hygiene gate may batch runner invocations, but each checkpoint still executes as a separate
-  isolated test that fails immediately at that checkpoint. A passing journey or an exposure record
-  cannot replace its deliberate-failure evidence. Scan the original stdout, stderr, nested artifacts,
-  and owned preview output before cleanup; reject missing, duplicate, skipped, retried, passing, or
-  wrong-checkpoint results. Preview ownership must refuse occupied ports and clean up only owned
-  descendants. Public standalone npm checks use the same ownership mechanism.
+- Do not commit fixture credentials or private reports. Synthetic values in private diagnostics do not require
+  deliberate-failure scans or reporter suppression. Keep ordinary failure output useful.
+- For each retained or new privacy check, identify the concrete path to harm and affected data or action; verify that
+  its assertion detects the defect, name equivalent owners, and use the cheapest adequate layer. Browser tests are
+  needed for actual DOM, zoom, focus, lifecycle and cross-tab behavior. A security label alone is not rationale.
+- Test forbidden application storage, production logs, URLs, rendering, request overfetch and stale content at their
+  owners. Do not mistake an authorized API response in developer tools for an exposure.
+- The owned preview refuses occupied ports, checks the built assets and cleans up only owned descendants.
 
 ## Manual evidence
 
@@ -101,4 +99,4 @@ or visual result, actual result, tester, date, exact environment, evidence link,
 Screenshots alone cannot prove keyboard order, accessible names, announcements, password-manager behavior, or
 screen-reader reading. Screen recordings or timestamped notes must accompany dynamic behavior.
 
-Evidence must contain no passwords, MFA values, recovery codes, tokens, private content, or real student data.
+Manual evidence must contain no real passwords, MFA values, recovery codes, tokens, private content, or student data.

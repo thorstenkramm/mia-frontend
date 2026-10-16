@@ -13,10 +13,7 @@ import { http, HttpResponse } from "msw";
 import { afterAll, afterEach, beforeAll, beforeEach, expect, it } from "vitest";
 import { server } from "../../../test/server";
 import { authenticatedSessionResponse } from "../../../test/mfaFixtures";
-import {
-  courseUnitFixture,
-  courseUnitCheckpoint,
-} from "../../../scripts/secret-hygiene-evidence";
+import { courseUnitFixture } from "../../../test/courseUnitFixture";
 import { App } from "../App";
 import { AnnouncementProvider } from "../../platform/announcer/AnnouncementRegion";
 import { MiaIntlProvider } from "../../platform/i18n/MiaIntlProvider";
@@ -312,7 +309,6 @@ it("material deletion new attempt retires rejection and stopped late success sta
       ).toBe(true),
     );
     expect(state.deletes === 1 && state.fileVisible).toBe(true);
-    courseUnitCheckpoint("material-delete-prior-rejected");
     await user.click(
       screen.getByRole("button", { name: "Delete this persisted file" }),
     );
@@ -323,7 +319,6 @@ it("material deletion new attempt retires rejection and stopped late success sta
         screen.queryByRole("button", { name: "Technical details" }) === null &&
         state.deletes === 1,
     ).toBe(true);
-    courseUnitCheckpoint("material-delete-new-chosen");
     await user.click(
       within(screen.getByRole("dialog")).getByRole("button", {
         name: "Delete this persisted file",
@@ -347,7 +342,6 @@ it("material deletion new attempt retires rejection and stopped late success sta
         .length === 1 &&
       state.deletes === 2;
     await waitFor(() => expect(unknownOnly()).toBe(true));
-    courseUnitCheckpoint("material-delete-new-stopped");
     const reads = state.fileReads;
     await act(async () => {
       release();
@@ -361,7 +355,6 @@ it("material deletion new attempt retires rejection and stopped late success sta
         message.startsWith("File deletion is unconfirmed."),
       ).length === 1,
     ).toBe(true);
-    courseUnitCheckpoint("material-delete-new-late-success");
   } finally {
     release();
     speech.close();
@@ -409,7 +402,6 @@ for (const path of ["material", "files"] as const) {
             ?.textContent?.includes("This operation was not accepted") &&
           !success()?.includes(fixture.rawError),
       ).toBe(true);
-      courseUnitCheckpoint(`material-deleted-read-failed-${path}-${outcome}`);
       state.readFailure = null;
       await user.click(
         screen.getByRole("button", {
@@ -430,9 +422,6 @@ for (const path of ["material", "files"] as const) {
           }).length === 0 &&
           success() === "The selected persisted file was deleted.",
       ).toBe(true);
-      courseUnitCheckpoint(
-        `material-deleted-read-recovered-${path}-${outcome}`,
-      );
     });
   }
 }
@@ -483,7 +472,6 @@ it.each(["unknown", "rejected"] as const)(
             ?.textContent?.includes("This operation was not accepted.") ===
             false,
         ).toBe(true);
-      courseUnitCheckpoint(`material-create-feedback-${outcome}`);
       view.repaint();
       await act(async () => {
         await Promise.resolve();
@@ -507,7 +495,6 @@ it.each(["unknown", "rejected"] as const)(
         !speech.current().includes(expected) &&
           !speech.current().includes(fixture.rawError),
       ).toBe(true);
-      courseUnitCheckpoint(`material-create-retired-${outcome}`);
     } finally {
       speech.close();
     }
@@ -562,7 +549,6 @@ it.each(["unknown", "rejected"] as const)(
             "The selected persisted file was deleted.",
           ) === false,
       ).toBe(true);
-      courseUnitCheckpoint(`material-delete-feedback-${outcome}`);
       view.repaint();
       await act(async () => {
         await Promise.resolve();
@@ -576,7 +562,6 @@ it.each(["unknown", "rejected"] as const)(
         !speech.current().includes(expected) &&
           !speech.current().includes(fixture.rawError),
       ).toBe(true);
-      courseUnitCheckpoint(`material-delete-retired-${outcome}`);
     } finally {
       speech.close();
     }
@@ -612,14 +597,12 @@ it("material name validation exposes required corrective text focus and correcti
         document.getElementById("material-name-error")?.textContent === reason,
     ).toBe(true);
   }
-  courseUnitCheckpoint("material-validation-long");
   fireEvent.change(input, { target: { value: fixture.name } });
   expect(
     input.getAttribute("aria-invalid") === "false" &&
       document.getElementById("material-name-error") === null &&
       input.getAttribute("aria-describedby") === "material-name-help",
   ).toBe(true);
-  courseUnitCheckpoint("material-validation-corrected");
   await user.click(
     screen.getByRole("button", { name: "Create course material" }),
   );
@@ -642,7 +625,6 @@ it("material routes gate private dependent files before protected mount", async 
     state.fileReads === 0 &&
       screen.queryByLabelText("Select source files") === null,
   ).toBe(true);
-  courseUnitCheckpoint("material-admission");
 });
 it("material native selection preserves duplicate rows and dirty Stay then discards on departure", async () => {
   const { fixture } = backend();
@@ -656,7 +638,6 @@ it("material native selection preserves duplicate rows and dirty Stay then disca
   expect(
     screen.getAllByRole("button", { name: "Remove local row" }).length === 2,
   ).toBe(true);
-  courseUnitCheckpoint("material-input");
   await user.click(screen.getByRole("link", { name: "Course material" }));
   await user.click(screen.getByRole("button", { name: "Stay on this page" }));
   expect(document.activeElement === input).toBe(true);
@@ -665,7 +646,6 @@ it("material native selection preserves duplicate rows and dirty Stay then disca
   await waitFor(() =>
     expect(screen.queryByLabelText("Select source files") === null).toBe(true),
   );
-  courseUnitCheckpoint("material-departed");
 });
 it("material unconfirmed creation freezes repeat dispatch and permits explicit abandonment", async () => {
   const { fixture, state } = backend();
@@ -685,5 +665,4 @@ it("material unconfirmed creation freezes repeat dispatch and permits explicit a
         .getByRole("button", { name: "Create course material" })
         .getAttribute("aria-disabled") === "true",
   ).toBe(true);
-  courseUnitCheckpoint("material-create-unknown");
 });

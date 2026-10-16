@@ -1,6 +1,6 @@
 import type { Page, Route } from "@playwright/test";
 import { routeBackend } from "./routeFixtures";
-import { routeSecretFixture } from "./routeSecretHygiene";
+import { routeSecretFixture } from "./routeTestFixtures";
 
 const mediaType = "application/vnd.api+json";
 const actions = [

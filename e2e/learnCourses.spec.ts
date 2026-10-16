@@ -2,10 +2,7 @@ import AxeBuilder from "@axe-core/playwright";
 import { expect, test, type Page } from "@playwright/test";
 import { learnBackend } from "./learnFixtures";
 import { atBrowserZoom, protectedJourney } from "./routeFixtures";
-import {
-  routeHygieneCheckpoint,
-  routeSecretFixture,
-} from "./routeSecretHygiene";
+import { routeSecretFixture } from "./routeTestFixtures";
 
 test.use({ trace: "off", video: "off", screenshot: "off" });
 const list = "/learn/courses",
@@ -49,6 +46,22 @@ async function minimized(page: Page) {
     !tree.includes(fixture.teachingText) && !tree.includes(fixture.rawError),
   ).toBe(true);
 }
+async function metadataOnly(page: Page) {
+  const fixture = routeSecretFixture(page);
+  await expect(page.locator("main")).toContainText(fixture.courseName);
+  expect(
+    (await page.locator("main").textContent())?.includes(fixture.teachingText),
+  ).toBe(false);
+  await minimized(page);
+}
+async function hiddenWithoutTable(page: Page) {
+  expect(
+    (await page.locator("main").textContent())?.includes(
+      routeSecretFixture(page).courseName,
+    ),
+  ).toBe(false);
+  await expect(page.locator("main table")).toHaveCount(0);
+}
 async function noScroll(page: Page) {
   expect(
     await page.evaluate(
@@ -83,12 +96,11 @@ test(
         (await page.locator('main a[href^="https:"]').count()) === 0 &&
         control.forbidden === 0,
     ).toBe(true);
-    await minimized(page);
-    await routeHygieneCheckpoint(page, "learn-metadata");
+    await metadataOnly(page);
     await page.reload();
     await ready(page, "Course");
     await expect.poll(() => control.materialReads === 2).toBe(true);
-    await minimized(page);
+    await metadataOnly(page);
   }),
 );
 
@@ -133,7 +145,7 @@ test(
       ).toBe(true);
     }
     expect(control.courseReads === 4).toBe(true);
-    await routeHygieneCheckpoint(page, "learn-hidden");
+    await hiddenWithoutTable(page);
   }),
 );
 
@@ -179,7 +191,7 @@ test(
           control.materialReads === 0 &&
           control.capabilities === 2,
       ).toBe(true);
-      await routeHygieneCheckpoint(page, "learn-hidden");
+      await hiddenWithoutTable(page);
     } finally {
       release();
     }
@@ -226,20 +238,21 @@ test(
           .locator("main h2[tabindex]")
           .evaluate((node) => document.activeElement === node)),
     ).toBe(true);
-    await minimized(page);
-    await routeHygieneCheckpoint(page, "learn-metadata");
+    await metadataOnly(page);
     control.materialDeny = true;
     await page.getByRole("button", { name: "Previous", exact: true }).click();
     await ready(page, "Course access unavailable");
     await page
       .getByRole("button", { name: "Technical details", exact: true })
       .click();
+    await expect(page.locator("main pre")).toContainText(
+      routeSecretFixture(page).rawError,
+    );
     expect(
       !(await page.locator("main").textContent())?.includes(
         routeSecretFixture(page).courseName,
       ),
     ).toBe(true);
-    await routeHygieneCheckpoint(page, "learn-error");
   }),
 );
 
@@ -285,11 +298,10 @@ test(
                   : "20px"),
           ).toBe(true);
           await noScroll(page);
-          await minimized(page);
+          await metadataOnly(page);
         }
       }
     }
-    await routeHygieneCheckpoint(page, "learn-metadata");
   }),
 );
 

@@ -10,10 +10,7 @@ import userEvent from "@testing-library/user-event";
 import { http, HttpResponse, type JsonBodyType } from "msw";
 import { afterAll, afterEach, beforeAll, beforeEach, expect, it } from "vitest";
 import { server } from "../../../test/server";
-import {
-  courseUnitCheckpoint,
-  courseUnitFixture,
-} from "../../../scripts/secret-hygiene-evidence";
+import { courseUnitFixture } from "../../../test/courseUnitFixture";
 import { authenticatedSessionResponse } from "../../../test/mfaFixtures";
 import { App } from "../App";
 import { AnnouncementProvider } from "../../platform/announcer/AnnouncementRegion";
@@ -247,14 +244,12 @@ it("preparation gates assigned identities before any dependent course request", 
     authenticatedRoute("/prepare/courses/opaque%2Fidentity/activate", access)
       .key === "preparationActivation",
   ).toBe(true);
-  courseUnitCheckpoint("preparation-gate");
 });
 
 it("preparation validates Unicode bounds then installs persisted distinct teaching values", async () => {
   const { fixture, state } = backend();
   mount();
   const user = await replace(fixture.teachingText);
-  courseUnitCheckpoint("preparation-input");
   expect(
     teachingTextInvalid("description", "😀".repeat(4001)) &&
       !teachingTextInvalid("description", "😀".repeat(4000)) &&
@@ -273,7 +268,6 @@ it("preparation validates Unicode bounds then installs persisted distinct teachi
       state.fields.learning_goals === fixture.teachingText &&
       state.fields.ai_tutor_instructions === null,
   ).toBe(true);
-  courseUnitCheckpoint("preparation-persisted");
   await user.click(screen.getByRole("link", { name: "Course preparation" }));
   await screen.findByRole("heading", { level: 1, name: fixture.name });
   await waitFor(() =>
@@ -398,7 +392,6 @@ for (const presentation of [
       expect(mainIncludes("Sessions already in progress continue.")).toBe(true);
     if (presentation === "accepting")
       expect(mainIncludes("Activated")).toBe(true);
-    courseUnitCheckpoint("hub-states");
   });
 
 it("hub rejects a ready-state/activation disagreement without claiming prior activation", async () => {
@@ -421,7 +414,6 @@ it("hub rejects a ready-state/activation disagreement without claiming prior act
       screen.queryByRole("link", { name: "Review and activate" }) === null &&
       !document.querySelector('main a[href*="activate"]'),
   ).toBe(true);
-  courseUnitCheckpoint("hub-protocol");
 });
 
 it("hub blockers preserve server order and never turn API links into hrefs", async () => {
@@ -449,7 +441,6 @@ it("hub blockers preserve server order and never turn API links into hrefs", asy
       ) &&
       mainIncludes("An administrator must resolve supervisor assignment."),
   ).toBe(true);
-  courseUnitCheckpoint("hub-blockers");
 });
 
 it("hub renders display blockers only, never activation-only extras", async () => {
@@ -465,7 +456,6 @@ it("hub renders display blockers only, never activation-only extras", async () =
     blockers?.querySelectorAll("h3").length === 1 &&
       blockers.querySelector("h3")?.textContent === "Learning goals",
   ).toBe(true);
-  courseUnitCheckpoint("hub-blockers");
 });
 
 it("hub readiness failure removes course identity and retries only by explicit admission", async () => {
@@ -490,7 +480,6 @@ it("hub readiness failure removes course identity and retries only by explicit a
     .click(screen.getByRole("button", { name: "Check again" }));
   await screen.findByRole("heading", { level: 1, name: fixture.name });
   expect(state.reads === 2).toBe(true);
-  courseUnitCheckpoint("hub-unavailable");
 });
 
 it("preparation backend validation retains correction and clears invalid associations", async () => {
@@ -512,7 +501,6 @@ it("preparation backend validation retains correction and clears invalid associa
       document.activeElement === field &&
       (field as HTMLTextAreaElement).value === fixture.teachingText,
   ).toBe(true);
-  courseUnitCheckpoint("preparation-error");
   await user.type(field, " ");
   expect(
     field.getAttribute("aria-invalid") === "false" &&
@@ -537,7 +525,6 @@ it("preparation unknown save reconciles matching or differing values without rep
       (screen.getByLabelText("Learning goals") as HTMLTextAreaElement).readOnly,
     ).toBe(true),
   );
-  courseUnitCheckpoint("preparation-unknown");
   state.fields.learning_goals = null;
   await user.click(
     screen.getByRole("button", { name: "Check current course" }),
@@ -561,7 +548,6 @@ it("preparation unknown save reconciles matching or differing values without rep
     state.sends === 1 &&
       !mainIncludes("Changes saved. The confirmed values are shown."),
   ).toBe(true);
-  courseUnitCheckpoint("preparation-reconciled");
 });
 
 it("preparation hidden PATCH denial unmounts draft preview and keeps collapsed disclosure", async () => {
@@ -588,7 +574,6 @@ it("preparation hidden PATCH denial unmounts draft preview and keeps collapsed d
     document.querySelector("pre")?.textContent?.includes(fixture.rawError) ===
       true,
   ).toBe(true);
-  courseUnitCheckpoint("preparation-hidden");
 });
 
 it("preparation dirty dialog loses input on lifecycle security override without requests", async () => {
@@ -610,7 +595,6 @@ it("preparation dirty dialog loses input on lifecycle security override without 
   await user.click(screen.getByRole("button", { name: "Refresh" }));
   await screen.findByRole("heading", { level: 1, name: "Home" });
   expect(state.reads === reads && state.sends === 0).toBe(true);
-  courseUnitCheckpoint("preparation-cleared");
 });
 
 it("preparation Stop waiting fences late save success and a newer read preserves draft", async () => {
@@ -661,7 +645,6 @@ it("preparation Stop waiting fences late save success and a newer read preserves
         .parentElement?.querySelector("pre")?.textContent === persisted &&
       state.sends === 1,
   ).toBe(true);
-  courseUnitCheckpoint("preparation-newer");
 });
 
 it("preparation security departure fences an in-flight save before protected completion", async () => {
@@ -689,7 +672,6 @@ it("preparation security departure fences an in-flight save before protected com
       state.reads === reads &&
       state.sends === 1,
   ).toBe(true);
-  courseUnitCheckpoint("preparation-late-cleared");
 });
 
 for (const operation of ["PATCH", "GET"] as const) {
@@ -726,7 +708,6 @@ for (const operation of ["PATCH", "GET"] as const) {
       );
       await screen.findByRole("dialog");
     }
-    courseUnitCheckpoint(`preparation-stopped-${operation}`);
     state.denied = true;
     await act(async () => release());
     await screen.findByRole("heading", {
@@ -752,7 +733,6 @@ for (const operation of ["PATCH", "GET"] as const) {
       state.sends === (operation === "PATCH" ? 1 : 0) &&
         state.reads === reads + (operation === "GET" ? 1 : 0),
     ).toBe(true);
-    courseUnitCheckpoint(`preparation-stopped-hidden-${operation}`);
   });
 }
 
@@ -792,7 +772,6 @@ it("preparation stopped denial remains applicable after a newer same-resource ch
       !mainIncludes("Changes saved.") &&
       state.sends === 1,
   ).toBe(true);
-  courseUnitCheckpoint("preparation-same-resource-denial");
 });
 
 it("preparation pending dirty read guards departure and fences departed denial", async () => {
@@ -818,7 +797,6 @@ it("preparation pending dirty read guards departure and fences departed denial",
     (screen.getByLabelText("Learning goals") as HTMLTextAreaElement).value ===
       fixture.teachingText && state.reads === reads + 1,
   ).toBe(true);
-  courseUnitCheckpoint("preparation-read-stay");
   await user.click(screen.getByRole("link", { name: "Home" }));
   await screen.findByRole("dialog");
   await user.click(screen.getByRole("button", { name: "Discard and leave" }));
@@ -832,5 +810,4 @@ it("preparation pending dirty read guards departure and fences departed denial",
     screen.queryByRole("heading", { name: "Course access unavailable" }) ===
       null && !document.body.textContent?.includes(fixture.teachingText),
   ).toBe(true);
-  courseUnitCheckpoint("preparation-read-discard");
 });

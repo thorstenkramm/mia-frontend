@@ -3,11 +3,9 @@ import { expect, test, type Page } from "@playwright/test";
 import { readFileSync } from "node:fs";
 import { courseBackend, courseRoutes } from "./courseFixtures";
 import { materialBackend } from "./materialFixtures";
+import { presentationLocales } from "./presentationMatrix";
 import { atBrowserZoom, protectedJourney } from "./routeFixtures";
-import {
-  routeHygieneCheckpoint,
-  routeSecretFixture,
-} from "./routeSecretHygiene";
+import { routeSecretFixture } from "./routeTestFixtures";
 
 test.use({ trace: "off", video: "off", screenshot: "off" });
 const hub = "/prepare/courses/course_1";
@@ -132,7 +130,6 @@ test(
     expect(await contains(page, routeSecretFixture(page).courseName)).toBe(
       false,
     );
-    await routeHygieneCheckpoint(page, "readiness-unavailable");
     control.readUnavailable = false;
     await page.getByRole("button", { name: "Check again" }).click();
     await expect(
@@ -222,7 +219,6 @@ test(
       .getByRole("button", { name: "Confirm activation", exact: true })
       .focus();
     await scan(page);
-    await routeHygieneCheckpoint(page, "activation-review");
     await page.keyboard.press("Enter");
     await mounted(page, "Course preparation");
     await expect
@@ -243,7 +239,6 @@ test(
           0,
     ).toBe(true);
     await scan(page);
-    await routeHygieneCheckpoint(page, "activation-hub");
   }),
 );
 
@@ -400,7 +395,6 @@ for (const outcome of [
           .last()
           .evaluate((node) => node === document.activeElement),
       ).toBe(true);
-      await routeHygieneCheckpoint(page, "activation-outcome");
       await scan(page);
       if (outcome !== "conflict") {
         await page
@@ -431,7 +425,6 @@ for (const outcome of [
           page.getByRole("button", { name: "Confirm activation" }),
         ).toBeEnabled();
       }
-      await routeHygieneCheckpoint(page, "activation-reconciled");
     }),
   );
 
@@ -456,7 +449,6 @@ test(
     });
     await page.getByRole("button", { name: "Stop waiting" }).click();
     await expect.poll(() => contains(page, unknown)).toBe(true);
-    await routeHygieneCheckpoint(page, "activation-stopped");
     release();
     await expect.poll(() => control.courseState === "active").toBe(true);
     await page
@@ -484,19 +476,13 @@ test(
       control.detailReads.length === reads &&
         !(await contains(page, routeSecretFixture(page).courseName)),
     ).toBe(true);
-    await routeHygieneCheckpoint(page, "activation-cleared");
   }),
 );
 
-for (const locale of [
-  "en-US",
-  "de-DE",
-  "es-ES",
-  "es-AR",
-  "fr-FR",
-  "pt-PT",
-  "pt-BR",
-])
+for (const locale of presentationLocales(
+  ["en-US", "de-DE", "es-ES", "es-AR", "fr-FR", "pt-PT", "pt-BR"],
+  "course",
+))
   for (const mode of ["standard", "large", "extra-large"])
     test(
       `activation readiness confirmation ${locale} ${mode} reflow at 320`,

@@ -1,6 +1,6 @@
 import type { Page, Route } from "@playwright/test";
 import { courseBackend, courseRoutes } from "./courseFixtures";
-import { routeSecretFixture } from "./routeSecretHygiene";
+import { routeSecretFixture } from "./routeTestFixtures";
 import {
   materialBriefSchema,
   type MaterialBrief,

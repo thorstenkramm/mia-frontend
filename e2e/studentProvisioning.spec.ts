@@ -3,10 +3,7 @@ import { expect, test, type Page } from "@playwright/test";
 import { readFileSync } from "node:fs";
 import { studentBackend, fillStudent } from "./studentFixtures";
 import { protectedJourney, atBrowserZoom } from "./routeFixtures";
-import {
-  routeHygieneCheckpoint,
-  routeSecretFixture,
-} from "./routeSecretHygiene";
+import { routeSecretFixture } from "./routeTestFixtures";
 
 test.use({ trace: "off", video: "off", screenshot: "off" });
 const hub = "/prepare/courses/course_1",
@@ -146,10 +143,6 @@ test(
           });
         }, invalid),
       ).toBe(true);
-      await routeHygieneCheckpoint(
-        page,
-        invalid ? "student-boundary-invalid" : "student-boundary-normal",
-      );
     }
     expect(control.posts === 0).toBe(true);
   }),
@@ -225,7 +218,6 @@ for (const scenario of [
         ).toBe(true);
       }
       expect(control.posts === 0).toBe(true);
-      await routeHygieneCheckpoint(page, "student-field-errors");
       await scan(page);
     }),
   );
@@ -255,7 +247,6 @@ test(
         );
         expect((await input.inputValue()) === value).toBe(true);
       }
-      await routeHygieneCheckpoint(page, "student-pasted");
       await submit(page);
       await mounted(page, "Student membership");
       expect(
@@ -287,7 +278,6 @@ for (const loss of ["csrf", "expired", "restricted", "denied"])
       await expect.poll(() => page.locator("#new-password").count()).toBe(0);
       await secretAbsent(page);
       expect(control.posts === 1 && control.membershipReads === 0).toBe(true);
-      await routeHygieneCheckpoint(page, "student-security");
     }),
   );
 
@@ -355,7 +345,6 @@ test(
     await expect.poll(() => page.locator("#new-password").count()).toBe(0);
     await secretAbsent(page);
     expect(control.posts === 1).toBe(true);
-    await routeHygieneCheckpoint(page, "student-inactive");
   }),
 );
 
@@ -412,7 +401,6 @@ test(
       .getByRole("button", { name: "Hide temporary password", exact: true })
       .click();
     await scan(page);
-    await routeHygieneCheckpoint(page, "student-input");
     await submit(page);
     await mounted(page, "Student membership");
     expect(
@@ -424,7 +412,6 @@ test(
     ).toBe(true);
     await secretAbsent(page);
     await scan(page);
-    await routeHygieneCheckpoint(page, "student-success");
     await page
       .getByRole("link", { name: "Course students", exact: true })
       .click();
@@ -478,7 +465,6 @@ for (const outcome of ["conflict", "invalid"])
         ) === true &&
           (await page.locator("main pre a, main pre script").count()) === 0,
       ).toBe(true);
-      await routeHygieneCheckpoint(page, "student-rejected");
       await scan(page);
     }),
   );
@@ -499,7 +485,6 @@ for (const outcome of ["lose", "malformed", "server"])
           control.rosterReads === 0 &&
           (await page.getByRole("button", { name: /Abandon/ }).count()) === 0,
       ).toBe(true);
-      await routeHygieneCheckpoint(page, "student-unknown");
       control.readFail = true;
       await page.getByRole("button", { name: "Refresh", exact: true }).click();
       await expect.poll(() => control.rosterReads).toBe(1);
@@ -512,7 +497,6 @@ for (const outcome of ["lose", "malformed", "server"])
         .poll(() => page.getByRole("button", { name: /Abandon/ }).count())
         .toBe(1);
       expect(control.offsets.join() === "0" && control.posts === 1).toBe(true);
-      await routeHygieneCheckpoint(page, "student-reconciled");
       await page.getByRole("button", { name: /Abandon/ }).click();
       expect(
         (await page.locator("#new-password").inputValue()) === "" &&
@@ -541,7 +525,6 @@ test(
       .click();
     await expect.poll(() => page.locator("#new-password").count()).toBe(0);
     await secretAbsent(page);
-    await routeHygieneCheckpoint(page, "student-stopped");
     release();
     await expect.poll(() => control.persisted).toBe(true);
     await expect
@@ -554,7 +537,6 @@ test(
         control.membershipReads === 0 &&
         page.url().endsWith("/new"),
     ).toBe(true);
-    await routeHygieneCheckpoint(page, "student-late");
   }),
 );
 test(
@@ -580,7 +562,6 @@ test(
     expect(
       control.course.detailReads.length === reads && control.posts === 0,
     ).toBe(true);
-    await routeHygieneCheckpoint(page, "student-cleared");
     control.course.scopeIds = [];
     await page.getByRole("button", { name: "Refresh", exact: true }).click();
     await mounted(page, "Home");
@@ -602,7 +583,6 @@ test(
         .getByRole("button", { name: "Stay on this page" })
         .evaluate((node) => node === document.activeElement),
     ).toBe(true);
-    await routeHygieneCheckpoint(page, "student-stay");
     await page.keyboard.press("Escape");
     await expect
       .poll(() =>
@@ -615,7 +595,6 @@ test(
     await page.getByRole("button", { name: "Discard and leave" }).click();
     await mounted(page, "Course students");
     await secretAbsent(page);
-    await routeHygieneCheckpoint(page, "student-discard");
   }),
 );
 test(
@@ -774,7 +753,6 @@ for (const mode of ["standard", "large", "extra-large"])
       await mounted(page, "Create student");
       await fillStudent(page);
       await geometry(page);
-      await routeHygieneCheckpoint(page, "student-input");
       await submit(page);
       await mounted(page, "Student membership");
       await geometry(page);

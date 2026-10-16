@@ -12,10 +12,7 @@ import { Fragment, StrictMode } from "react";
 import { http, HttpResponse } from "msw";
 import { afterAll, afterEach, beforeAll, beforeEach, expect, it } from "vitest";
 import { server } from "../../../test/server";
-import {
-  courseUnitCheckpoint,
-  courseUnitFixture,
-} from "../../../scripts/secret-hygiene-evidence";
+import { courseUnitFixture } from "../../../test/courseUnitFixture";
 import { authenticatedSessionResponse } from "../../../test/mfaFixtures";
 import { App } from "../App";
 import { AnnouncementProvider } from "../../platform/announcer/AnnouncementRegion";
@@ -291,7 +288,6 @@ for (const route of ["", "/new", "/student_1"])
         control.rosterReads === 0 &&
         control.membershipReads === 0,
     ).toBe(true);
-    courseUnitCheckpoint("student-gate");
   });
 it("student authority never substitutes administrator student or mentor capabilities", async () => {
   const { control } = backend();
@@ -299,7 +295,6 @@ it("student authority never substitutes administrator student or mentor capabili
   mount();
   await screen.findByRole("heading", { level: 1, name: "Home" });
   expect(control.courseReads === 0 && control.posts === 0).toBe(true);
-  courseUnitCheckpoint("student-authority");
 });
 it("student definitive creation clears credentials and navigates by student relationship", async () => {
   const { seed, password, control } = backend();
@@ -313,7 +308,6 @@ it("student definitive creation clears credentials and navigates by student rela
         .querySelector("#student-language")
         ?.getAttribute("autocomplete") === null,
   ).toBe(true);
-  courseUnitCheckpoint("student-input");
   await user.click(screen.getByRole("button", { name: "Create student" }));
   await screen.findByRole("heading", { level: 1, name: "Student membership" });
   expect(
@@ -327,7 +321,6 @@ it("student definitive creation clears credentials and navigates by student rela
         control.ledger.indexOf("course") &&
       control.ledger.indexOf("course") < control.ledger.indexOf("membership"),
   ).toBe(true);
-  courseUnitCheckpoint("student-success");
 });
 for (const outcome of ["conflict", "invalid", "bad", "large", "media"])
   it(`student definitive ${outcome} keeps only same mounted native correction`, async () => {
@@ -350,7 +343,6 @@ for (const outcome of ["conflict", "invalid", "bad", "large", "media"])
       document.querySelector("main pre") === null &&
         !document.querySelector("[aria-live]")?.textContent?.includes(password),
     ).toBe(true);
-    courseUnitCheckpoint("student-rejected");
   });
 for (const outcome of ["lose", "malformed", "server"])
   it(`student ambiguous ${outcome} destroys credentials and bounded review never attributes success`, async () => {
@@ -369,7 +361,6 @@ for (const outcome of ["lose", "malformed", "server"])
       control.rosterReads === 0 &&
         screen.queryByRole("button", { name: /Abandon/ }) === null,
     ).toBe(true);
-    courseUnitCheckpoint("student-unknown");
     await user.click(screen.getByRole("button", { name: "Refresh" }));
     await screen.findByRole("button", {
       name: "Abandon unconfirmed attempt and start a new blank form",
@@ -380,7 +371,6 @@ for (const outcome of ["lose", "malformed", "server"])
         control.pages.join() === "0" &&
         !has("Student creation confirmed."),
     ).toBe(true);
-    courseUnitCheckpoint("student-reconciled");
     await user.click(
       screen.getByRole("button", {
         name: "Abandon unconfirmed attempt and start a new blank form",
@@ -405,7 +395,6 @@ for (const loss of ["csrf", "expired", "restricted", "denied"])
     await user.click(screen.getByRole("button", { name: "Create student" }));
     await waitFor(() => expect(cleared(input)).toBe(true));
     expect(control.posts <= 1 && !has(seed.name)).toBe(true);
-    courseUnitCheckpoint("student-security");
   });
 it("student stopped post fences late success and duplicate native submits dispatch once", async () => {
   const { seed, password, control } = backend();
@@ -427,7 +416,6 @@ it("student stopped post fences late success and duplicate native submits dispat
     .setup()
     .click(screen.getByRole("button", { name: "Stop waiting" }));
   expect(cleared(input) && control.posts === 1).toBe(true);
-  courseUnitCheckpoint("student-stopped");
   await act(async () => {
     release();
   });
@@ -438,7 +426,6 @@ it("student stopped post fences late success and duplicate native submits dispat
         control.membershipReads === 0,
     ).toBe(true),
   );
-  courseUnitCheckpoint("student-late");
 });
 it("student stopped response still handles applicable hidden denial", async () => {
   const { seed, password, control } = backend();
@@ -458,7 +445,6 @@ it("student stopped response still handles applicable hidden denial", async () =
     name: "Course access unavailable",
   });
   expect(cleared(input) && control.posts === 1 && !has(seed.name)).toBe(true);
-  courseUnitCheckpoint("student-stopped-denial");
 });
 
 it("student inactive preflight and cancelled pending read send no POST", async () => {
@@ -482,7 +468,6 @@ it("student inactive preflight and cancelled pending read send no POST", async (
   expect(
     control.posts === 0 && document.querySelector("#new-password") === null,
   ).toBe(true);
-  courseUnitCheckpoint("student-preflight");
 });
 it("student lifecycle destroys controls synchronously and return makes no authenticated request", async () => {
   const { seed, password, control } = backend();
@@ -500,7 +485,6 @@ it("student lifecycle destroys controls synchronously and return makes no authen
   expect(
     control.courseReads === reads && control.posts === 0 && cleared(input),
   ).toBe(true);
-  courseUnitCheckpoint("student-lifecycle");
 });
 it("student dirty Stay retains focus but Discard destroys both credential controls", async () => {
   const { seed, password } = backend();
@@ -517,14 +501,12 @@ it("student dirty Stay retains focus but Discard destroys both credential contro
     input.value === password &&
       document.activeElement?.id === "student-username",
   ).toBe(true);
-  courseUnitCheckpoint("student-stay");
   await user.click(screen.getByRole("link", { name: "Cancel" }));
   await user.click(
     await screen.findByRole("button", { name: "Discard and leave" }),
   );
   await screen.findByRole("heading", { level: 1, name: "Course students" });
   expect(cleared(input)).toBe(true);
-  courseUnitCheckpoint("student-discard");
 });
 it("student local mismatch and missing profile prevent any unsafe dispatch", async () => {
   const { seed, password, control } = backend();
@@ -539,7 +521,6 @@ it("student local mismatch and missing profile prevent any unsafe dispatch", asy
   expect(
     control.posts === 0 && confirmation.getAttribute("aria-invalid") === "true",
   ).toBe(true);
-  courseUnitCheckpoint("student-validation");
   fireEvent.change(confirmation, { target: { value: password } });
   await user.selectOptions(select("language"), "");
   await user.click(screen.getByRole("button", { name: "Create student" }));
@@ -619,7 +600,6 @@ for (const scenario of [
           window.location.hash === "",
       ).toBe(true);
     }
-    courseUnitCheckpoint("student-field-errors");
     // Corrected values retire every association and summary on resubmission.
     fireEvent.change(document.getElementById("student-username") ?? input, {
       target: { value: seed.username },
@@ -638,7 +618,6 @@ for (const scenario of [
         document.getElementById("password-change-summary-heading") === null &&
         input.value === password,
     ).toBe(true);
-    courseUnitCheckpoint("student-field-corrected");
   });
 
 it("student StrictMode replay permits one definitive dispatch and credential teardown", async () => {
@@ -654,7 +633,6 @@ it("student StrictMode replay permits one definitive dispatch and credential tea
       control.membershipReads > 0 &&
       cleared(input),
   ).toBe(true);
-  courseUnitCheckpoint("student-strict-success");
 });
 
 for (const phase of ["preflight", "post"])
@@ -678,7 +656,6 @@ for (const phase of ["preflight", "post"])
       await waitFor(() => expect(control.courseReads === reads + 1).toBe(true));
     view.unmount();
     expect(cleared(input)).toBe(true);
-    courseUnitCheckpoint("student-strict-retired");
     await act(async () => release());
     await waitFor(() =>
       expect(
@@ -693,5 +670,4 @@ for (const phase of ["preflight", "post"])
         window.location.pathname === `${list}/new` &&
         document.querySelector("#new-password") === null,
     ).toBe(true);
-    courseUnitCheckpoint("student-strict-late");
   });

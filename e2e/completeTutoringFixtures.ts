@@ -5,7 +5,7 @@ import { materialBackend } from "./materialFixtures";
 import { studentRoutes } from "./studentFixtures";
 import { tutoringResources } from "./tutoringFixtures";
 import { routeBackend } from "./routeFixtures";
-import { routeSecretFixture } from "./routeSecretHygiene";
+import { routeSecretFixture } from "./routeTestFixtures";
 import {
   activeTutoringSessionDocument,
   studentMessageResource,

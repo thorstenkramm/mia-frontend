@@ -11,10 +11,7 @@ import {
   focusedHeading,
   protectedJourney,
 } from "./routeFixtures";
-import {
-  routeHygieneCheckpoint,
-  routeSecretFixture,
-} from "./routeSecretHygiene";
+import { routeSecretFixture } from "./routeTestFixtures";
 
 // Invitee addresses, CSRF values and raw error bodies are per-run synthetic
 // markers. Artifacts stay off; assertions compare them as booleans only.
@@ -94,7 +91,6 @@ test(
       .click();
     await focusedHeading(page, "Invite a supervisor");
     await page.getByLabel(field).fill(routeSecretFixture(page).email);
-    await routeHygieneCheckpoint(page, "invitation-email");
     await page.getByRole("button", { name: "Send invitation" }).click();
     await expect(
       page.getByRole("heading", { level: 2, name: "Invitation created" }),
@@ -107,7 +103,6 @@ test(
     await focusedHeading(page, "Invitation details");
     await expect(page).toHaveURL(/\/admin\/invitations\/inv_1$/u);
     await expect(page.getByText("Pending", { exact: true })).toBeVisible();
-    await routeHygieneCheckpoint(page, "invitation-detail");
     expect(await addressOutsideContent(page)).toBe(false);
     await page.reload();
     await focusedHeading(page, "Invitation details");
@@ -129,7 +124,6 @@ test(
     await focusedHeading(page, "Invite a supervisor");
     const input = page.getByLabel(field);
     await input.fill(routeSecretFixture(page).email);
-    await routeHygieneCheckpoint(page, "invitation-email");
 
     await page
       .getByRole("navigation", { name: "Application" })
@@ -188,7 +182,6 @@ test(
     await expect(
       page.getByRole("heading", { level: 2, name: "Invitation not confirmed" }),
     ).toBeFocused();
-    await routeHygieneCheckpoint(page, "invitation-error");
     await page.getByRole("link", { name: "Review invitations" }).click();
     await focusedHeading(page, "Invitations");
     expect(state.dispatches.create).toBe(1);
@@ -253,7 +246,6 @@ test(
     await expect(dialog).toHaveAccessibleDescription(
       "The email address you entered has not been sent. If you leave this page, it is discarded.",
     );
-    await routeHygieneCheckpoint(page, "invitation-email");
     // Containment in both directions, then Escape restores the input.
     for (const key of ["Tab", "Tab", "Shift+Tab", "Shift+Tab"]) {
       await page.keyboard.press(key);
@@ -319,7 +311,6 @@ test(
     const input = page.getByLabel(field);
     expect(await input.inputValue()).toBe("");
     await input.fill(routeSecretFixture(page).email);
-    await routeHygieneCheckpoint(page, "invitation-email");
     let requests = 0;
     page.on("request", (request) => {
       if (new URL(request.url()).pathname.startsWith("/api/")) requests++;

@@ -10,10 +10,7 @@ import userEvent from "@testing-library/user-event";
 import { http, HttpResponse, type JsonBodyType } from "msw";
 import { afterAll, afterEach, beforeAll, beforeEach, expect, it } from "vitest";
 import { server } from "../../../test/server";
-import {
-  courseUnitCheckpoint,
-  courseUnitFixture,
-} from "../../../scripts/secret-hygiene-evidence";
+import { courseUnitFixture } from "../../../test/courseUnitFixture";
 import { authenticatedSessionResponse } from "../../../test/mfaFixtures";
 import { App } from "../App";
 import { AnnouncementProvider } from "../../platform/announcer/AnnouncementRegion";
@@ -256,10 +253,8 @@ it("course form validates locally then redirects only after definitive creation"
   await user.click(screen.getByRole("button", { name: "Create course" }));
   supervisorInvalid(true, "Select at least one supervisor.");
   expect(state.posts === 0).toBe(true);
-  courseUnitCheckpoint("route-invalid");
   await user.click(screen.getAllByRole("checkbox")[0] as HTMLElement);
   supervisorInvalid(false, "Select at least one supervisor.");
-  courseUnitCheckpoint("route-draft");
   await user.click(screen.getByRole("button", { name: "Create course" }));
   await screen.findByRole("heading", {
     level: 1,
@@ -273,14 +268,12 @@ it("course form validates locally then redirects only after definitive creation"
       true,
     ),
   );
-  courseUnitCheckpoint("route-persisted");
 });
 
 it("course selector denial tears down selected draft and retains collapsed raw disclosure", async () => {
   const { state, fixture } = backend();
   mount();
   const user = await fill(fixture.name);
-  courseUnitCheckpoint("route-draft");
   state.denied = true;
   await user.click(screen.getByRole("button", { name: "Next" }));
   await screen.findByRole("heading", {
@@ -297,7 +290,6 @@ it("course selector denial tears down selected draft and retains collapsed raw d
   expect(
     document.querySelector("pre")?.textContent?.includes(fixture.rawError),
   ).toBe(true);
-  courseUnitCheckpoint("route-error");
 });
 
 it("course unknown response is not success and cannot replay on review", async () => {
@@ -305,7 +297,6 @@ it("course unknown response is not success and cannot replay on review", async (
   state.lose = true;
   mount();
   const user = await fill(fixture.name);
-  courseUnitCheckpoint("route-draft");
   await user.click(screen.getByRole("button", { name: "Create course" }));
   await screen.findByRole("heading", { name: "Save outcome unknown" });
   expect(
@@ -320,7 +311,6 @@ it("course unknown response is not success and cannot replay on review", async (
         screen.getByRole("main").textContent?.includes(fixture.name),
     ).toBe(true),
   );
-  courseUnitCheckpoint("route-persisted");
 });
 
 it("course stale supervisor rejection preserves correction without identity inference", async () => {
@@ -342,7 +332,6 @@ it("course stale supervisor rejection preserves correction without identity infe
     true,
     "The supervisor set could not be assigned. Review your selection and try a corrected set.",
   );
-  courseUnitCheckpoint("route-error");
   await user.click(screen.getByRole("button", { name: "Next" }));
   await waitFor(() => expect(state.candidateReads === 2).toBe(true));
   await user.click(screen.getAllByRole("checkbox")[0] as HTMLElement);
@@ -351,7 +340,6 @@ it("course stale supervisor rejection preserves correction without identity infe
     "The supervisor set could not be assigned. Review your selection and try a corrected set.",
   );
   expect(state.posts === 1 && state.detailReads.length === 0).toBe(true);
-  courseUnitCheckpoint("route-corrected");
 });
 
 it("course selection spans pages and dirty Stay does not reauthorize", async () => {
@@ -373,7 +361,6 @@ it("course selection spans pages and dirty Stay does not reauthorize", async () 
       (screen.getByLabelText("Course name (required)") as HTMLInputElement)
         .value === fixture.name,
   ).toBe(true);
-  courseUnitCheckpoint("route-draft");
 });
 
 it("course privacy shield overrides an open dirty dialog without extra requests", async () => {
@@ -389,7 +376,6 @@ it("course privacy shield overrides an open dirty dialog without extra requests"
       !document.body.textContent?.includes(fixture.username),
   ).toBe(true);
   expect(state.candidateReads === 1 && state.posts === 0).toBe(true);
-  courseUnitCheckpoint("route-cleared");
 });
 
 it("course Prepare batches known IDs and never reads visible-course union", async () => {
@@ -403,7 +389,6 @@ it("course Prepare batches known IDs and never reads visible-course union", asyn
       state.coursesReads === 0 &&
       state.candidateReads === 0,
   ).toBe(true);
-  courseUnitCheckpoint("route-batch");
   await userEvent
     .setup()
     .click(
@@ -419,7 +404,6 @@ it("course account and non-global capability gates withhold collection requests"
   const view = mount();
   await screen.findByRole("heading", { level: 1, name: "Create course" });
   expect(state.candidateReads === 0 && state.posts === 0).toBe(true);
-  courseUnitCheckpoint("route-prerequisite");
   view.unmount();
   state.global = false;
   mount("/admin/courses");

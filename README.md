@@ -22,12 +22,15 @@ Run the complete local quality gate before submitting changes:
 ./run-all-tests.sh
 ```
 
+The bare gate samples audited presentation matrices; `./run-all-tests.sh --full-matrix` runs all presentation cells
+before epic completion or a GitHub push. Standalone Playwright defaults to the complete matrix.
+
 The gate runs type checking, lint and architecture fences, formatting, unit tests, a production build, the compressed
 initial-route JavaScript budget, Chromium E2E, duplication detection, dependency scanning, Tailwind Plus catalog
 validation, and Markdown linting. Trivy remains an explicit environment-dependent skip when it is not installed.
 
 GitHub Actions (`.github/workflows/checks.yml`) runs the same stages as individual steps on every push to `main` and
-on pull requests. E2E and secret hygiene run on macOS. Two checks run only locally and the workflow reports them as
+on pull requests. E2E runs on macOS. Two checks run only locally and the workflow reports them as
 skipped: the API type check, which needs the sibling backend checkout, and the Tailwind Plus catalog check, which needs
 the licensed library. CI does not replace running the local gate.
 

@@ -2,11 +2,12 @@ import AxeBuilder from "@axe-core/playwright";
 import { expect, test, type Page } from "@playwright/test";
 import { readFileSync } from "node:fs";
 import { materialBackend } from "./materialFixtures";
-import { atBrowserZoom, protectedJourney } from "./routeFixtures";
 import {
-  routeHygieneCheckpoint,
-  routeSecretFixture,
-} from "./routeSecretHygiene";
+  atBrowserZoom,
+  expectInertTechnicalDetails,
+  protectedJourney,
+} from "./routeFixtures";
+import { routeSecretFixture } from "./routeTestFixtures";
 
 test.use({ trace: "off", video: "off", screenshot: "off" });
 const list = "/prepare/courses/course_1/materials";
@@ -100,7 +101,6 @@ test(
       )
       .toBe(true);
     expect(control.deletes === 1 && control.files.length === 1).toBe(true);
-    await routeHygieneCheckpoint(page, "material-delete-prior-rejected");
     let release: () => void = () => undefined;
     control.deleteRelease = new Promise<void>((resolve) => {
       release = resolve;
@@ -115,7 +115,6 @@ test(
             .count()) === 0 &&
           control.deletes === 1,
       ).toBe(true);
-      await routeHygieneCheckpoint(page, "material-delete-new-chosen");
       await page
         .getByRole("dialog")
         .getByRole("button", {
@@ -142,7 +141,6 @@ test(
         (await remove.count()) === 1 &&
         control.deletes === 2;
       await expect.poll(unknownOnly).toBe(true);
-      await routeHygieneCheckpoint(page, "material-delete-new-stopped");
       const before = control.admissionLedger.length;
       const response = page.waitForResponse(
         (response) =>
@@ -157,7 +155,6 @@ test(
           control.admissionLedger.length === before &&
           control.deletes === 2,
       ).toBe(true);
-      await routeHygieneCheckpoint(page, "material-delete-new-late-success");
     } finally {
       release();
     }
@@ -218,10 +215,6 @@ for (const path of ["material", "files"] as const) {
                 (value) => !value?.includes(routeSecretFixture(page).rawError),
               )),
         ).toBe(true);
-        await routeHygieneCheckpoint(
-          page,
-          `material-deleted-read-failed-${path}-${outcome}`,
-        );
         control.readFailure = null;
         await page
           .getByRole("button", {
@@ -246,10 +239,6 @@ for (const path of ["material", "files"] as const) {
                 (value) => value === "The selected persisted file was deleted.",
               )),
         ).toBe(true);
-        await routeHygieneCheckpoint(
-          page,
-          `material-deleted-read-recovered-${path}-${outcome}`,
-        );
       }),
     );
   }
@@ -285,7 +274,6 @@ test(
     expect(
       control.uploads === 1 && control.admissionLedger.length === before,
     ).toBe(true);
-    await routeHygieneCheckpoint(page, "material-csrf-cleared");
     control.uploadOutcome = "success";
     await page.getByRole("button", { name: "Refresh", exact: true }).click();
     await ready(page, "Course material files");
@@ -297,7 +285,6 @@ test(
           .getByRole("button", { name: "Remove local row", exact: true })
           .count()) === 0,
     ).toBe(true);
-    await routeHygieneCheckpoint(page, "material-csrf-recovered");
     await select(page);
     await page
       .getByRole("button", { name: "Queue selected files", exact: true })
@@ -401,10 +388,6 @@ for (const operation of ["create", "delete"] as const) {
                   })
                   .count()) === 1,
         ).toBe(true);
-        await routeHygieneCheckpoint(
-          page,
-          `material-${operation}-feedback-${outcome}`,
-        );
         if (outcome === "rejected") {
           await page
             .getByRole("button", { name: "Technical details", exact: true })
@@ -444,10 +427,6 @@ for (const operation of ["create", "delete"] as const) {
                 !text?.includes(prefix) && !text?.includes(fixture.rawError),
             ),
         ).toBe(true);
-        await routeHygieneCheckpoint(
-          page,
-          `material-${operation}-retired-${outcome}`,
-        );
       }),
     );
   }
@@ -493,14 +472,12 @@ test(
         )
         .toBe(true);
     }
-    await routeHygieneCheckpoint(page, "material-validation-long");
     await input.fill(routeSecretFixture(page).courseName);
     expect(
       (await input.getAttribute("aria-invalid")) === "false" &&
         (await page.locator("#material-name-error").count()) === 0 &&
         (await input.getAttribute("aria-describedby")) === "material-name-help",
     ).toBe(true);
-    await routeHygieneCheckpoint(page, "material-validation-corrected");
     await page
       .getByRole("button", { name: "Create course material", exact: true })
       .click();
@@ -538,7 +515,6 @@ test(
     await page
       .locator("#material-name")
       .fill(routeSecretFixture(page).courseName);
-    await routeHygieneCheckpoint(page, "material-create-input");
     await page
       .getByRole("button", { name: "Create course material", exact: true })
       .click();
@@ -552,7 +528,6 @@ test(
             .count()) === 2,
       )
       .toBe(true);
-    await routeHygieneCheckpoint(page, "material-selected");
     await page
       .getByRole("button", { name: "Queue selected files", exact: true })
       .click();
@@ -572,7 +547,6 @@ test(
     expect(
       control.validCreate && control.validMultipart && control.forbidden === 0,
     ).toBe(true);
-    await routeHygieneCheckpoint(page, "material-persisted");
     await page
       .getByRole("button", {
         name: "Accept authoritative file list",
@@ -671,7 +645,6 @@ test(
       .getByRole("button", { name: "Create course material", exact: true })
       .click({ force: true });
     expect(control.creates === 1 && control.persisted).toBe(true);
-    await routeHygieneCheckpoint(page, "material-create-unknown");
     await page
       .getByRole("button", {
         name: "Abandon unconfirmed creation and return to list",
@@ -716,7 +689,6 @@ test(
           })
           .count()) === 1,
     ).toBe(true);
-    await routeHygieneCheckpoint(page, "material-delete-unknown");
     await page
       .getByRole("button", {
         name: "Reconcile material and complete file list",
@@ -753,7 +725,6 @@ test(
       .click();
     await expect.poll(() => has(page, "Upload outcome unknown")).toBe(true);
     expect(control.uploads === 1 && control.files.length === 1).toBe(true);
-    await routeHygieneCheckpoint(page, "material-unknown");
     await page
       .getByRole("button", {
         name: "Reconcile material and complete file list",
@@ -775,7 +746,6 @@ test(
         })
         .count()) === 1 && control.uploads === 1,
     ).toBe(true);
-    await routeHygieneCheckpoint(page, "material-reconciled");
     await page
       .getByRole("button", { name: "Remove local row", exact: true })
       .click();
@@ -827,7 +797,6 @@ test(
     expect(
       control.course.base.ledger.length === before && control.uploads === 0,
     ).toBe(true);
-    await routeHygieneCheckpoint(page, "material-cleared");
     await page.getByRole("button", { name: "Refresh", exact: true }).click();
     await ready(page, "Course material files");
     expect(
@@ -845,7 +814,7 @@ test(
       (await page.locator("#material-picker").count()) === 0 &&
         control.uploads === 1,
     ).toBe(true);
-    await routeHygieneCheckpoint(page, "material-error");
+    await expectInertTechnicalDetails(page, routeSecretFixture(page).rawError);
   }),
 );
 
@@ -901,7 +870,6 @@ test(
           ),
       )
       .toBe(true);
-    await routeHygieneCheckpoint(page, "material-many");
   }),
 );
 

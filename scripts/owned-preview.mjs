@@ -1,39 +1,34 @@
 import { spawn } from "node:child_process";
 import { createConnection } from "node:net";
-import { mkdir, mkdtemp, open, readFile, rm } from "node:fs/promises";
+import { mkdtemp, open, readFile, rm } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { setTimeout as delay } from "node:timers/promises";
-import { artifactBuffers, assertMarkerFree } from "./hygiene-output.mjs";
 
-// One owner for both previews and the invocation(s) using them. Ports are
+// One owner for the preview and the invocation using it. The port is
 // deliberately fixed; an unrelated listener is never reused or terminated.
 const commands = process.argv.slice(2);
-const onlyOrdinaryPreview = commands[0] === "--only-4173";
-if (onlyOrdinaryPreview) commands.shift();
 if (commands[0] !== "--" || commands.length < 2)
-  throw new Error(
-    "Usage: node scripts/hygiene-preview.mjs -- <command> [args].",
-  );
+  throw new Error("Usage: node scripts/owned-preview.mjs -- <command> [args].");
 const builtIndex = await readFile("dist/index.html").catch(() => {
-  throw new Error("Hygiene preview requires a completed build.");
+  throw new Error("Owned preview requires a completed build.");
 });
 const buildManifest = await readFile("dist/.vite/manifest.json", "utf8")
   .then((bytes) => JSON.parse(bytes))
   .catch(() => {
-    throw new Error("Hygiene preview requires a valid build manifest.");
+    throw new Error("Owned preview requires a valid build manifest.");
   });
 if (typeof buildManifest?.["index.html"]?.file !== "string")
-  throw new Error("Hygiene preview requires a valid build entry.");
+  throw new Error("Owned preview requires a valid build entry.");
 const entry = buildManifest["index.html"].file;
 if (
   !/^assets\/[a-zA-Z0-9_./-]+\.js$/u.test(entry) ||
   entry.includes("..") ||
   !builtIndex.includes(Buffer.from(`/${entry}`))
 )
-  throw new Error("Hygiene preview requires a valid built entry reference.");
+  throw new Error("Owned preview requires a valid built entry reference.");
 const builtEntry = await readFile(join("dist", entry)).catch(() => {
-  throw new Error("Hygiene preview requires built entry assets.");
+  throw new Error("Owned preview requires built entry assets.");
 });
 
 async function occupied(port) {
@@ -50,21 +45,18 @@ async function occupied(port) {
   });
 }
 
-const root = await mkdtemp(join(tmpdir(), "mia-hygiene-preview-"));
+const root = await mkdtemp(join(tmpdir(), "mia-owned-preview-"));
 const children = [];
 const logs = [];
-const manifest = join(root, "markers.jsonl");
-const artifacts = join(root, "artifacts");
-await mkdir(artifacts);
 let stopping = false;
 let signalExit = 0;
 let cleanupFailed = false;
 let shutdown;
-const timeoutMs = process.env.MIA_HYGIENE_TEST_TIMEOUT_MS
-  ? Number(process.env.MIA_HYGIENE_TEST_TIMEOUT_MS)
+const timeoutMs = process.env.MIA_PREVIEW_TEST_TIMEOUT_MS
+  ? Number(process.env.MIA_PREVIEW_TEST_TIMEOUT_MS)
   : 75 * 60_000;
 if (!Number.isSafeInteger(timeoutMs) || timeoutMs < 1)
-  throw new Error("Invalid hygiene preview timeout.");
+  throw new Error("Invalid owned preview timeout.");
 
 function signalGroup(child, signal) {
   if (!child.pid) return;
@@ -94,7 +86,7 @@ function stop(code = 1) {
   return shutdown;
 }
 function requireRunning() {
-  if (stopping) throw new Error("Hygiene preview cancelled during startup.");
+  if (stopping) throw new Error("Owned preview cancelled during startup.");
 }
 process.on("SIGINT", () => stop(130));
 process.on("SIGTERM", () => stop(143));
@@ -105,7 +97,7 @@ async function startPreview(port) {
   requireRunning();
   if (inUse)
     throw new Error(
-      "Required hygiene preview port is occupied; listener left untouched.",
+      "Required owned preview port is occupied; listener left untouched.",
     );
   const path = join(root, `preview-${port}.log`);
   const log = await open(path, "wx", 0o600);
@@ -134,11 +126,11 @@ async function startPreview(port) {
   });
   children.push(child);
   if (stopping) signalGroup(child, "SIGTERM");
-  const attempts = process.env.MIA_HYGIENE_TEST_READINESS_ATTEMPTS
-    ? Number(process.env.MIA_HYGIENE_TEST_READINESS_ATTEMPTS)
+  const attempts = process.env.MIA_PREVIEW_TEST_READINESS_ATTEMPTS
+    ? Number(process.env.MIA_PREVIEW_TEST_READINESS_ATTEMPTS)
     : 100;
   if (!Number.isSafeInteger(attempts) || attempts < 1)
-    throw new Error("Invalid hygiene preview readiness bound.");
+    throw new Error("Invalid owned preview readiness bound.");
   for (let attempt = 0; attempt < attempts && !stopping; attempt++) {
     if (child.exitCode !== null || spawnFailed) break;
     try {
@@ -164,7 +156,7 @@ async function startPreview(port) {
           Buffer.from(await asset.arrayBuffer()).equals(builtEntry)
         ) {
           requireRunning();
-          return { path };
+          return;
         }
       }
     } catch {
@@ -172,39 +164,21 @@ async function startPreview(port) {
     }
     await delay(150);
   }
-  throw new Error("Owned hygiene preview did not become ready.");
+  throw new Error("Owned preview did not become ready.");
 }
 
 let result = 1;
 let phase = "preflight";
-let workerStarted = false;
 try {
   phase = "preview-4173";
-  const first = await startPreview(4173);
-  requireRunning();
-  phase = "preview-4174";
-  const second = onlyOrdinaryPreview ? null : await startPreview(4174);
+  await startPreview(4173);
   requireRunning();
   phase = "worker";
-  const workerStdout = await open(join(root, "worker.stdout"), "wx", 0o600);
-  const workerStderr = await open(join(root, "worker.stderr"), "wx", 0o600);
-  logs.push(workerStdout, workerStderr);
-  requireRunning();
   const worker = spawn(commands[1], commands.slice(2), {
     detached: true,
-    stdio: ["ignore", workerStdout.fd, workerStderr.fd],
-    env: {
-      ...process.env,
-      MIA_HYGIENE_PREVIEW_4173: "1",
-      ...(second ? { MIA_HYGIENE_PREVIEW_4174: "1" } : {}),
-      MIA_HYGIENE_SERVER_LOGS: JSON.stringify(
-        second ? [first.path, second.path] : [first.path],
-      ),
-      MIA_HYGIENE_MARKER_MANIFEST: manifest,
-      MIA_HYGIENE_ARTIFACT_ROOT: artifacts,
-    },
+    stdio: "inherit",
+    env: { ...process.env, MIA_OWNED_PREVIEW: "1" },
   });
-  workerStarted = true;
   children.push(worker);
   if (stopping) signalGroup(worker, "SIGTERM");
   result = await new Promise((resolve) => {
@@ -212,82 +186,21 @@ try {
     worker.once("exit", (code) => resolve(code ?? 1));
   });
   if (stopping) result = signalExit;
-  // No child bytes reach the parent. Scan original streams before emitting
-  // only strictly shaped content-free summaries and timings.
 } catch (error) {
   const category =
     error instanceof Error &&
-    error.message.startsWith("Required hygiene preview port is occupied")
+    error.message.startsWith("Required owned preview port is occupied")
       ? "occupied-port"
       : error instanceof Error &&
-          error.message.startsWith("Owned hygiene preview did not become ready")
+          error.message.startsWith("Owned preview did not become ready")
         ? "readiness"
         : "other";
-  console.error(
-    `Owned hygiene preview or worker failed at ${phase}: ${category} (content-free).`,
-  );
+  console.error(`Owned preview or worker failed at ${phase}: ${category}.`);
   result = signalExit || 1;
 } finally {
   stop(result);
   await shutdown;
   clearTimeout(timeout);
-  try {
-    const recorded = await readFile(manifest, "utf8").catch((error) => {
-      if (error.code === "ENOENT") return "";
-      throw error;
-    });
-    const markers = recorded.trim()
-      ? recorded
-          .trimEnd()
-          .split("\n")
-          .flatMap((line) => JSON.parse(line))
-      : [];
-    const logs = await Promise.all(
-      [4173, 4174].map((port) =>
-        readFile(join(root, `preview-${port}.log`)).catch((error) => {
-          if (error.code === "ENOENT") return Buffer.alloc(0);
-          throw error;
-        }),
-      ),
-    );
-    const stdout = workerStarted
-      ? await readFile(join(root, "worker.stdout"))
-      : Buffer.alloc(0);
-    const stderr = workerStarted
-      ? await readFile(join(root, "worker.stderr"))
-      : Buffer.alloc(0);
-    assertMarkerFree(markers, [
-      stdout,
-      stderr,
-      ...logs,
-      ...(await artifactBuffers(artifacts)),
-    ]);
-    if (result === 0) {
-      for (const line of stdout.toString("utf8").split("\n"))
-        if (
-          /^(?:TIMING stage=[\w:-]+ seconds=\d+|Hygiene inventory: \d+ browser cases and \d+ course-unit cases registered\.|Actual route-test hygiene passed: \d+ tests, \d+ secret checkpoints, early-failure canary rejected\.|Route hygiene timing: probes=\d+ total=\d+s test=\d+s overhead=\d+s\.|Course unit hygiene: \d+ actual tests, \d+ checkpoints; early-failure canary rejected; zero marker leaks\.|Course unit timing: probes=\d+ total=\d+s\.|Secret-hygiene timing: (?:playwright|vitest) (?:canary|baseline) run \d+s\.|(?:Route|Course-unit) evidence set: \d+ independent failures; sha256=[a-f0-9]{64}; one canary\.|BROWSER (?:E2E|secret hygiene) passed\.)$/u.test(
-            line,
-          )
-        )
-          console.log(line);
-    }
-  } catch {
-    console.error("Owned hygiene output scan failed (content-free).");
-    result = 1;
-  }
-  if (workerStarted && result !== 0) {
-    const stderr = await readFile(join(root, "worker.stderr")).catch(() =>
-      Buffer.alloc(0),
-    );
-    const stage = stderr
-      .toString("utf8")
-      .match(
-        /^GATE_FAILURE stage=(browser-install|e2e|secret-hygiene|evidence-compare)$/mu,
-      )?.[1];
-    console.error(
-      `Owned hygiene worker did not complete successfully at ${stage ?? "worker"} (content-free).`,
-    );
-  }
   await Promise.all(logs.map((log) => log.close()));
   await rm(root, { recursive: true, force: true });
 }

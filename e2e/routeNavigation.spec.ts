@@ -4,10 +4,7 @@ import {
   protectedJourney,
   routeBackend,
 } from "./routeFixtures";
-import {
-  routeHygieneCheckpoint,
-  routeSecretFixture,
-} from "./routeSecretHygiene";
+import { routeSecretFixture } from "./routeTestFixtures";
 
 test.use({ trace: "off", screenshot: "off", video: "off" });
 const mfa = "/profile/security/mfa";
@@ -168,7 +165,6 @@ test(
       exact: true,
     });
     await password.fill(fixture.password);
-    await routeHygieneCheckpoint(page, "invitation-form");
     await page.getByRole("link", { name: "Back to invitation" }).click();
     await page.getByRole("link", { name: "Accept invitation" }).click();
     expect((await password.inputValue()) === "").toBe(true);

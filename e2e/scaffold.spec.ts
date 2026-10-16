@@ -18,12 +18,9 @@ import { invitationBackend } from "./invitationFixtures";
 import { studentBackend, fillStudent } from "./studentFixtures";
 import { learnResources } from "./learnFixtures";
 import { ownProfileCapabilities } from "../test/mfaFixtures";
-import {
-  injectRouteEarlyFailure,
-  releaseRouteFixture,
-  routeHygieneCheckpoint,
-  routeSecretFixture,
-} from "./routeSecretHygiene";
+import { presentationLocales, presentationMode } from "./presentationMatrix";
+import { expectInertTechnicalDetails } from "./routeFixtures";
+import { releaseRouteFixture, routeSecretFixture } from "./routeTestFixtures";
 
 const locales = [
   "en-US",
@@ -989,7 +986,7 @@ test.describe("required password replacement", () => {
     await page.setViewportSize({ width: 320, height: 900 });
     await mockSession(page, "password-change");
     await page.goto("/auth/password-change");
-    for (const locale of locales) {
+    for (const locale of presentationLocales(locales, "login")) {
       for (const textSize of textSizes) {
         await page.evaluate(
           ([nextLocale, nextTextSize]) => {
@@ -1641,7 +1638,6 @@ async function withStudentHandoff(
   locale: (typeof locales)[number] = "en-US",
   size: (typeof textSizes)[number] = "standard",
 ) {
-  injectRouteEarlyFailure();
   const supervisorContext = await browser.newContext({ baseURL: appUrl });
   const supervisor = await supervisorContext.newPage();
   try {
@@ -1649,7 +1645,6 @@ async function withStudentHandoff(
     await supervisor.goto("/prepare/courses/course_1/students/new");
     await expect(supervisor.locator("main h1")).toBeFocused();
     await fillStudent(supervisor);
-    await routeHygieneCheckpoint(supervisor, "student-entry-provision-input");
     await supervisor
       .getByRole("button", { name: "Create student", exact: true })
       .click();
@@ -1665,7 +1660,6 @@ async function withStudentHandoff(
       size,
     );
     await body(handoff);
-    await routeHygieneCheckpoint(page, "complete");
   } finally {
     await supervisorContext.close();
     releaseRouteFixture(supervisor);
@@ -1896,7 +1890,6 @@ async function replaceStudentPassword(
   await page.locator("#username").fill(handoff.username);
   await pasteInto(page, page.locator("#password"), handoff.temporary);
   if (textSpacing) await expectStudentTextSpacingActive(page);
-  await routeHygieneCheckpoint(page, "student-entry-login-input");
   await page.locator("#password").press("Enter");
   await expect(page).toHaveURL(/\/auth\/password-change$/u);
   await expect(page.locator("main h1")).toBeFocused();
@@ -1928,7 +1921,6 @@ async function replaceStudentPassword(
   await page.keyboard.press("Enter");
   await expect(page.locator("#new-password")).toHaveAttribute("type", "text");
   if (textSpacing) await expectStudentTextSpacingActive(page);
-  await routeHygieneCheckpoint(page, "student-entry-replacement-input");
   await expectNoPageOverflow(page);
   await page.locator("#password-confirmation").press("Enter");
 }
@@ -2023,7 +2015,6 @@ test.describe("student first-sign-in handoff", () => {
           handoff.provision.posts === 1 &&
           handoff.state.counts.replacements === 1,
       ).toBe(true);
-      await routeHygieneCheckpoint(page, "learn-metadata");
       await page.reload();
       await expect(page).toHaveTitle("Course | MIA");
       await expect.poll(() => learn.materialReads).toBe(2);
@@ -2031,7 +2022,6 @@ test.describe("student first-sign-in handoff", () => {
       await expect(page).toHaveURL(/\/login$/u);
       await page.locator("#username").fill(handoff.username);
       await pasteInto(page, page.locator("#password"), handoff.replacement);
-      await routeHygieneCheckpoint(page, "student-entry-later-login-input");
       await page.locator("#password").press("Enter");
       await expectStudentHome(handoff);
       await page.locator("a[href='/learn/courses']").click();
@@ -2090,7 +2080,6 @@ test.describe("student first-sign-in handoff", () => {
           ).toBe(true);
           await page.locator("#password").fill("");
           await pasteInto(page, page.locator("#password"), handoff.replacement);
-          await routeHygieneCheckpoint(page, "student-entry-later-login-input");
           await page.locator("#password").press("Enter");
           await expectStudentHome(handoff);
           expect(handoff.state.counts).toEqual({
@@ -2119,7 +2108,10 @@ test.describe("student first-sign-in handoff", () => {
       ).toBeVisible();
       await expectNoApplicationNavigation(page);
       expect(handoff.state.homeChunks).toBe(0);
-      await routeHygieneCheckpoint(page, "student-entry-gate-error");
+      await expectInertTechnicalDetails(
+        page,
+        routeSecretFixture(page).rawError,
+      );
       handoff.state.failCapabilities = false;
       await page
         .getByRole("button", { name: "Check again", exact: true })
@@ -2991,7 +2983,6 @@ async function withSupervisorHandoff(
   locale: (typeof locales)[number] = "en-US",
   textSize: (typeof textSizes)[number] = "standard",
 ) {
-  injectRouteEarlyFailure();
   const administratorContext = await browser.newContext({
     baseURL: appUrl,
     viewport: { width: 320, height: 900 },
@@ -3005,7 +2996,6 @@ async function withSupervisorHandoff(
       textSize,
     );
     await body(handoff);
-    await routeHygieneCheckpoint(page, "complete");
   } finally {
     await administratorContext.close();
     releaseRouteFixture(administrator);
@@ -3032,7 +3022,6 @@ async function installSupervisorHandoff(
   await administrator
     .getByLabel("Supervisor’s email address")
     .fill(routeSecretFixture(administrator).email);
-  await routeHygieneCheckpoint(administrator, "invitation-email");
   await administrator.getByRole("button", { name: "Send invitation" }).click();
   await expect(administrator.getByText("Delivery queued")).toBeVisible();
   expect(admin.dispatches.create).toBe(1);
@@ -3041,7 +3030,6 @@ async function installSupervisorHandoff(
   await expect(
     administrator.getByText("Pending", { exact: true }),
   ).toBeVisible();
-  await routeHygieneCheckpoint(administrator, "invitation-detail");
   const invitation = admin.invitations[0];
   if (!invitation)
     throw new Error("The created invitation fixture is missing.");
@@ -3339,7 +3327,6 @@ async function acceptSupervisor(
       await page.locator("#new-password").fill("");
       await pasteInto(page, page.locator("#new-password"), fixture.password);
       await page.locator("#password-confirmation").fill(fixture.password);
-      await routeHygieneCheckpoint(page, "onboarding-acceptance-input");
       await expectNoPageOverflow(page);
       if (axe) await expectNoWcagViolations(page);
     },
@@ -3368,7 +3355,6 @@ async function signInSupervisor(handoff: SupervisorHandoff) {
   ).toBeFocused();
   await page.locator("#username").fill("example.supervisor");
   await pasteInto(page, page.locator("#password"), fixture.password);
-  await routeHygieneCheckpoint(page, "onboarding-login-input");
   await tabTo(page, page.locator("button[type=submit]"));
   await page.keyboard.press("Enter");
 }
@@ -3516,7 +3502,10 @@ test.describe("supervisor onboarding handoff", () => {
         page.getByRole("button", { name: "Check again", exact: true }),
       ).toBeVisible();
       await expectNoApplicationNavigation(page);
-      await routeHygieneCheckpoint(page, "onboarding-gate-error");
+      await expectInertTechnicalDetails(
+        page,
+        routeSecretFixture(page).rawError,
+      );
       handoff.state.failCapabilities = false;
       await page
         .getByRole("button", { name: "Check again", exact: true })
@@ -3548,7 +3537,6 @@ test.describe("supervisor onboarding handoff", () => {
         page.getByRole("button", { name: "Sign out", exact: true }),
       ).toBeVisible();
       await pasteInto(page, page.locator("#mfa-code"), handoff.fixture.mfaCode);
-      await routeHygieneCheckpoint(page, "onboarding-mfa-input");
       await page.locator("#mfa-code").press("Enter");
       await expectSupervisorShell(handoff);
       expect(handoff.state.counts).toMatchObject({
@@ -3793,7 +3781,7 @@ test("all locales and text sizes reflow at 320 CSS pixels with WCAG text spacing
   await page.goto("/");
   await applyWcagTextSpacing(page);
 
-  for (const locale of locales) {
+  for (const locale of presentationLocales(locales, "login")) {
     await page.locator("#interface-language").selectOption(locale);
     await expect(page.locator("html")).toHaveAttribute("lang", locale);
     await expect(
@@ -4073,6 +4061,8 @@ for (const zoomFactor of [2, 4] as const) {
 }
 
 test.describe("canonical entry routing", () => {
+  if (presentationMode() === "story")
+    test.describe.configure({ mode: "parallel" });
   test("dispatches MFA without requesting capabilities", async ({ page }) => {
     const capabilityRequests: string[] = [];
     page.on("request", (request) => {

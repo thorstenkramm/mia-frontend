@@ -5,11 +5,9 @@ import {
   protectedJourney,
   routeBackend,
   atBrowserZoom,
+  expectInertTechnicalDetails,
 } from "./routeFixtures";
-import {
-  routeHygieneCheckpoint,
-  routeSecretFixture,
-} from "./routeSecretHygiene";
+import { routeSecretFixture } from "./routeTestFixtures";
 
 test.use({ trace: "off", screenshot: "off", video: "off" });
 const mfa = "/profile/security/mfa";
@@ -53,7 +51,7 @@ test(
     expect(state.stage).toBe("authenticated");
     expect(state.logouts).toBe(1);
     expect(state.ledger).toEqual(["session", "capabilities"]);
-    await routeHygieneCheckpoint(page, "logout-unconfirmed");
+    await expectInertTechnicalDetails(page, routeSecretFixture(page).rawError);
     state.logoutFails = false;
     await page.getByRole("button", { name: "Retry logout" }).click();
     await focusedHeading(page, "Sign in to MIA");
@@ -115,7 +113,10 @@ for (const failure of ["session", "capabilities", "resource"]) {
       await expect(
         page.getByRole("button", { name: "Check again" }),
       ).toBeVisible();
-      await routeHygieneCheckpoint(page, "read-failure");
+      await expectInertTechnicalDetails(
+        page,
+        routeSecretFixture(page).rawError,
+      );
       state.failure = "";
       await page.getByRole("button", { name: "Check again" }).click();
       await focusedHeading(page, "Multi-factor authentication");
@@ -136,7 +137,6 @@ test(
     await page
       .getByLabel("Six-digit code from your authenticator app (required)")
       .fill(routeSecretFixture(page).mfaCode);
-    await routeHygieneCheckpoint(page, "totp-input");
     await page.getByRole("button", { name: "Verify code" }).click();
     await expect(
       page.getByRole("heading", {
@@ -155,7 +155,6 @@ test(
       "Confirm that you saved your recovery codes first.",
     );
     expect(state.verifies).toBe(1);
-    await routeHygieneCheckpoint(page, "codes-held");
     await page
       .getByRole("navigation", { name: "Application" })
       .getByRole("button", { name: "Sign out" })
@@ -228,7 +227,6 @@ test(
     await page
       .getByLabel("Six-digit code from your authenticator app (required)")
       .fill(routeSecretFixture(page).mfaCode);
-    await routeHygieneCheckpoint(page, "totp-input");
     state.failure = "resource";
     await page.getByRole("button", { name: "Verify code" }).click();
     await focusedHeading(page, "Unable to check access");
@@ -239,7 +237,6 @@ test(
     await page.getByRole("link", { name: "Back to Home" }).click();
     expect(new URL(page.url()).pathname).toBe(`${mfa}/recovery-codes`);
     expect(state.verifies).toBe(1);
-    await routeHygieneCheckpoint(page, "codes-held");
     await page.getByRole("button", { name: "Sign out" }).click();
     await focusedHeading(page, "Sign in to MIA");
     expect(state.verifies).toBe(1);

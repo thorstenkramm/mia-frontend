@@ -1,10 +1,7 @@
 import { http, HttpResponse } from "msw";
 import { expect, it } from "vitest";
 import { server } from "../../../test/server";
-import {
-  courseUnitFixture,
-  courseUnitCheckpoint,
-} from "../../../scripts/secret-hygiene-evidence";
+import { courseUnitFixture } from "../../../test/courseUnitFixture";
 import { toCourseId, toMaterialId } from "./entry";
 import { jsonApiMediaType, ApiProtocolError } from "./client";
 import {
@@ -85,7 +82,6 @@ it("material create is one dispatch and relationship admission rejects cross-cou
       saved.name === fixture.name &&
       saved.courseId === course,
   ).toBe(true);
-  courseUnitCheckpoint("material-create");
   let rejected = false;
   try {
     await getMaterial(toCourseId("other"), id, new AbortController().signal);
@@ -185,7 +181,6 @@ it("material protocol validates file identity byte metadata status and scoped na
     expect(rejected).toBe(true);
   }
   expect(noQuery).toBe(true);
-  courseUnitCheckpoint("material-protocol");
 });
 
 it("material files reject null collections and advice never decides server acceptance", async () => {

@@ -103,7 +103,9 @@ blocked_on: null
 ```
 
 Record at phase transitions and actual failures; worker spec notes cover progress within long calls. Session IDs and file
-paths are operational metadata; never record fixture secrets, prompts containing protected content, or tokens. Summarize
+paths are operational metadata; never record real credentials, protected production content, or tokens in these
+checkpoints. Synthetic values in private test failures need no artifact-marker scan; operational handoffs remain
+content-free. For retained privacy checks, name the concrete application harm and cheapest adequate owning layer. Summarize
 accepted-story elapsed time/repair rounds/valid findings/provider failures locally in this record when measurable; do not
 invent totals from commit timestamps or introduce product telemetry.
 

@@ -2,10 +2,7 @@ import { http, HttpResponse } from "msw";
 import { expect, it, vi } from "vitest";
 import { waitFor } from "@testing-library/react";
 import { server } from "../../../test/server";
-import {
-  courseUnitCheckpoint,
-  courseUnitFixture,
-} from "../../../scripts/secret-hygiene-evidence";
+import { courseUnitFixture } from "../../../test/courseUnitFixture";
 import {
   ApiHttpError,
   ApiProtocolError,
@@ -382,7 +379,6 @@ it("material queue serializes duplicate sources and pauses unknown until explici
     type: "application/pdf",
   });
   queue.select([file, file]);
-  courseUnitCheckpoint("material-queued");
   const run = queue.start();
   expect(
     pending.length === 1 &&
@@ -398,7 +394,6 @@ it("material queue serializes duplicate sources and pauses unknown until explici
       counts().reads === 0 &&
       pending.length === 1,
   ).toBe(true);
-  courseUnitCheckpoint("material-unconfirmed");
   await queue.start();
   expect(pending.length).toBe(1);
   await queue.reconcile();
@@ -407,7 +402,6 @@ it("material queue serializes duplicate sources and pauses unknown until explici
       queue.getSnapshot()?.files[0]?.id === files[0]?.id &&
       pending.length === 1,
   ).toBe(true);
-  courseUnitCheckpoint("material-reconciled");
   queue.abandon(1);
   queue.remove(2);
   queue.accept();
@@ -416,7 +410,6 @@ it("material queue serializes duplicate sources and pauses unknown until explici
   expect(queue.getSnapshot()?.review.kind === "List accepted").toBe(false);
   queue.destroy();
   expect(queue.getSnapshot() === null).toBe(true);
-  courseUnitCheckpoint("material-cleared");
 });
 it("material queue supports 200 keyboard rows and rejects each mixed-format source without losing saved draft", async () => {
   const { fixture, queue } = await queueFixture();
@@ -444,7 +437,6 @@ it("material queue supports 200 keyboard rows and rejects each mixed-format sour
   ).toBe(true);
   queue.remove(1);
   expect(queue.getSnapshot()?.rows[0]?.position === 2).toBe(true);
-  courseUnitCheckpoint("material-many");
   queue.destroy();
 });
 it("material queue requires deliberate duplicate-risk acceptance and freezes authoritative processing", async () => {
@@ -468,7 +460,6 @@ it("material queue requires deliberate duplicate-risk acceptance and freezes aut
   );
   queue.select([new File([], "synthetic.pdf")]);
   expect(queue.getSnapshot()?.rows.length).toBe(1);
-  courseUnitCheckpoint("material-frozen");
   queue.destroy();
 });
 it("material file removal keeps persisted rows until exact definitive success and never replays unknown", async () => {
@@ -483,7 +474,6 @@ it("material file removal keeps persisted rows until exact definitive success an
       queue.getSnapshot()?.deletion.kind === "Outcome unknown" &&
       counts().deletes === 1,
   ).toBe(true);
-  courseUnitCheckpoint("material-delete-unknown");
   await queue.deleteChosen();
   expect(counts().deletes).toBe(1);
   await queue.reconcile();
@@ -536,7 +526,6 @@ it.each([204, 404])(
       queue.getSnapshot()?.error === null &&
         queue.getSnapshot()?.deletion.kind === "Remove chosen row",
     ).toBe(true);
-    courseUnitCheckpoint(`material-delete-retired-start-${status}`);
     const announcements: string[] = [];
     queue.configure(
       () => undefined,
@@ -565,7 +554,6 @@ it.each([204, 404])(
             queue.getSnapshot()?.error === null
           : queue.getSnapshot() === null && counts().unavailable === 1),
     ).toBe(true);
-    courseUnitCheckpoint(`material-delete-retired-late-${status}`);
     queue.destroy();
   },
 );
@@ -585,5 +573,4 @@ it("material stopped wait retains a current hidden denial and destroys every que
       counts().unavailable === 1 &&
       counts().reads === 0,
   ).toBe(true);
-  courseUnitCheckpoint("material-stopped-denial");
 });

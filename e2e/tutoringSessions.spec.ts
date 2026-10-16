@@ -2,10 +2,7 @@ import AxeBuilder from "@axe-core/playwright";
 import { expect, test, type Page } from "@playwright/test";
 import { tutoringBackend } from "./tutoringFixtures";
 import { atBrowserZoom, protectedJourney } from "./routeFixtures";
-import {
-  routeHygieneCheckpoint,
-  routeSecretFixture,
-} from "./routeSecretHygiene";
+import { routeSecretFixture } from "./routeTestFixtures";
 
 test.use({ trace: "off", video: "off", screenshot: "off" });
 const start = "/learn/start",
@@ -61,6 +58,15 @@ async function minimized(page: Page) {
   ).toBe(true);
   const tree = await page.locator("main").ariaSnapshot();
   expect(!tree.includes(fixture.rawError)).toBe(true);
+}
+async function persistedTutoringText(page: Page, kind: "course" | "teaching") {
+  const fixture = routeSecretFixture(page);
+  await expect(page.locator("main")).toContainText(
+    kind === "course" ? fixture.courseName : fixture.teachingText,
+  );
+  expect(
+    (await page.locator("main").textContent())?.includes(fixture.rawError),
+  ).toBe(false);
 }
 async function noScroll(page: Page) {
   expect(
@@ -154,7 +160,6 @@ test(
       control.workReads === reads &&
         (await page.evaluate(() => window.__miaTutorSse?.closed())),
     ).toBe(true);
-    await routeHygieneCheckpoint(page, "tutoring-lifecycle");
     await page.getByRole("button", { name: "Refresh", exact: true }).click();
     await ready(page, "Tutoring session");
     expect(
@@ -222,7 +227,6 @@ test(
       (await page.getByLabel("Your message to the tutor").inputValue()) ===
         fixture.teachingText,
     ).toBe(true);
-    await routeHygieneCheckpoint(page, "tutoring-resource-recoverable");
     await page.evaluate(() => window.dispatchEvent(new Event("focus")));
     await expect(
       page.getByRole("button", { name: "Refresh", exact: true }),
@@ -237,7 +241,6 @@ test(
           fixture.teachingText,
         ),
     ).toBe(true);
-    await routeHygieneCheckpoint(page, "tutoring-resource-denied");
   }),
 );
 test(
@@ -267,7 +270,6 @@ test(
       "Response interrupted",
     );
     expect(control.forbidden).toBe(0);
-    await routeHygieneCheckpoint(page, "tutoring-stop");
   }),
 );
 
@@ -307,7 +309,6 @@ test(
       "Response in progress",
     );
     expect(control.stopPosts).toBe(1);
-    await routeHygieneCheckpoint(page, "tutoring-stop-conflict");
   }),
 );
 
@@ -353,7 +354,6 @@ test(
       "Response interrupted",
     );
     expect(control.stopPosts).toBe(1);
-    await routeHygieneCheckpoint(page, "tutoring-stop-loss");
   }),
 );
 
@@ -479,7 +479,6 @@ for (const outcome of ["created", "replay", "conflict", "lose"] as const) {
         ).toBe(true);
       }
       expect(control.forbidden).toBe(0);
-      await routeHygieneCheckpoint(page, `tutoring-retry-${outcome}`);
     }),
   );
 }
@@ -569,7 +568,6 @@ test(
     } finally {
       await secondPage.close();
     }
-    await routeHygieneCheckpoint(page, "tutoring-two-tab");
   }),
 );
 test(
@@ -644,7 +642,6 @@ test(
           name: "Stop response · Response queued · Attempt 1",
         }),
       ).toHaveCount(0);
-      await routeHygieneCheckpoint(page, "tutoring-stop-terminal-race");
     } finally {
       release();
     }
@@ -1071,7 +1068,7 @@ test(
         "MIA's tutor is AI-powered.",
       ) === true,
     ).toBe(true);
-    await routeHygieneCheckpoint(page, "tutoring-content");
+    await persistedTutoringText(page, "teaching");
     // Reload reconstructs the workspace from authoritative reads only.
     await page.reload();
     await ready(page, "Tutoring session");
@@ -1111,7 +1108,7 @@ test(
         page.url().endsWith(intent) &&
         control.forbidden === 0,
     ).toBe(true);
-    await routeHygieneCheckpoint(page, "tutoring-course");
+    await persistedTutoringText(page, "course");
     // The composed draft never dispatched; leaving confirms its discard.
     await page.getByRole("link", { name: "Continue session" }).click();
     await page.getByRole("button", { name: "Discard and leave" }).click();
@@ -1146,7 +1143,6 @@ test(
       page.getByRole("link", { name: "Continue session" }),
     ).toBeVisible();
     expect(control.starts === 1).toBe(true);
-    await routeHygieneCheckpoint(page, "tutoring-course");
     // A later fresh load (another device) discovers the same session.
     await page.reload();
     await page.goto(recovery);
@@ -1187,7 +1183,6 @@ test(
         control.materialsSent.join() === "," &&
         control.forbidden === 0,
     ).toBe(true);
-    await routeHygieneCheckpoint(page, "tutoring-content");
     await minimized(page);
   }),
 );
@@ -1240,7 +1235,6 @@ test(
         !text?.includes(fixture.teachingText) &&
         !text?.includes(fixture.rawError),
     ).toBe(true);
-    await routeHygieneCheckpoint(page, "learn-hidden");
   }),
 );
 
@@ -1264,7 +1258,6 @@ test(
         (await page.locator(`main a[href="/learn/courses"]`).count()) === 1,
     ).toBe(true);
     await minimized(page);
-    await routeHygieneCheckpoint(page, "tutoring-finished");
   }),
 );
 
@@ -1302,7 +1295,6 @@ test(
       ),
     ).toBe(true);
     await minimized(page);
-    await routeHygieneCheckpoint(page, "tutoring-finish-success");
     await page
       .locator("main")
       .getByRole("link", { name: "Start a tutoring session" })
@@ -1347,7 +1339,6 @@ test(
         control.turnReads === 0 &&
         control.workReads === 0,
     ).toBe(true);
-    await routeHygieneCheckpoint(page, "tutoring-finish-owner");
   }),
 );
 
@@ -1375,7 +1366,6 @@ test(
       page.getByRole("button", { name: "Review Finish" }),
     ).toBeDisabled();
     expect(control.finishPosts === 0).toBe(true);
-    await routeHygieneCheckpoint(page, "tutoring-finish-ineligible");
   }),
 );
 
@@ -1396,7 +1386,6 @@ test(
       page.getByRole("dialog").getByText(/finish outcome is unknown/u),
     ).toBeVisible();
     expect(control.finishPosts === 1 && control.turnReads === 0).toBe(true);
-    await routeHygieneCheckpoint(page, "tutoring-finish-unknown");
     await page.getByRole("button", { name: "Refresh" }).click();
     await ready(page, "Tutoring session");
     expect(control.finishPosts === 1 && control.turnReads === 1).toBe(true);
@@ -1430,7 +1419,6 @@ test(
         page.getByRole("dialog").getByText(/finish outcome is unknown/u),
       ).toBeVisible();
       expect(control.finishPosts === 1 && control.turnReads === 0).toBe(true);
-      await routeHygieneCheckpoint(page, "tutoring-finish-stopped");
       await page.getByRole("button", { name: "Refresh" }).click();
       await ready(page, "Tutoring session");
       expect(control.finishPosts === 1 && control.turnReads === 1).toBe(true);
@@ -1512,7 +1500,6 @@ test(
         page.locator("main").getByText(/finish outcome is unknown/u),
       ).toBeVisible();
       expect(control.finishPosts === 1).toBe(true);
-      await routeHygieneCheckpoint(page, "tutoring-finish-return");
     } finally {
       release();
     }
@@ -1580,7 +1567,6 @@ test(
       page.getByRole("button", { name: "Confirm Finish" }),
     ).toBeDisabled();
     expect(control.finishPosts === 1 && control.workReads >= 2).toBe(true);
-    await routeHygieneCheckpoint(page, "tutoring-finish-failed-check");
   }),
 );
 
@@ -1633,7 +1619,6 @@ test(
       await page.getByRole("button", { name: "Confirm Finish" }).click();
       await ready(page, "Tutoring session");
       expect(control.finishPosts === 2 && control.turnReads === 1).toBe(true);
-      await routeHygieneCheckpoint(page, "tutoring-finish-resolved");
     } finally {
       release();
     }
@@ -1664,7 +1649,6 @@ test(
         control.workReads > reads &&
         control.turnReads === 0,
     ).toBe(true);
-    await routeHygieneCheckpoint(page, "tutoring-finish-race");
   }),
 );
 
@@ -1703,7 +1687,6 @@ test(
       .withTags(["wcag2a", "wcag2aa", "wcag21aa", "wcag22aa"])
       .analyze();
     expect(completedAxe.violations.length === 0).toBe(true);
-    await routeHygieneCheckpoint(page, "tutoring-finish-access");
   }),
 );
 
@@ -1723,7 +1706,6 @@ test("tutoring completed transcript preserves semantics at actual 200 percent zo
       .withTags(["wcag2a", "wcag2aa", "wcag21aa", "wcag22aa"])
       .analyze();
     expect(axe.violations.length === 0 && control.workReads === 0).toBe(true);
-    await routeHygieneCheckpoint(page, "tutoring-finish-zoom");
   });
 });
 
@@ -1764,7 +1746,6 @@ test(
       control.messagePosts === 1 &&
         (await composer.inputValue()) === "a follow-up question",
     ).toBe(true);
-    await routeHygieneCheckpoint(page, "tutoring-content");
     await minimized(page);
   }),
 );
@@ -1806,7 +1787,6 @@ test(
     await expect(
       page.getByRole("heading", { name: "Response queued" }),
     ).toBeVisible();
-    await routeHygieneCheckpoint(page, "tutoring-content");
     await minimized(page);
   }),
 );
@@ -1836,7 +1816,6 @@ test(
     await page.getByRole("button", { name: "Refresh", exact: true }).click();
     await expect.poll(() => control.workReads === 2).toBe(true);
     expect(control.messagePosts === 1 && control.forbidden === 0).toBe(true);
-    await routeHygieneCheckpoint(page, "tutoring-content");
     await minimized(page);
   }),
 );
@@ -1867,7 +1846,6 @@ test(
           .getByRole("heading", { name: unknownSendHeading })
           .count()) === 0,
     ).toBe(true);
-    await routeHygieneCheckpoint(page, "tutoring-content");
     await minimized(page);
   }),
 );
@@ -1933,7 +1911,6 @@ test(
     await expect
       .poll(async () => (await page.locator("main article").count()) >= 1)
       .toBe(true);
-    await routeHygieneCheckpoint(page, "tutoring-content");
   }),
 );
 

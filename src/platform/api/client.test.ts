@@ -1,10 +1,7 @@
 import { http, HttpResponse } from "msw";
 import { expect, it } from "vitest";
 import { server } from "../../../test/server";
-import {
-  courseUnitCheckpoint,
-  courseUnitFixture,
-} from "../../../scripts/secret-hygiene-evidence";
+import { courseUnitFixture } from "../../../test/courseUnitFixture";
 import { ApiTransportError, sendUnsafeRequest } from "./client";
 
 it("preparation unsafe PATCH dispatch is single and cannot inherit read retries", async () => {
@@ -32,5 +29,4 @@ it("preparation unsafe PATCH dispatch is single and cannot inherit read retries"
     ),
   ).toBe(true);
   expect(attempts === 1 && valid).toBe(true);
-  courseUnitCheckpoint("preparation-client");
 });

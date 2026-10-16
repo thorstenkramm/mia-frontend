@@ -138,10 +138,8 @@ describe("invitation transport", () => {
 
   it("creates only a supervisor invitation for the entered address", async () => {
     const observations: { bodyMatches: boolean; csrfMatches: boolean }[] = [];
-    const address =
-      process.env.MIA_INVITATION_UNIT_EMAIL ??
-      `invitee-${crypto.randomUUID()}@example.test`;
-    const csrf = process.env.MIA_INVITATION_UNIT_CSRF ?? crypto.randomUUID();
+    const address = `invitee-${crypto.randomUUID()}@example.test`;
+    const csrf = crypto.randomUUID();
     server.use(
       http.post("/api/v1/invitations", async ({ request }) => {
         const body = await request.json();
@@ -171,10 +169,8 @@ describe("invitation transport", () => {
     );
     const created = await createSupervisorInvitation(address, csrf);
     expect(observations).toHaveLength(1);
-    // The deliberate-failure probe uses this actual request-contract assertion.
-    // Only booleans can reach Vitest's original failure formatter.
     expect(observations[0]?.bodyMatches, "Invitation request contract").toBe(
-      process.env.MIA_INVITATION_UNIT_FAIL !== "1",
+      true,
     );
     expect(observations[0]?.csrfMatches).toBe(true);
     expect(created).toMatchObject({

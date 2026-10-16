@@ -27,10 +27,7 @@ import { holdGuardedHistoryTraversals } from "../../platform/ui/routeDeparture";
 import { useMaterialLifecycle } from "./useMaterialLifecycle";
 import { MaterialBriefFields } from "./MaterialBriefFields";
 import { MaterialLifecycleFeedback } from "./MaterialProcessingRoute";
-import {
-  courseUnitFixture,
-  courseUnitCheckpoint,
-} from "../../../scripts/secret-hygiene-evidence";
+import { courseUnitFixture } from "../../../test/courseUnitFixture";
 
 let saved: Material;
 let sends = 0,
@@ -306,7 +303,6 @@ it("mounted brief fields give corrective named errors focus and recovery without
   );
   expect(sends).toBe(0);
   expect(document.activeElement?.id).toBe("brief-validation");
-  courseUnitCheckpoint("brief-validation-invalid");
   const summary = view.getByRole("link", {
     name: "Summary: Required. Enter at least one character.",
   });
@@ -362,7 +358,6 @@ it("mounted brief fields give corrective named errors focus and recovery without
       true,
     ),
   );
-  courseUnitCheckpoint("brief-validation-recovered");
 });
 it("successive saves invalidate readiness and successful Refresh replaces failure and fences older reads", async () => {
   readinessState = "active_accepting";
@@ -414,7 +409,6 @@ it("successive saves invalidate readiness and successful Refresh replaces failur
       !latest.readinessFailed &&
       sends === 3,
   ).toBe(true);
-  courseUnitCheckpoint("brief-readiness-reconciled");
   readinessWaiting = new Promise<void>((resolve) => {
     finish = resolve;
   });
@@ -427,7 +421,6 @@ it("successive saves invalidate readiness and successful Refresh replaces failur
   expect(latest.material === null && latest.readinessMessage === null).toBe(
     true,
   );
-  courseUnitCheckpoint("brief-readiness-teardown");
 });
 for (const disposition of ["stop", "teardown"] as const)
   for (const status of [200, 404, 403] as const)
@@ -459,7 +452,6 @@ for (const disposition of ["stop", "teardown"] as const)
       ).toBe(true);
       if (disposition === "stop") fireEvent.click(view.getByText("Stop"));
       else act(teardown);
-      courseUnitCheckpoint(`brief-dependent-${disposition}-${status}-retired`);
       if (status !== 200)
         readinessDenial = new ApiHttpError(
           { status, body: "" },
@@ -488,7 +480,6 @@ for (const disposition of ["stop", "teardown"] as const)
             latest.draft !== null &&
             latest.state.kind === "Save accepted",
         ).toBe(true);
-      courseUnitCheckpoint(`brief-dependent-${disposition}-${status}-settled`);
     });
 it("changed approved brief revokes only from returned truth and normalized no-op stays approved", async () => {
   const view = mount();
@@ -501,7 +492,6 @@ it("changed approved brief revokes only from returned truth and normalized no-op
     ).toBe(true),
   );
   expect(latest.feedback?.includes("revoked") === false).toBe(true);
-  courseUnitCheckpoint("brief-saved");
   fireEvent.change(view.getByLabelText("Summary"), {
     target: { value: `${courseUnitFixture().teachingText}-changed` },
   });
@@ -512,7 +502,6 @@ it("changed approved brief revokes only from returned truth and normalized no-op
         latest.feedback?.includes("revoked"),
     ).toBe(true),
   );
-  courseUnitCheckpoint("brief-revoked");
   const revoked = latest.feedback;
   await act(() => latest.reconcile());
   expect(sends === 2 && latest.feedback !== revoked).toBe(true);
@@ -531,7 +520,6 @@ it("lost save freezes submitted input and Refresh matches values without an exec
   expect(
     latest.material?.approved === true && latest.draft?.summary === value,
   ).toBe(true);
-  courseUnitCheckpoint("brief-unknown");
   await act(() => latest.reconcile());
   expect(
     latest.state.kind === "Read matches submit" &&
@@ -539,7 +527,6 @@ it("lost save freezes submitted input and Refresh matches values without an exec
       latest.material?.approved === false &&
       sends === 1,
   ).toBe(true);
-  courseUnitCheckpoint("brief-reconciled");
 });
 it("different current read preserves dirty input and requires deliberate discard", async () => {
   const view = mount();
@@ -601,14 +588,12 @@ it("scope teardown drops drafts and errors immediately and fences a pending resp
   });
   fireEvent.click(view.getByText("Save"));
   await waitFor(() => expect(sends === 1).toBe(true));
-  courseUnitCheckpoint("brief-pending");
   act(teardown);
   expect(
     latest.material === null &&
       latest.draft === null &&
       view.container.querySelector("textarea") === null,
   ).toBe(true);
-  courseUnitCheckpoint("brief-teardown");
   await act(async () => {
     release?.();
     await waiting;

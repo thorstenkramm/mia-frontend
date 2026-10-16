@@ -10,10 +10,7 @@ import userEvent from "@testing-library/user-event";
 import { http, HttpResponse, type JsonBodyType } from "msw";
 import { afterAll, afterEach, beforeAll, beforeEach, expect, it } from "vitest";
 import { server } from "../../../test/server";
-import {
-  courseUnitCheckpoint,
-  courseUnitFixture,
-} from "../../../scripts/secret-hygiene-evidence";
+import { courseUnitFixture } from "../../../test/courseUnitFixture";
 import { authenticatedSessionResponse } from "../../../test/mfaFixtures";
 import { App } from "../App";
 import { AnnouncementProvider } from "../../platform/announcer/AnnouncementRegion";
@@ -233,7 +230,6 @@ it("activation checks current facts with native disabled confirmation and Cancel
   ).toBe("-1");
   release();
   await screen.findByRole("heading", { level: 1, name: control.name });
-  courseUnitCheckpoint("activation-success");
 });
 
 it("activation in flight changes label, disables submit and offers Stop waiting", async () => {
@@ -254,7 +250,6 @@ it("activation in flight changes label, disables submit and offers Stop waiting"
   expect(screen.queryByRole("link", { name: "Cancel" })).toBeNull();
   release();
   await screen.findByRole("heading", { level: 1, name: control.name });
-  courseUnitCheckpoint("activation-success");
 });
 
 for (const path of ["readiness", "activate"])
@@ -264,7 +259,6 @@ for (const path of ["readiness", "activate"])
     mount(`/prepare/courses/course_1/${path}`);
     await screen.findByRole("heading", { level: 1, name: "Home" });
     expect(control.reads === 0 && control.posts === 0).toBe(true);
-    courseUnitCheckpoint("activation-gate");
   });
 
 it("readiness unavailable admission hides course identity and offers explicit retry", async () => {
@@ -279,7 +273,6 @@ it("readiness unavailable admission hides course identity and offers explicit re
     !document.querySelector("main")?.textContent?.includes(fixture.name) &&
       control.reads === 1,
   ).toBe(true);
-  courseUnitCheckpoint("readiness-unavailable");
   control.readFail = false;
   await userEvent
     .setup()
@@ -334,7 +327,6 @@ it("readiness offers only implemented trusted blocker destinations and no local 
         includes("Activation unavailable"),
     ).toBe(true),
   );
-  courseUnitCheckpoint("activation-blockers");
 });
 
 it("readiness counts display blockers only and shows action-only blockers without links", async () => {
@@ -355,7 +347,6 @@ it("readiness counts display blockers only and shows action-only blockers withou
       'section[aria-labelledby="course-blockers-heading"] a',
     ).length,
   ).toBe(0);
-  courseUnitCheckpoint("activation-blockers");
 });
 
 it("eligible readiness links to activation only after admitted first activation", async () => {
@@ -368,7 +359,6 @@ it("eligible readiness links to activation only after admitted first activation"
       .getAttribute("href"),
   ).toBe("/prepare/courses/course_1/activate");
   expect(control.reads === 1 && control.posts === 0).toBe(true);
-  courseUnitCheckpoint("activation-blockers");
 });
 
 for (const acceptance of ["active_accepting", "active_not_accepting"])
@@ -407,7 +397,6 @@ for (const acceptance of ["active_accepting", "active_not_accepting"])
           ),
       ).toBe(true),
     );
-    courseUnitCheckpoint("activation-success");
   });
 
 for (const change of ["name", "teaching", "eligibility", "lifecycle"])
@@ -454,7 +443,6 @@ for (const change of ["name", "teaching", "eligibility", "lifecycle"])
       expect(
         screen.queryByRole("button", { name: "Confirm activation" }),
       ).toBeNull();
-    courseUnitCheckpoint("activation-changed");
   });
 
 for (const outcome of ["conflict", "already", "lose", "malformed", "server"])
@@ -480,7 +468,6 @@ for (const outcome of ["conflict", "already", "lose", "malformed", "server"])
         ),
       ).toBeTruthy();
     }
-    courseUnitCheckpoint("activation-outcome");
     if (unknown) {
       await user.click(screen.getByRole("button", { name: "Refresh course" }));
       await waitFor(() => expect(control.reads === 3).toBe(true));
@@ -512,7 +499,6 @@ for (const outcome of ["conflict", "already", "lose", "malformed", "server"])
         ).toBe(true),
       );
     }
-    courseUnitCheckpoint("activation-reconciled");
   });
 
 for (const phase of ["post"])
@@ -544,7 +530,6 @@ for (const phase of ["post"])
         !document.body.textContent?.includes(fixture.rawError) &&
         control.posts === (phase === "post" ? 1 : 0),
     ).toBe(true);
-    courseUnitCheckpoint("activation-hidden");
   });
 
 it("activation Stop waiting keeps late success unknown and reconciliation never attributes it", async () => {
@@ -569,7 +554,6 @@ it("activation Stop waiting keeps late success unknown and reconciliation never 
       screen.queryByRole("button", { name: "Confirm activation" }) === null &&
       !document.body.textContent?.includes("Course activation confirmed."),
   ).toBe(true);
-  courseUnitCheckpoint("activation-stopped");
 });
 
 for (const loss of ["csrf", "expired", "restricted", "lifecycle"])
@@ -595,7 +579,6 @@ for (const loss of ["csrf", "expired", "restricted", "lifecycle"])
         control.posts === 1 &&
         control.reads === reads,
     ).toBe(true);
-    courseUnitCheckpoint("activation-teardown");
   });
 
 it("activation preflight failure requires a new readiness review before another attempt", async () => {
@@ -617,7 +600,6 @@ it("activation preflight failure requires a new readiness review before another 
   );
   await screen.findByRole("heading", { level: 1, name: "Course readiness" });
   expect(control.posts).toBe(0);
-  courseUnitCheckpoint("activation-read-failed");
 });
 
 it("activation duplicate native submissions cannot queue another unsafe dispatch", async () => {
@@ -639,7 +621,6 @@ it("activation duplicate native submissions cannot queue another unsafe dispatch
   await act(async () => release());
   await screen.findByRole("heading", { level: 1, name: control.name });
   expect(control.posts === 1).toBe(true);
-  courseUnitCheckpoint("activation-duplicate");
 });
 
 it("activation stopped preflight cannot dispatch after a late eligible read", async () => {
@@ -660,7 +641,6 @@ it("activation stopped preflight cannot dispatch after a late eligible read", as
   expect(
     control.posts === 0 && window.location.pathname.endsWith("readiness"),
   ).toBe(true);
-  courseUnitCheckpoint("activation-preflight-stopped");
 });
 
 it("activation preflight lifecycle shield prevents future unsafe dispatch and scope recovery prevents discovery", async () => {
@@ -682,7 +662,6 @@ it("activation preflight lifecycle shield prevents future unsafe dispatch and sc
   await user.click(await screen.findByRole("button", { name: "Refresh" }));
   await screen.findByRole("heading", { level: 1, name: "Home" });
   expect(control.reads === 2 && control.posts === 0).toBe(true);
-  courseUnitCheckpoint("activation-preflight-shield");
 });
 
 it("activation unknown departure asks before dropping attempt and security loss overrides the dialog", async () => {
@@ -708,7 +687,6 @@ it("activation unknown departure asks before dropping attempt and security loss 
       !document.body.textContent?.includes(fixture.name) &&
       control.posts === 1,
   ).toBe(true);
-  courseUnitCheckpoint("activation-departure");
 });
 
 it("activation direct previously activated course stays unavailable even with server eligibility", async () => {
@@ -728,5 +706,4 @@ it("activation direct previously activated course stays unavailable even with se
   );
   await screen.findByRole("heading", { level: 1, name: "Course readiness" });
   expect(control.posts === 0).toBe(true);
-  courseUnitCheckpoint("activation-previously-active");
 });

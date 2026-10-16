@@ -183,8 +183,8 @@ graph TD
 - **Rule:** `npm test` runs Vitest with jsdom and React Testing Library (+`user-event`). Network is faked only at the
   network layer via MSW, so client core, CSRF, zod boundaries, and the data layer run unmodified in integration tests.
   Tests are colocated `*.test.ts(x)`; shared handlers and fixture builders live in root `test/`, outside the `src`
-  tiers, and redact secret-marked headers and bodies by construction so no failure output can print them; the
-  secret-marker scan runs in the full check.
+  tiers. Synthetic values in private test failure output need no marker scan; the application privacy
+  boundaries retain their own assertions.
 
 ### AD-12 — Errors cross the client boundary as one discriminated union
 

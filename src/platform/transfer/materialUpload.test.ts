@@ -7,10 +7,7 @@ import {
   authenticatedSessionResponse,
   ownProfileCapabilities,
 } from "../../../test/mfaFixtures";
-import {
-  courseUnitCheckpoint,
-  courseUnitFixture,
-} from "../../../scripts/secret-hygiene-evidence";
+import { courseUnitFixture } from "../../../test/courseUnitFixture";
 import { SessionController } from "../session/sessionController";
 import { toMaterialId } from "../api/entry";
 import { jsonApiMediaType } from "../api/client";
@@ -103,7 +100,6 @@ it("material transfer sends one multipart file with current CSRF and measured pr
         !xhr.headers.has("Content-Type") &&
         [...(xhr.body?.keys() ?? [])].join() === "file",
     ).toBe(true);
-    courseUnitCheckpoint("material-sent");
     xhr.upload.dispatchEvent(
       new ProgressEvent("progress", {
         lengthComputable: true,
@@ -144,7 +140,6 @@ it("material transfer sends one multipart file with current CSRF and measured pr
         states.includes("Verifying") &&
         xhr.sends === 1,
     ).toBe(true);
-    courseUnitCheckpoint("material-persisted");
   } finally {
     close();
   }
@@ -193,7 +188,6 @@ it.each([
           xhr.onload === null &&
           xhr.upload.onprogress === null,
       ).toBe(true);
-      courseUnitCheckpoint(`material-transfer-${mode}`);
     } finally {
       close();
     }
@@ -218,7 +212,6 @@ it("material transfer preserves original rejected UTF-8 disclosure and fences se
         result.failure.kind === "http" &&
         result.failure.disclosure.body === raw,
     ).toBe(true);
-    courseUnitCheckpoint("material-error");
     const pending = transfer.upload(
       id,
       new File([fixture.teachingText], `${fixture.name}.pdf`),

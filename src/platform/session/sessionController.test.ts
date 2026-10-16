@@ -8,10 +8,7 @@ import { capturePasswordResetLink } from "./passwordResetLink";
 import { SessionController } from "./sessionController";
 import { MaterialUpload } from "../transfer/materialUpload";
 import { ApiHttpError } from "../api/client";
-import {
-  courseUnitFixture,
-  courseUnitCheckpoint,
-} from "../../../scripts/secret-hygiene-evidence";
+import { courseUnitFixture } from "../../../test/courseUnitFixture";
 import {
   authenticatedSessionResponse,
   ownProfileCapabilities,
@@ -79,7 +76,6 @@ it("material CSRF rejection destroys authenticated work and only explicit recove
         sends === 1 &&
         reads.length === before,
     ).toBe(true);
-    courseUnitCheckpoint("material-csrf-state");
     await controller.refreshSession();
     expect(
       controller.getSnapshot().kind === "Authenticated" &&

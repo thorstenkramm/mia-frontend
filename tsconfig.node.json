@@ -17,7 +17,6 @@
   "include": [
     "vite.config.ts",
     "vitest.config.ts",
-    "vitest.secret-hygiene.config.ts",
     "playwright*.config.ts",
     "scripts/**/*.ts"
   ]

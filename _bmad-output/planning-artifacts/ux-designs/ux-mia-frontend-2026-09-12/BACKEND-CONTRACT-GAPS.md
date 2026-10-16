@@ -1762,7 +1762,7 @@ Verbatim warning acknowledgment and mitigation from the 2026-10-10 execution che
 
 Mandatory mitigation: immediately discard brief and every non-metadata field at the API boundary upon receipt. Carry
 only the metadata the surface renders; no broad Material object in application state, DOM, accessibility tree, logs,
-announcements or test artifacts. Changed/denied membership uses the fixed existence-hiding presentation; reload/later
+announcements. Changed/denied membership uses the fixed existence-hiding presentation; reload/later
 sign-in rediscovers backend membership without implying a second account. Course detail exposes only authorized
 active-course read actions and metadata. Tutoring start (6.1), downloads and private-material handling remain excluded.
 BCG-003 navigation guidance and BCG-011 authoritative read-only readiness remain in force; neither is globally closed.
@@ -1791,7 +1791,8 @@ server-filtered metadata response. Never expand this exception to other surfaces
 
 - Product/OpenAPI agreement and backend tests for joined-active discovery and minimized learner representations.
 - Mixed-role, revoked membership, inactive course, cross-course and material scope/approval/technical-state regressions.
-- Frontend boundary-discard, state/DOM/accessibility/log/artifact non-exposure, ordered admission and fixed hidden-result evidence.
+- Frontend boundary-discard, state/DOM/accessibility/production-log non-exposure, ordered admission and fixed
+  hidden-result evidence. Private synthetic test output is not an application disclosure.
 
 ## Release Gate
 

@@ -1,10 +1,7 @@
 import { http, HttpResponse, type JsonBodyType } from "msw";
 import { expect, it } from "vitest";
 import { server } from "../../../test/server";
-import {
-  courseUnitCheckpoint,
-  courseUnitFixture,
-} from "../../../scripts/secret-hygiene-evidence";
+import { courseUnitFixture } from "../../../test/courseUnitFixture";
 import {
   ApiProtocolError,
   ApiTransportError,
@@ -104,7 +101,6 @@ it("preparation reads readiness and persists only the chosen teaching field", as
       current.readiness.blockers[1]?.field === null &&
       !("logo_url" in current.fields),
   ).toBe(true);
-  courseUnitCheckpoint("preparation-read");
   const saved = await updateCourseTeachingField(
     id,
     "learningGoals",
@@ -117,7 +113,6 @@ it("preparation reads readiness and persists only the chosen teaching field", as
       saved.fields.learningGoals === fixture.teachingText &&
       saved.fields.instructions === null,
   ).toBe(true);
-  courseUnitCheckpoint("preparation-patch");
 });
 
 it("preparation rejects malformed readiness and never follows unsafe blocker links", async () => {
@@ -164,7 +159,6 @@ it("preparation rejects malformed readiness and never follows unsafe blocker lin
     ).toBe(true);
   }
   expect(reads === 5).toBe(true);
-  courseUnitCheckpoint("preparation-links");
   server.use(
     http.get("/api/v1/courses/course_1", () =>
       json({
@@ -212,7 +206,6 @@ it("preparation lost PATCH response never replays and preserves error identity",
     ),
   ).toBe(true);
   expect(sends === 1).toBe(true);
-  courseUnitCheckpoint("preparation-unknown");
   server.use(
     http.patch("/api/v1/courses/course_1", () => {
       sends++;
@@ -235,7 +228,6 @@ it("preparation lost PATCH response never replays and preserves error identity",
     ),
   ).toBe(true);
   expect(sends === 2).toBe(true);
-  courseUnitCheckpoint("preparation-error");
 });
 
 it("sends one atomic create and reads the persisted minimized course", async () => {
@@ -292,7 +284,6 @@ it("sends one atomic create and reads the persisted minimized course", async () 
       course.name === fixture.name &&
       course.supervisors[0] === "s1",
   ).toBe(true);
-  courseUnitCheckpoint("atomic-payload");
   const persisted = await getCourse(
     toCourseId("course_1"),
     new AbortController().signal,
@@ -302,7 +293,6 @@ it("sends one atomic create and reads the persisted minimized course", async () 
       !("readiness" in persisted) &&
       !("description" in persisted),
   ).toBe(true);
-  courseUnitCheckpoint("persisted-projection");
 });
 
 it("does not replay a create after response loss or malformed success", async () => {
@@ -321,7 +311,6 @@ it("does not replay a create after response loss or malformed success", async ()
     ),
   ).toBe(true);
   expect(sends === 1).toBe(true);
-  courseUnitCheckpoint("lost-response");
   server.use(
     http.post("/api/v1/courses", () => {
       sends++;
@@ -338,7 +327,6 @@ it("does not replay a create after response loss or malformed success", async ()
     ),
   ).toBe(true);
   expect(sends === 2).toBe(true);
-  courseUnitCheckpoint("malformed-success");
 });
 
 it("activation sends a single bodyless contract request and validates active persisted truth", async () => {
@@ -383,7 +371,6 @@ it("activation sends a single bodyless contract request and validates active per
       result.course.state === "active" &&
       result.readiness.state === "active_not_accepting",
   ).toBe(true);
-  courseUnitCheckpoint("activation-wire");
 });
 
 it("activation rejects contradictory protocol success without replay", async () => {
@@ -433,7 +420,6 @@ it("activation rejects contradictory protocol success without replay", async () 
     ).toBe(true);
   }
   expect(sends === 6).toBe(true);
-  courseUnitCheckpoint("activation-malformed");
 });
 
 it("readiness retains server false independently of empty display blockers and rejects malformed action facts", async () => {
@@ -523,5 +509,4 @@ it("readiness retains server false independently of empty display blockers and r
         (link === "/api/v1/courses/course_1/materials"),
     ).toBe(true);
   }
-  courseUnitCheckpoint("activation-readiness");
 });

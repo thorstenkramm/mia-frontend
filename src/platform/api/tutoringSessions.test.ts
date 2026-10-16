@@ -12,10 +12,7 @@ import {
   tutoringTurnsPage,
   tutoringWorkDocument,
 } from "../../../test/tutoringFixtures";
-import {
-  courseUnitCheckpoint,
-  courseUnitFixture,
-} from "../../../scripts/secret-hygiene-evidence";
+import { courseUnitFixture } from "../../../test/courseUnitFixture";
 import { ApiHttpError, ApiProtocolError, jsonApiMediaType } from "./client";
 import { toCourseId, toMaterialId } from "./entry";
 import {
@@ -111,7 +108,6 @@ it("Tutoring Finish requires atomic server eligibility and the exact definitive 
   expect(
     await protocolRejected(completeTutoringSession(session, seed.csrf)),
   ).toBe(true);
-  courseUnitCheckpoint("tutoring-finish-document");
 });
 
 it("Tutoring terminal reconciliation accepts only the targeted persisted response", async () => {
@@ -162,7 +158,6 @@ it("Tutoring terminal reconciliation accepts only the targeted persisted respons
       getTutoringResponseCurrentWork(session, "response_gen", signal()),
     ),
   ).toBe(true);
-  courseUnitCheckpoint("tutoring-targeted-terminal");
 });
 
 it("Tutoring Stop accepts only 200 with a targeted interrupted response and independent current work", async () => {
@@ -239,7 +234,6 @@ it("Tutoring Stop accepts only 200 with a targeted interrupted response and inde
       stopTutorResponse(session, "response_gen", seed.csrf),
     ),
   ).toBe(true);
-  courseUnitCheckpoint("tutoring-stop-document");
 });
 
 it("Tutoring response retry accepts linked 201/200 but rejects wrong lineage and status", async () => {
@@ -330,7 +324,6 @@ it("Tutoring response retry accepts linked 201/200 but rejects wrong lineage and
       ),
     ),
   ).toBe(true);
-  courseUnitCheckpoint("tutoring-retry-document");
 });
 
 // A violated rejection assertion must not print a mistakenly returned protected
@@ -371,7 +364,6 @@ it("Tutoring discovery returns explicit none and strips every non-projection fie
         "courseId,courseName,id,startedAt" &&
       !JSON.stringify(active).includes(seed.teachingText),
   ).toBe(true);
-  courseUnitCheckpoint("tutoring-discovery");
 });
 
 it("Tutoring discovery rejects malformed documents instead of guessing none", async () => {
@@ -389,7 +381,6 @@ it("Tutoring discovery rejects malformed documents instead of guessing none", as
       true,
     );
   }
-  courseUnitCheckpoint("tutoring-discovery-malformed");
 });
 
 it("Tutoring creation binds the request ID and optional material in one exact payload", async () => {
@@ -454,7 +445,6 @@ it("Tutoring creation binds the request ID and optional material in one exact pa
           },
         }),
   ).toBe(true);
-  courseUnitCheckpoint("tutoring-create");
 });
 
 it("Tutoring creation accepts only 200 or 201 and rejects cross-course or ambiguous success", async () => {
@@ -497,7 +487,6 @@ it("Tutoring creation accepts only 200 or 201 and rejects cross-course or ambigu
       createTutoringSession(course, null, "id", seed.csrf),
     ),
   ).toBe(true);
-  courseUnitCheckpoint("tutoring-create-status");
 });
 
 it("Tutoring session read requires the addressed identity and strips summary fields", async () => {
@@ -524,7 +513,6 @@ it("Tutoring session read requires the addressed identity and strips summary fie
   expect(await protocolRejected(getTutoringSession(session, signal()))).toBe(
     true,
   );
-  courseUnitCheckpoint("tutoring-session");
 });
 
 it("Tutoring turn pages reject duplicate wrong-identity and cross-session rows", async () => {
@@ -557,7 +545,6 @@ it("Tutoring turn pages reject duplicate wrong-identity and cross-session rows",
       true,
     );
   }
-  courseUnitCheckpoint("tutoring-turns");
 });
 
 it("Tutoring turn pages keep bounded escaped text and reject unsafe navigation", async () => {
@@ -594,7 +581,6 @@ it("Tutoring turn pages keep bounded escaped text and reject unsafe navigation",
   expect(await protocolRejected(listSessionTurns(session, 0, signal()))).toBe(
     true,
   );
-  courseUnitCheckpoint("tutoring-turn-pages");
 });
 
 it("Tutoring message send binds the request ID and exact bytes in one payload", async () => {
@@ -642,7 +628,6 @@ it("Tutoring message send binds the request ID and exact bytes in one payload", 
         "attempt,content,id,messageId,retryOfId,state" &&
       !JSON.stringify(sent).includes(seed.rawError),
   ).toBe(true);
-  courseUnitCheckpoint("tutoring-message-send");
 });
 
 it("Tutoring message send accepts only 200 or 201 and rejects cross-identity success", async () => {
@@ -691,7 +676,6 @@ it("Tutoring message send accepts only 200 or 201 and rejects cross-identity suc
   expect(
     await protocolRejected(createStudentMessage(session, "q", "id", seed.csrf)),
   ).toBe(true);
-  courseUnitCheckpoint("tutoring-message-status");
 });
 
 it("Tutoring current work parses every state and strips unused projections", async () => {
@@ -784,7 +768,6 @@ it("Tutoring current work parses every state and strips unused projections", asy
   expect(done.state === "completed" && done.sessionState === "completed").toBe(
     true,
   );
-  courseUnitCheckpoint("tutoring-work-states");
   // Request-ID reconciliation: the query carries only the retained ID, and a
   // well-formed unknown ID is 200 with an explicit null, never an error.
   let seenQuery: string | null = null;
@@ -815,7 +798,6 @@ it("Tutoring current work parses every state and strips unused projections", asy
     signal(),
   );
   expect(missing.reconciledMessage === null).toBe(true);
-  courseUnitCheckpoint("tutoring-work-reconcile");
 });
 
 it("Tutoring current work rejects contradictions and wrong identities", async () => {
@@ -858,7 +840,6 @@ it("Tutoring current work rejects contradictions and wrong identities", async ()
       ),
     ).toBe(true);
   }
-  courseUnitCheckpoint("tutoring-work-invalid");
 });
 
 it("Tutoring hidden failures cover exactly denial unknown and throttled statuses", () => {
@@ -874,5 +855,4 @@ it("Tutoring hidden failures cover exactly denial unknown and throttled statuses
       !isHiddenTutoringFailure(http(500)) &&
       !isHiddenTutoringFailure(new ApiProtocolError()),
   ).toBe(true);
-  courseUnitCheckpoint("tutoring-hidden");
 });

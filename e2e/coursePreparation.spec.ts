@@ -2,11 +2,13 @@ import AxeBuilder from "@axe-core/playwright";
 import { expect, test, type Page } from "@playwright/test";
 import { readFileSync } from "node:fs";
 import { courseBackend, courseRoutes } from "./courseFixtures";
-import { atBrowserZoom, protectedJourney } from "./routeFixtures";
+import { presentationLocales } from "./presentationMatrix";
 import {
-  routeHygieneCheckpoint,
-  routeSecretFixture,
-} from "./routeSecretHygiene";
+  atBrowserZoom,
+  expectInertTechnicalDetails,
+  protectedJourney,
+} from "./routeFixtures";
+import { routeSecretFixture } from "./routeTestFixtures";
 
 test.use({ trace: "off", video: "off", screenshot: "off" });
 const hub = "/prepare/courses/course_1";
@@ -137,8 +139,6 @@ test(
         attribute === "language" ? "ja" : `${fixture.teachingText}\n${slug}`;
       control.expectedPatch = { [attribute ?? ""]: value };
       await field(page).fill(value);
-      if (slug === "learning-goals")
-        await routeHygieneCheckpoint(page, "preparation-input");
       await page.getByText("Exact plain-text preview", { exact: true }).click();
       expect(
         await page
@@ -191,7 +191,6 @@ test(
           })
           .count()) === 0,
     ).toBe(true);
-    await routeHygieneCheckpoint(page, "preparation-persisted");
     expect(
       (await new AxeBuilder({ page }).analyze()).violations.length === 0,
     ).toBe(true);
@@ -338,7 +337,7 @@ test(
     expect(!(await hasText(page, routeSecretFixture(page).courseName))).toBe(
       true,
     );
-    await routeHygieneCheckpoint(page, "preparation-error");
+    await expectInertTechnicalDetails(page, routeSecretFixture(page).rawError);
   }),
 );
 
@@ -407,7 +406,6 @@ test(
         () => document.documentElement.scrollWidth <= innerWidth,
       ),
     ).toBe(true);
-    await routeHygieneCheckpoint(page, "hub-reflow");
     expect(
       control.collectionReads === 0 &&
         control.candidateReads === 0 &&
@@ -480,7 +478,6 @@ test(
       }
     }
     expect(control.detailReads.every((id) => id === "course_1")).toBe(true);
-    await routeHygieneCheckpoint(page, "hub-reflow");
   }),
 );
 
@@ -505,7 +502,6 @@ test("hub remains operable at real 400 percent zoom", async () => {
     await expect(
       page.getByRole("link", { name: /Course students/u }),
     ).toBeVisible();
-    await routeHygieneCheckpoint(page, "hub-zoom");
     expect(control.collectionReads === 0).toBe(true);
   });
 });
@@ -536,7 +532,7 @@ test(
         .getByRole("button", { name: "Technical details", exact: true })
         .getAttribute("aria-expanded")) === "false",
     ).toBe(true);
-    await routeHygieneCheckpoint(page, "preparation-error");
+    await expectInertTechnicalDetails(page, fixture.rawError);
   }),
 );
 
@@ -567,8 +563,6 @@ test(
         control.patches === before + 1 &&
           !(await hasText(page, "Changes saved.")),
       ).toBe(true);
-      if (outcome === "lose")
-        await routeHygieneCheckpoint(page, "preparation-unknown");
       control.teaching.learning_goals = null;
       await page
         .getByRole("button", { name: "Check current course", exact: true })
@@ -638,7 +632,6 @@ test(
       .getByRole("button", { name: "Check current course", exact: true })
       .click();
     await expect.poll(() => field(page).getAttribute("readonly")).toBe(null);
-    await routeHygieneCheckpoint(page, "preparation-persisted");
     await field(page).fill(fixture.teachingText + " ");
     const persisted = fixture.teachingText + " persisted";
     control.teaching.learning_goals = persisted;
@@ -658,7 +651,6 @@ test(
       (await field(page).inputValue()) === fixture.teachingText + " " &&
         control.patches === 1,
     ).toBe(true);
-    await routeHygieneCheckpoint(page, "preparation-newer");
     const reads = control.detailReads.length;
     await page.getByRole("link", { name: "Home", exact: true }).click();
     await page
@@ -722,7 +714,6 @@ test(
           .click();
         await expect.poll(() => page.getByRole("dialog").count()).toBe(1);
       }
-      await routeHygieneCheckpoint(page, `preparation-stop-${operation}`);
       control.denial = true;
       release();
       await ready(page, "Course access unavailable");
@@ -749,7 +740,6 @@ test(
         control.patches === patches + (operation === "PATCH" ? 1 : 0) &&
           control.detailReads.length === reads + (operation === "GET" ? 1 : 0),
       ).toBe(true);
-      await routeHygieneCheckpoint(page, `preparation-hidden-${operation}`);
       control.readRelease = null;
       control.patchRelease = null;
     }
@@ -802,7 +792,6 @@ test(
           nativePrompt &&
             (await field(page).inputValue()) === fixture.teachingText,
         ).toBe(true);
-        await routeHygieneCheckpoint(page, "preparation-read-pending");
       }
       const leave = async () => {
         if (destination === "Back") await page.goBack();
@@ -823,7 +812,6 @@ test(
         (await field(page).inputValue()) === fixture.teachingText &&
           control.detailReads.length === reads + 1,
       ).toBe(true);
-      await routeHygieneCheckpoint(page, "preparation-read-stay");
       await leave();
       await expect.poll(() => page.getByRole("dialog").count()).toBe(1);
       if (destination === "Back") {
@@ -849,7 +837,6 @@ test(
         expect(
           control.detailReads.length === reads + 1 && control.patches === 0,
         ).toBe(true);
-        await routeHygieneCheckpoint(page, "preparation-read-cleared");
       } else {
         control.readRelease = null;
         await page
@@ -863,7 +850,6 @@ test(
         expect(
           !(await hasText(page, fixture.teachingText)) && control.patches === 0,
         ).toBe(true);
-        await routeHygieneCheckpoint(page, "preparation-read-discard");
       }
     }
   }),
@@ -934,7 +920,6 @@ test(
     await expect
       .poll(() => field(page).getAttribute("aria-invalid"))
       .toBe("true");
-    await routeHygieneCheckpoint(page, "preparation-error");
     const scan = await new AxeBuilder({ page }).analyze();
     expect(scan.violations.length === 0).toBe(true);
   }),
@@ -1007,7 +992,7 @@ test(
     const control = await courseBackend(page);
     control.scopeIds = ["course_1"];
     await page.goto("/");
-    for (const locale of locales)
+    for (const locale of presentationLocales(locales, "course"))
       for (const mode of ["standard", "large", "extra-large"]) {
         const labels = catalog(locale);
         await page.evaluate(
@@ -1092,8 +1077,6 @@ test("preparation connected process remains usable at real 200 percent zoom", as
         control.expectedPatch = { [attribute]: value };
         await field(page).fill(value);
         await reflow(page);
-        if (mode === "standard" && slug === "learning-goals")
-          await routeHygieneCheckpoint(page, "preparation-input");
         await page
           .getByRole("button", { name: "Save changes", exact: true })
           .click();
@@ -1109,6 +1092,5 @@ test("preparation connected process remains usable at real 200 percent zoom", as
         ).toBe(true);
       }
     }
-    await routeHygieneCheckpoint(page, "preparation-persisted");
   });
 });

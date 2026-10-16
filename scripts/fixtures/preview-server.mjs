@@ -5,7 +5,7 @@ import { join } from "node:path";
 
 const args = process.argv.slice(2);
 const port = Number(args[args.indexOf("--port") + 1]);
-if (![4173, 4174].includes(port)) process.exit(2);
+if (port !== 4173) process.exit(2);
 const readinessDirectory = process.env.MIA_SYNTHETIC_READINESS_DIRECTORY;
 if (readinessDirectory)
   process.on("SIGTERM", () => {

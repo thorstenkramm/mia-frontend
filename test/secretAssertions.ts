@@ -1,7 +1,7 @@
 import { expect } from "vitest";
 
 // Compare or search for a secret without handing it to the matcher, so a
-// failure prints only the label and a boolean (testing.md secret hygiene).
+// failure prints only the label and a boolean; the tested application value is not needed in the message.
 export function expectSameSecret(
   actual: string | null | undefined,
   expected: string,

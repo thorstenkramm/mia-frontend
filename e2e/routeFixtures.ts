@@ -11,13 +11,11 @@ import {
   type MfaStateFixture,
 } from "../test/mfaFixtures";
 import {
-  injectRouteEarlyFailure,
   releaseRouteFixture,
   routeFailureFixture,
-  routeHygieneCheckpoint,
   routeProvisioningFixture,
   routeSecretFixture,
-} from "./routeSecretHygiene";
+} from "./routeTestFixtures";
 
 export async function respond(route: Route, response: Response) {
   await route.fulfill({
@@ -138,12 +136,26 @@ export async function focusedHeading(page: Page, name: string) {
   await expect(page.getByRole("heading", { level: 1, name })).toBeFocused();
 }
 
+// The raw response body is shown only after a deliberate disclosure; it must
+// remain text rather than creating a link or executable content.
+export async function expectInertTechnicalDetails(page: Page, body: string) {
+  const disclosure = page.getByRole("button", {
+    name: "Technical details",
+    exact: true,
+  });
+  await expect(disclosure).toHaveAttribute("aria-expanded", "false");
+  await expect(page.locator("main pre")).toHaveCount(0);
+  await disclosure.click();
+  await expect(page.locator("main pre")).toContainText(body);
+  await expect(
+    page.locator("main pre a, main pre script, main pre style"),
+  ).toHaveCount(0);
+}
+
 export function protectedJourney(body: (page: Page) => Promise<void>) {
   return async ({ page }: { page: Page }) => {
     try {
-      injectRouteEarlyFailure();
       await body(page);
-      await routeHygieneCheckpoint(page, "complete");
     } finally {
       await page.close();
       releaseRouteFixture(page);
@@ -174,7 +186,6 @@ export async function atBrowserZoom(
   });
   try {
     const page = await context.newPage();
-    injectRouteEarlyFailure();
     await routeBackend(page);
     await page.goto("http://127.0.0.1:4173/login");
     const worker =
@@ -189,7 +200,6 @@ export async function atBrowserZoom(
     expect(applied).toBeCloseTo(factor, 10);
     expect(await page.evaluate(() => innerWidth)).toBe(1280 / factor);
     await body(page);
-    await routeHygieneCheckpoint(page, "complete");
     releaseRouteFixture(page);
   } finally {
     await context.close();

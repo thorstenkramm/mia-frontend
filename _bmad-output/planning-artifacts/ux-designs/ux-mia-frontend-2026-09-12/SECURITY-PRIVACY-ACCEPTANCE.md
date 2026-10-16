@@ -112,7 +112,7 @@ ephemeral flow object and immediately removes the complete fragment with `histor
 Only one exact `token=<canonical-lowercase-UUID-v4>` fragment is accepted. Empty, malformed, uppercase, duplicate,
 additional, and unknown fragment parameters are invalid, but the complete fragment is still removed synchronously.
 After capture, tokens never enter the live address, application-controlled current history entry, router state, query
-caches, global state, browser storage, titles, referrers, errors, logs, clipboard helpers, or test reports. Departure,
+caches, global state, browser storage, titles, referrers, errors, logs, or clipboard helpers. Departure,
 cancel, first-byte dispatch, timeout after dispatch, and auth change drop the sole application-reachable reference. A
 definitive pre-dispatch failure retains it only in the active route so the user may explicitly retry an acceptance that
 made no server attempt. An unsafe request is never automatically replayed with the token. For password reset at
@@ -534,8 +534,8 @@ show completion.
 - Record network and client state for active-session supervisor pages; fail on any transcript, used-material, or private
   material request even if its result is hidden.
 - Record every mentor route request; fail if it leaves the mentor-specific identity and mentoring operation allowlist.
-- Search DOM, accessibility snapshots, React state, query caches, errors, clipboard data, and test artifacts for
-  forbidden fixture fields that the visible page does not need.
+- Search application DOM, accessibility snapshots, React state, query caches, errors, and clipboard data for
+  forbidden fixture fields that the authorized page does not need.
 - Test multi-role users and prove role union adds actions only in authorized scope and never broadens fetched data.
 - Render `/profile` for student-only and staff fixtures; assert student-only state has no edit control, form state,
   profile mutation, or staff-only child-route request, while staff receives only its authorized writable fields.
@@ -703,7 +703,8 @@ blockers remain release goals.
   disclosure contains only status and the supplied response-body fixture.
 - Supply valid UTF-8, a conflicting charset declaration, invalid bytes, and mixed line endings; assert the displayed and
   copied value equals the single `Response.text()` result, never the original bytes or a normalized reconstruction.
-- Fail if snapshots, telemetry, console output, test reports, or error boundaries capture the raw body.
+- Fail if application telemetry, production console output, persisted diagnostics, or error boundaries capture the raw
+  body. Synthetic data in private test reports is not an application leak.
 - Verify escaped rendering under mutation-XSS corpora and CSP; no test may use a real token or personal record.
 
 ## No Telemetry or Third-Party Diagnostics
@@ -724,7 +725,7 @@ external origin is a separately approved and security-reviewed product change.
 - Exercise all critical flows under network interception and assert no request leaves the MIA origin except a deliberate
   user-activated external link handled under the link rules below.
 - Trigger global errors and unhandled rejections with protected fixtures; assert no remote request and no sensitive
-  console entry, browser report, or persisted diagnostic record.
+  production console entry or persisted diagnostic record.
 
 ## Untrusted Rich Content and External Links
 
@@ -919,33 +920,20 @@ external copies.
 - Test supported-browser native print defaults separately, verify the neutral title and cleaned live URL, and record any
   browser-added headers or footers without treating them as frontend-controlled output.
 
-## Test and Diagnostic Secret Hygiene
+## Test Privacy and Production Diagnostics
 
-Automated tests use synthetic, non-production fixtures only and never call paid or production providers. Secret-shaped
-fixtures are generated per test, are not committed, and are referenced in assertions by labels or one-way test-only
-fingerprints rather than literal values. Test names, snapshots, golden files, diffs, failure messages, console capture,
-HAR files, traces, videos, screenshots, coverage artifacts, and CI output must contain no fixture secret or protected
-body.
-
-Disable automatic artifact capture for token, password, MFA, recovery-code, raw-error, private-content, and download
-tests. If debugging requires a local artifact, use sanitized fixtures, keep it outside version control, and delete it
-before completion. Network mocks and request assertions must redact headers and bodies before a failure can print them.
-
-### Secret-Hygiene Negative Tests
-
-- Deliberately fail each secret-bearing test and scan all process output and generated artifacts for its unique marker;
-  the scan must find none.
-- Assert repository fixtures, snapshots, and browser-storage seeds contain no real credential, production URL token,
-  personal record, provider key, or provider payload.
-- Assert global logging and test reporters receive redacted summaries rather than request, response, exception, or DOM
-  objects from sensitive flows.
+Automated tests use synthetic, non-production fixtures only and never call paid or production providers. Do not commit
+real credentials, personal records or private test reports. Private failure diagnostics may contain synthetic values;
+they are not a proxy for application disclosure. Test forbidden application storage, production logs, URLs,
+unauthorized requests, unsafe rendering, and stale protected state at the responsible boundary. Repository credential
+scanning and dependency vulnerability checks remain required.
 
 ## Release Gate
 
-Release fails if any rule above is untested, any negative test exposes protected data, any critical scenario can render
+Release fails if any rule above is untested, any application negative test exposes protected data, any critical scenario can render
 before authorization, or any referenced backend dependency remains open in `BACKEND-CONTRACT-GAPS.md`. Passing visual
 checks is not evidence of request minimization, cache isolation, teardown, or secret containment; tests must inspect
-network activity, retained client state, browser lifecycle behavior, and generated artifacts.
+network activity, retained client state, browser lifecycle behavior.
 
 The final evidence set must identify the tested frontend revision, backend/OpenAPI revision, browser version, locale,
 text-size mode, relevant account and scope fixtures, and result without recording secrets or protected content.

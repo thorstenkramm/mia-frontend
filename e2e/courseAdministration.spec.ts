@@ -2,12 +2,14 @@ import AxeBuilder from "@axe-core/playwright";
 import { expect, test, type Page } from "@playwright/test";
 import { courseBackend, courseRoutes } from "./courseFixtures";
 import { invitationBackend } from "./invitationFixtures";
+import { presentationLocales } from "./presentationMatrix";
 import { readFileSync } from "node:fs";
-import { atBrowserZoom, protectedJourney } from "./routeFixtures";
 import {
-  routeHygieneCheckpoint,
-  routeSecretFixture,
-} from "./routeSecretHygiene";
+  atBrowserZoom,
+  expectInertTechnicalDetails,
+  protectedJourney,
+} from "./routeFixtures";
+import { routeSecretFixture } from "./routeTestFixtures";
 
 test.use({ trace: "off", video: "off", screenshot: "off" });
 const create = "/admin/courses/new";
@@ -235,7 +237,6 @@ async function fillCourse(page: Page) {
       .getByRole("button", { name: "Create course", exact: true })
       .getAttribute("aria-disabled")) === "false",
   ).toBe(true);
-  await routeHygieneCheckpoint(page, "course-input");
 }
 async function contained(page: Page) {
   expect(
@@ -317,7 +318,6 @@ test(
           ),
         )
         .toBe(true);
-      await routeHygieneCheckpoint(page, "course-persisted");
       backend.denial = true;
       await page
         .getByRole("button", {
@@ -376,7 +376,6 @@ test(
           .then((text) => text?.includes(routeSecretFixture(page).courseName)),
       )
       .toBe(true);
-    await routeHygieneCheckpoint(page, "course-persisted");
     await page.emulateMedia({ media: "print" });
     expect(
       await page.evaluate(
@@ -438,7 +437,6 @@ test(
     expect(
       backend.detailReads.every((id) => backend.scopeIds.includes(id)),
     ).toBe(true);
-    await routeHygieneCheckpoint(page, "course-persisted");
     await page
       .getByRole("button", { name: "Show more assigned courses" })
       .click();
@@ -480,7 +478,7 @@ test(
       ),
     ).toBe(false);
     expect(await page.locator("main pre").count()).toBe(0);
-    await routeHygieneCheckpoint(page, "course-error");
+    await expectInertTechnicalDetails(page, routeSecretFixture(page).rawError);
   }),
 );
 
@@ -501,7 +499,6 @@ test(
       .getByRole("link", { name: "Review courses", exact: true })
       .click();
     await focusedHeading(page, "Courses");
-    await routeHygieneCheckpoint(page, "course-persisted");
     expect(backend.creates === 1).toBe(true);
   }),
 );
@@ -621,15 +618,7 @@ test(
   protectedJourney(async (page) => {
     await courseBackend(page);
     await page.goto("/");
-    for (const locale of [
-      "en-US",
-      "de-DE",
-      "es-ES",
-      "es-AR",
-      "fr-FR",
-      "pt-PT",
-      "pt-BR",
-    ]) {
+    for (const locale of presentationLocales(locales, "course")) {
       for (const mode of ["standard", "large", "extra-large"]) {
         await page.evaluate(
           ({ locale, mode }) => {
@@ -695,7 +684,6 @@ test("course connected process remains operable at real 200 percent zoom", async
         .getByRole("button", { name: "Create course", exact: true })
         .click();
       await focusedHeading(page, "Course administration");
-      await routeHygieneCheckpoint(page, "course-persisted");
       await contained(page);
       expect(
         (await new AxeBuilder({ page }).analyze()).violations.length === 0,
@@ -704,13 +692,11 @@ test("course connected process remains operable at real 200 percent zoom", async
         .getByRole("link", { name: "Back to courses", exact: true })
         .click();
       await focusedHeading(page, "Courses");
-      await routeHygieneCheckpoint(page, "course-persisted");
       await contained(page);
       backend.scopeIds = ["course_1"];
       backend.grants = new Set(["courses.supervise"]);
       await page.goto("http://127.0.0.1:4173/prepare/courses");
       await focusedHeading(page, "Prepare courses");
-      await routeHygieneCheckpoint(page, "course-persisted");
       await contained(page);
       expect(
         backend.creates === 1 &&

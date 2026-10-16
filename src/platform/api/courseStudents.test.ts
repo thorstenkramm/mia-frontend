@@ -1,10 +1,7 @@
 import { http, HttpResponse } from "msw";
 import { expect, it } from "vitest";
 import { server } from "../../../test/server";
-import {
-  courseUnitCheckpoint,
-  courseUnitFixture,
-} from "../../../scripts/secret-hygiene-evidence";
+import { courseUnitFixture } from "../../../test/courseUnitFixture";
 import { ApiProtocolError, jsonApiMediaType } from "./client";
 import { toAccountId, toCourseId } from "./entry";
 import {
@@ -95,7 +92,6 @@ it("student transport sends one exact provision branch and retains only relation
         "courseId,id,joinedAt,studentId,username" &&
       !JSON.stringify(saved).includes(input.temporaryPassword),
   ).toBe(true);
-  courseUnitCheckpoint("student-wire");
 });
 
 it("student transport rejects ambiguous successes without unsafe replay", async () => {
@@ -136,7 +132,6 @@ it("student transport rejects ambiguous successes without unsafe replay", async 
     expect(failed).toBe(true);
   }
   expect(sends === 6).toBe(true);
-  courseUnitCheckpoint("student-malformed");
 });
 
 it("student roster bounds pages and rejects unsafe navigation and duplicate identities", async () => {
@@ -200,7 +195,6 @@ it("student roster bounds pages and rejects unsafe navigation and duplicate iden
     }
     expect(rejected).toBe(true);
   }
-  courseUnitCheckpoint("student-page");
 });
 
 it("student membership uses the users relationship and rejects mismatched pair data", async () => {
@@ -232,7 +226,6 @@ it("student membership uses the users relationship and rejects mismatched pair d
       getCourseStudentMembership(course, student, new AbortController().signal),
     ).rejects.toBeInstanceOf(ApiProtocolError);
   }
-  courseUnitCheckpoint("student-pair");
 });
 
 it("student empty and previous roster pages preserve absence without fabricated totals", async () => {
@@ -257,5 +250,4 @@ it("student empty and previous roster pages preserve absence without fabricated 
       page.nextOffset === null &&
       !("total" in page),
   ).toBe(true);
-  courseUnitCheckpoint("student-empty");
 });

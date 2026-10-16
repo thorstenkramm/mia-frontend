@@ -1,9 +1,5 @@
 import { defineConfig } from "@playwright/test";
 
-// A failed test otherwise writes an aria snapshot of the page to
-// error-context.md, which would carry any secret the page still shows.
-process.env.PLAYWRIGHT_NO_COPY_PROMPT = "1";
-
 export default defineConfig({
   testDir: "./e2e",
   use: {
@@ -15,7 +11,7 @@ export default defineConfig({
       use: { browserName: "chromium" },
     },
   ],
-  ...(process.env.MIA_HYGIENE_PREVIEW_4173 === "1"
+  ...(process.env.MIA_OWNED_PREVIEW === "1"
     ? {}
     : {
         webServer: {

@@ -1,7 +1,7 @@
 import { http, HttpResponse } from "msw";
 import { expect, it } from "vitest";
 import { server } from "../../../test/server";
-import { courseUnitFixture } from "../../../scripts/secret-hygiene-evidence";
+import { courseUnitFixture } from "../../../test/courseUnitFixture";
 import { toCourseId, toMaterialId } from "./entry";
 import { jsonApiMediaType, ApiProtocolError } from "./client";
 import {

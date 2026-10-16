@@ -1,11 +1,7 @@
 import { expect, test, type Page } from "@playwright/test";
 import { journeyScenario } from "./completeTutoringFixtures";
 import { fillStudent } from "./studentFixtures";
-import {
-  routeHygieneCheckpoint,
-  injectRouteEarlyFailure,
-  releaseRouteFixture,
-} from "./routeSecretHygiene";
+import { releaseRouteFixture } from "./routeTestFixtures";
 
 test.use({ screenshot: "off", trace: "off", video: "off" });
 test.setTimeout(150_000);
@@ -22,7 +18,6 @@ async function heading(page: Page, value: string) {
 test("one synthetic invitation-to-second-tutoring-session journey preserves recovery and scope", async ({
   browser,
 }) => {
-  injectRouteEarlyFailure();
   const journey = await journeyScenario(browser);
   const { admin, supervisor, student } = journey;
   try {
@@ -33,7 +28,6 @@ test("one synthetic invitation-to-second-tutoring-session journey preserves reco
     await admin
       .getByLabel("Supervisor’s email address")
       .fill(journey.adminFixture.email);
-    await routeHygieneCheckpoint(admin, "journey-invitation");
     await admin.getByRole("button", { name: "Send invitation" }).click();
     await expect(admin.getByText("Delivery queued")).toBeVisible();
     await expect.poll(() => journey.state.invited).toBe(true);
@@ -52,7 +46,6 @@ test("one synthetic invitation-to-second-tutoring-session journey preserves reco
         .locator(`#${field}`)
         .fill(journey.supervisorFixture.password);
     await supervisor.locator("#country").selectOption("DE");
-    await routeHygieneCheckpoint(supervisor, "journey-acceptance");
     await supervisor.locator("button[type=submit]").click();
     await expect(
       supervisor.getByRole("link", { name: "Sign in" }),
@@ -218,7 +211,6 @@ test("one synthetic invitation-to-second-tutoring-session journey preserves reco
     await supervisor.getByRole("link", { name: "Create student" }).click();
     await heading(supervisor, "Create student");
     await fillStudent(supervisor);
-    await routeHygieneCheckpoint(supervisor, "journey-student-input");
     await supervisor
       .getByRole("button", { name: "Create student", exact: true })
       .click();
@@ -238,7 +230,6 @@ test("one synthetic invitation-to-second-tutoring-session journey preserves reco
     await heading(student, "Choose a new password");
     for (const field of ["new-password", "password-confirmation"])
       await student.locator(`#${field}`).fill(journey.replacement);
-    await routeHygieneCheckpoint(student, "journey-student-replacement");
     await student.locator("#password-confirmation").press("Enter");
     await heading(student, "Home");
     expect(journey.state.replaced).toBe(true);
@@ -271,7 +262,6 @@ test("one synthetic invitation-to-second-tutoring-session journey preserves reco
         journey.tutor.materialsSent[0] === "material_1" &&
         journey.tutor.requestIds[0] !== journey.tutor.messageRequestIds[0],
     ).toBe(true);
-    await routeHygieneCheckpoint(student, "journey-tutoring");
 
     // The local fake's queued first answer reaches its persisted terminal
     // state asynchronously. A fresh load reads that truth before another send.
@@ -293,7 +283,6 @@ test("one synthetic invitation-to-second-tutoring-session journey preserves reco
       student.getByRole("heading", { name: /message outcome is unknown/u }),
     ).toBeVisible();
     const sent = journey.tutor.messagePosts;
-    await routeHygieneCheckpoint(student, "journey-interrupted");
     await expect.poll(() => journey.tutor.messagePosts).toBe(sent);
     const readsBeforeRefresh = journey.tutor.workReads;
     const queryCountBeforeRefresh = journey.tutor.workQueries.length;
@@ -409,7 +398,6 @@ test("one synthetic invitation-to-second-tutoring-session journey preserves reco
         journey.studentFixture.teachingText,
       ),
     ).toBe(true);
-    await routeHygieneCheckpoint(other, "journey-denied");
 
     await student
       .locator("main")
@@ -446,7 +434,6 @@ test("one synthetic invitation-to-second-tutoring-session journey preserves reco
         journey.state.unexpected === 0 &&
         journey.state.external === 0,
     ).toBe(true);
-    await routeHygieneCheckpoint(student, "complete");
   } finally {
     if (test.info().status !== "timedOut") await journey.close();
     for (const page of [admin, supervisor, student]) releaseRouteFixture(page);

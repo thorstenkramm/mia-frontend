@@ -1,10 +1,7 @@
 import { http, HttpResponse } from "msw";
 import { expect, it } from "vitest";
 import { server } from "../../../test/server";
-import {
-  courseUnitCheckpoint,
-  courseUnitFixture,
-} from "../../../scripts/secret-hygiene-evidence";
+import { courseUnitFixture } from "../../../test/courseUnitFixture";
 import { ApiHttpError, ApiProtocolError, jsonApiMediaType } from "./client";
 import { listSupervisorCandidates } from "./administrationAccounts";
 
@@ -48,7 +45,6 @@ it("shortlists a minimized candidate page without claiming assignment eligibilit
     page.candidates[0]?.username === fixture.username &&
       Object.keys(page.candidates[0] ?? {}).join(",") === "id,username",
   ).toBe(true);
-  courseUnitCheckpoint("candidate-projection");
 });
 
 it("rejects wrong state, missing role, private fields and malformed pagination", async () => {
@@ -110,7 +106,6 @@ it("rejects wrong state, missing role, private fields and malformed pagination",
       (error: unknown) => error instanceof ApiProtocolError,
     ),
   ).toBe(true);
-  courseUnitCheckpoint("candidate-rejection");
 });
 
 it("candidate absence and failed checks remain distinct", async () => {
@@ -127,7 +122,6 @@ it("candidate absence and failed checks remain distinct", async () => {
   expect(
     page.candidates.length === 0 && !page.hasMore && page.nextOffset === null,
   ).toBe(true);
-  courseUnitCheckpoint("candidate-empty");
   server.use(
     http.get("/api/v1/users", () =>
       HttpResponse.json(
@@ -146,5 +140,4 @@ it("candidate absence and failed checks remain distinct", async () => {
       (error: unknown) => error instanceof ApiHttpError,
     ),
   ).toBe(true);
-  courseUnitCheckpoint("candidate-failed");
 });

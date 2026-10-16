@@ -3,7 +3,7 @@ import { expect, test, type Page } from "@playwright/test";
 import { readFileSync } from "node:fs";
 import { materialBackend } from "./materialFixtures";
 import { atBrowserZoom, protectedJourney } from "./routeFixtures";
-import { routeSecretFixture } from "./routeSecretHygiene";
+import { routeSecretFixture } from "./routeTestFixtures";
 
 test.use({ screenshot: "off", trace: "off", video: "off" });
 const material = "/prepare/courses/course_1/materials/material_1";

@@ -166,7 +166,8 @@ Read the scoped rule before writing code in its area:
 - Test observable behavior, state-machine transitions, authorization-driven visibility, accessibility semantics, and
   security boundaries. Do not add tests that mirror constants or freeze incidental implementation details.
 - Never call paid or production providers from automated tests.
-- Never let a fixture secret or protected body reach a test name, snapshot, trace, video, screenshot, or CI log.
+- Use synthetic fixtures and never commit real credentials or protected records. Private test failure output may contain
+  synthetic data; test application privacy sinks directly rather than scanning test artifacts for fixture markers.
 - Follow `.agents/rules/testing.md` for the required categories and the Playwright scope.
 
 ## Workflow and verification

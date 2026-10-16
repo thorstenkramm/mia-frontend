@@ -5,10 +5,7 @@ import {
   learnCourseDocument,
   learnMaterialRow,
 } from "../../../test/learnFixtures";
-import {
-  courseUnitCheckpoint,
-  courseUnitFixture,
-} from "../../../scripts/secret-hygiene-evidence";
+import { courseUnitFixture } from "../../../test/courseUnitFixture";
 import { ApiProtocolError, jsonApiMediaType } from "./client";
 import { toCourseId } from "./entry";
 import {
@@ -101,7 +98,6 @@ it("Learn boundary discards brief and every non-rendered material field before s
       !JSON.stringify(page).includes(seed.teachingText) &&
       !JSON.stringify(page).includes(seed.rawError),
   ).toBe(true);
-  courseUnitCheckpoint("learn-boundary");
 });
 
 it("Learn course projection accepts student-safe empty supervisors and rejects wrong identity", async () => {
@@ -157,7 +153,6 @@ it("Learn course projection accepts student-safe empty supervisors and rejects w
     }),
   );
   expect(await protocolRejected(getLearnCourse(id, signal()))).toBe(true);
-  courseUnitCheckpoint("learn-course");
 });
 
 it("Learn joined batches advance by checked identities even when all first-page courses are inactive", async () => {
@@ -185,7 +180,6 @@ it("Learn joined batches advance by checked identities even when all first-page 
   expect(
     reads === 26 && more.consumed === 26 && more.courses.length === 1,
   ).toBe(true);
-  courseUnitCheckpoint("learn-batch");
 });
 
 it("Learn material pages retain navigation on filtered-empty pages and reject unsafe links", async () => {
@@ -218,7 +212,6 @@ it("Learn material pages retain navigation on filtered-empty pages and reject un
   expect(
     await protocolRejected(listApprovedCourseMaterialMetadata(id, 0, signal())),
   ).toBe(true);
-  courseUnitCheckpoint("learn-navigation");
 });
 
 it("Learn material boundary rejects cross-course duplicate and oversized documents without protected errors", async () => {
@@ -244,5 +237,4 @@ it("Learn material boundary rejects cross-course duplicate and oversized documen
       ),
     ).toBe(true);
   }
-  courseUnitCheckpoint("learn-invalid");
 });

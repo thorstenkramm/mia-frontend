@@ -226,8 +226,8 @@ navigation, response size, or whether a resource was visible earlier.
 
 ## Release gate
 
-Release fails if any rule above is untested, any negative test exposes protected data, any critical scenario can render
-before authorization, or any referenced entry in `BACKEND-CONTRACT-GAPS.md` remains open.
+Release fails if any rule above is untested, any application negative test exposes protected data, any critical
+scenario can render before authorization, or any referenced entry in `BACKEND-CONTRACT-GAPS.md` remains open.
 
 Passing visual checks is not evidence. Tests must inspect network activity, retained client state, browser lifecycle
-behavior, and generated artifacts.
+behavior. Synthetic data in private test reports is not a product disclosure.

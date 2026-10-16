@@ -36,10 +36,7 @@ import {
   tutoringTurnsPage,
   tutoringWorkDocument,
 } from "../../../test/tutoringFixtures";
-import {
-  courseUnitCheckpoint,
-  courseUnitFixture,
-} from "../../../scripts/secret-hygiene-evidence";
+import { courseUnitFixture } from "../../../test/courseUnitFixture";
 import { App } from "../App";
 import { tutoringRetention } from "../../features/tutoring/tutoringRetention";
 import { AnnouncementProvider } from "../../platform/announcer/AnnouncementRegion";
@@ -515,7 +512,6 @@ it("Tutoring workspace withholds session and transcript reads until learning par
         "session,capabilities,tutoring-session,current-work,turns" &&
         !document.body.textContent?.includes(seed.rawError),
     ).toBe(true);
-    courseUnitCheckpoint("tutoring-admitted");
   } finally {
     release();
   }
@@ -546,7 +542,6 @@ it("Tutoring start runs discovery before any start affordance and resumes the fo
       .getAttribute("href"),
   ).toBe("/learn/sessions/session_1");
   expect(screen.queryByRole("button", { name: "Start session" })).toBeNull();
-  courseUnitCheckpoint("tutoring-resume");
 });
 
 it("Tutoring course choice lists joined courses with server eligibility and no local computation", async () => {
@@ -571,7 +566,6 @@ it("Tutoring course choice lists joined courses with server eligibility and no l
       !document.body.textContent?.includes(seed.teachingText) &&
       !document.body.textContent?.includes(seed.rawError),
   ).toBe(true);
-  courseUnitCheckpoint("tutoring-choice");
 });
 
 it("Tutoring material choice continues to the intent route carrying one opaque selection", async () => {
@@ -596,7 +590,6 @@ it("Tutoring material choice continues to the intent route carrying one opaque s
       !JSON.stringify(window.history.state).includes(seed.teachingText) &&
       !document.body.textContent?.includes(seed.rawError),
   ).toBe(true);
-  courseUnitCheckpoint("tutoring-handoff");
 });
 
 it("Tutoring intent without handoff state starts intent-only with the visible material parent", async () => {
@@ -635,7 +628,6 @@ it("Tutoring intent without handoff state starts intent-only with the visible ma
     second.data?.relationships === undefined &&
       !document.body.textContent?.includes(seed.rawError),
   ).toBe(true);
-  courseUnitCheckpoint("tutoring-intent-only");
 });
 
 it("Tutoring intent begin dispatches one request-ID-bound creation then the first message", async () => {
@@ -680,7 +672,6 @@ it("Tutoring intent begin dispatches one request-ID-bound creation then the firs
     window.location.pathname === "/learn/sessions/session_1" &&
       !document.body.textContent?.includes(seed.rawError),
   ).toBe(true);
-  courseUnitCheckpoint("tutoring-created");
 });
 
 it("Tutoring intent replay 200 without material is the same definitive navigation", async () => {
@@ -702,7 +693,6 @@ it("Tutoring intent replay 200 without material is the same definitive navigatio
       ) &&
       create.data?.relationships === undefined,
   ).toBe(true);
-  courseUnitCheckpoint("tutoring-replay");
 });
 
 it("Tutoring active-session and request conflicts reconcile through one discovery read without a second start", async () => {
@@ -729,7 +719,6 @@ it("Tutoring active-session and request conflicts reconcile through one discover
     ).toBe(true);
     view.unmount();
   }
-  courseUnitCheckpoint("tutoring-conflict");
 });
 
 for (const outcome of ["invalid-state", "invalid", "not-found"])
@@ -758,7 +747,6 @@ for (const outcome of ["invalid-state", "invalid", "not-found"])
         control.messagePosts === 0 &&
         !document.body.textContent?.includes(seed.rawError),
     ).toBe(true);
-    courseUnitCheckpoint("tutoring-rejected");
   });
 
 it("Tutoring lost start response stays unknown and explicit reconcile resumes the discovered session", async () => {
@@ -774,7 +762,6 @@ it("Tutoring lost start response stays unknown and explicit reconcile resumes th
       window.location.pathname.endsWith("/intent") &&
       screen.queryByRole("button", { name: "Start session" }) === null,
   ).toBe(true);
-  courseUnitCheckpoint("tutoring-unknown");
   await user.click(screen.getByRole("button", { name: "Refresh" }));
   await waitFor(() =>
     expect(
@@ -790,7 +777,6 @@ it("Tutoring lost start response stays unknown and explicit reconcile resumes th
         .getByRole("link", { name: "Continue session" })
         .getAttribute("href") === "/learn/sessions/session_1",
   ).toBe(true);
-  courseUnitCheckpoint("tutoring-reconciled");
 });
 
 it("Tutoring reconciled unknown retries the exact retained attempt only explicitly", async () => {
@@ -816,7 +802,6 @@ it("Tutoring reconciled unknown retries the exact retained attempt only explicit
       control.postBodies[0] === control.postBodies[1] &&
       control.messagePosts === 1,
   ).toBe(true);
-  courseUnitCheckpoint("tutoring-retry");
 });
 
 it("Tutoring abandon destroys the retained attempt locally and a later start is a fresh attempt", async () => {
@@ -842,7 +827,6 @@ it("Tutoring abandon destroys the retained attempt locally and a later start is 
       control.postBodies[0] !== control.postBodies[1] &&
       control.messagePosts === 1,
   ).toBe(true);
-  courseUnitCheckpoint("tutoring-abandon");
 });
 
 it("Tutoring Stop waiting after dispatch keeps the outcome unknown and never claims the late success", async () => {
@@ -873,7 +857,6 @@ it("Tutoring Stop waiting after dispatch keeps the outcome unknown and never cla
       ),
     ).toBe(true),
   );
-  courseUnitCheckpoint("tutoring-stopped");
 });
 
 it("Tutoring lost first send reconciles committed through the current-work read without resending", async () => {
@@ -888,7 +871,6 @@ it("Tutoring lost first send reconciles committed through the current-work read 
       control.messagePosts === 1 &&
       window.location.pathname.endsWith("/intent"),
   ).toBe(true);
-  courseUnitCheckpoint("tutoring-send-unknown");
   await user.click(screen.getByRole("button", { name: "Refresh" }));
   await ready("Tutoring session");
   // The reconcile read carried the retained request ID; nothing was resent.
@@ -905,7 +887,6 @@ it("Tutoring lost first send reconciles committed through the current-work read 
         !document.body.textContent?.includes(seed.rawError),
     ).toBe(true),
   );
-  courseUnitCheckpoint("tutoring-send-reconciled");
 });
 
 it("Tutoring uncommitted first send retries only the message with the retained request identity", async () => {
@@ -927,7 +908,6 @@ it("Tutoring uncommitted first send retries only the message with the retained r
       control.messagePosts === 2 &&
       control.messageBodies[0] === control.messageBodies[1],
   ).toBe(true);
-  courseUnitCheckpoint("tutoring-send-retry");
 });
 
 it("Tutoring first-send conflict locks the attempt to reconcile and abandon without retry", async () => {
@@ -955,7 +935,6 @@ it("Tutoring first-send conflict locks the attempt to reconcile and abandon with
       control.workQueries.length === 1 &&
       !document.body.textContent?.includes(seed.rawError),
   ).toBe(true);
-  courseUnitCheckpoint("tutoring-send-conflict");
 });
 
 it("Tutoring busy first send keeps the session and draft until explicit Refresh", async () => {
@@ -972,7 +951,6 @@ it("Tutoring busy first send keeps the session and draft until explicit Refresh"
       control.posts === 1 &&
       control.messagePosts === 1,
   ).toBe(true);
-  courseUnitCheckpoint("tutoring-send-busy");
   await user.click(screen.getByRole("button", { name: "Refresh" }));
   await screen.findByRole("heading", {
     name: "The session exists and your message was not sent yet. Choose Start session to send it.",
@@ -986,7 +964,6 @@ it("Tutoring busy first send keeps the session and draft until explicit Refresh"
       control.messagePosts === 2 &&
       messageRequestId(control, 0) !== messageRequestId(control, 1),
   ).toBe(true);
-  courseUnitCheckpoint("tutoring-send-fresh");
 });
 
 it("Tutoring rejected first send mints a fresh message identity without recreating the session", async () => {
@@ -1005,7 +982,6 @@ it("Tutoring rejected first send mints a fresh message identity without recreati
       control.messagePosts === 2 &&
       messageRequestId(control, 0) !== messageRequestId(control, 1),
   ).toBe(true);
-  courseUnitCheckpoint("tutoring-send-rejected");
 });
 
 it("Tutoring first send to a completed session ends the attempt without replay", async () => {
@@ -1022,7 +998,6 @@ it("Tutoring first send to a completed session ends the attempt without replay",
       window.location.pathname.endsWith("/intent") &&
       !document.body.textContent?.includes(seed.rawError),
   ).toBe(true);
-  courseUnitCheckpoint("tutoring-send-finished");
 });
 
 it("Tutoring starters insert editable localized text and never submit", async () => {
@@ -1056,7 +1031,6 @@ it("Tutoring starters insert editable localized text and never submit", async ()
     message.data?.attributes?.content ===
       "I need help with my homework:\nI want to practice this topic: edited",
   ).toBe(true);
-  courseUnitCheckpoint("tutoring-starters");
 });
 
 it("Tutoring composer validates documented bounds locally without dispatch", async () => {
@@ -1085,7 +1059,6 @@ it("Tutoring composer validates documented bounds locally without dispatch", asy
       control.messagePosts === 0 &&
       (composer() as HTMLTextAreaElement).value === `é${"x".repeat(8000)}`,
   ).toBe(true);
-  courseUnitCheckpoint("tutoring-bounds");
 });
 
 it("Tutoring hidden causes share one neutral presentation on the start and workspace routes", async () => {
@@ -1150,7 +1123,6 @@ it("Tutoring hidden causes share one neutral presentation on the start and works
     ).toBe(true);
     view.unmount();
   }
-  courseUnitCheckpoint("tutoring-route-hidden");
 });
 
 it("Tutoring addressed denial destroys retained page memory but a failed check preserves it", async () => {
@@ -1198,7 +1170,6 @@ it("Tutoring addressed denial destroys retained page memory but a failed check p
     await ready("Tutoring access unavailable");
     expect(destroy).toHaveBeenCalledTimes(1);
     expect(document.body.textContent?.includes(seed.teachingText)).toBe(false);
-    courseUnitCheckpoint("tutoring-addressed-denial");
   } finally {
     destroy.mockRestore();
     view.unmount();
@@ -1269,7 +1240,6 @@ it("Tutoring linked retry replaces a queued POST article with fast terminal work
           article.textContent?.includes(seed.teachingText) === true,
       ).toBe(true);
     });
-    courseUnitCheckpoint("tutoring-fast-terminal-retry");
   } finally {
     view.unmount();
   }
@@ -1418,7 +1388,6 @@ it("Tutoring queued Stop fences an older terminal GET while retaining both targe
         name: "Stop response · Response queued · Attempt 1",
       }),
     ).toBeNull();
-    courseUnitCheckpoint("tutoring-stale-terminal-work");
   } finally {
     release();
     view.unmount();
@@ -1449,7 +1418,6 @@ it("Tutoring recovery replaces a found session with the workspace and offers fix
   expect(
     exits.getByRole("link", { name: "Back to Home" }).getAttribute("href"),
   ).toBe("/");
-  courseUnitCheckpoint("tutoring-recovery");
 });
 
 it("Tutoring completed session renders persisted transcript read-only on the workspace route", async () => {
@@ -1471,7 +1439,6 @@ it("Tutoring completed session renders persisted transcript read-only on the wor
         .getByRole("link", { name: "Joined courses" })
         .getAttribute("href") === "/learn/courses",
   ).toBe(true);
-  courseUnitCheckpoint("tutoring-finished");
 });
 
 it("Tutoring dual-capability non-owner completed session hides before transcript or finish work reads", async () => {
@@ -1513,7 +1480,6 @@ it("Tutoring dual-capability non-owner completed session hides before transcript
       view.unmount();
     }
   }
-  courseUnitCheckpoint("tutoring-finish-owner");
 });
 
 it("Tutoring workspace renders persisted turns as escaped text with neutral response labels", async () => {
@@ -1570,7 +1536,6 @@ it("Tutoring workspace renders persisted turns as escaped text with neutral resp
     text.includes("MIA's tutor is AI-powered.") &&
       screen.queryByRole("button", { name: /dismiss/iu }) === null,
   ).toBe(true);
-  courseUnitCheckpoint("tutoring-transcript");
 });
 
 it("Tutoring workspace sends one message and renders the queued work from the follow-up read", async () => {
@@ -1631,7 +1596,6 @@ it("Tutoring workspace sends one message and renders the queued work from the fo
       polite?.textContent === "Message queued." &&
       !document.body.textContent?.includes(seed.rawError),
   ).toBe(true);
-  courseUnitCheckpoint("tutoring-workspace-send");
 });
 
 it("Tutoring workspace queue-only work offers Queue message and dedupes current work from the transcript", async () => {
@@ -1677,7 +1641,6 @@ it("Tutoring workspace queue-only work offers Queue message and dedupes current 
       document.querySelectorAll("main article").length === 2 &&
       !document.body.textContent?.includes(seed.rawError),
   ).toBe(true);
-  courseUnitCheckpoint("tutoring-workspace-queue");
 });
 
 it("Tutoring workspace full queue keeps the draft and submission disabled until explicit Refresh", async () => {
@@ -1703,7 +1666,6 @@ it("Tutoring workspace full queue keeps the draft and submission disabled until 
       document.body.textContent?.includes("Response queued") === true &&
       !document.body.textContent?.includes(seed.rawError),
   ).toBe(true);
-  courseUnitCheckpoint("tutoring-workspace-full");
 });
 
 it("Tutoring lost workspace send reconciles through the current-work read and retries only the exact attempt", async () => {
@@ -1723,7 +1685,6 @@ it("Tutoring lost workspace send reconciles through the current-work read and re
     (composer() as HTMLTextAreaElement).disabled === true &&
       control.messagePosts === 1,
   ).toBe(true);
-  courseUnitCheckpoint("tutoring-workspace-unknown");
   await user.click(screen.getByRole("button", { name: "Refresh" }));
   // Committed: the current-work read carried the retained request ID, the
   // committed message renders, and the draft cleared without a resend.
@@ -1738,7 +1699,6 @@ it("Tutoring lost workspace send reconciles through the current-work read and re
       control.workQueries.includes(messageRequestId(control, 0)) &&
       document.body.textContent?.includes(seed.teachingText) === true,
   ).toBe(true);
-  courseUnitCheckpoint("tutoring-workspace-reconciled");
 });
 
 it("Tutoring uncommitted workspace send retries the exact retained attempt only explicitly", async () => {
@@ -1763,7 +1723,6 @@ it("Tutoring uncommitted workspace send retries the exact retained attempt only 
     control.messagePosts === 2 &&
       control.messageBodies[0] === control.messageBodies[1],
   ).toBe(true);
-  courseUnitCheckpoint("tutoring-workspace-retry");
 });
 
 it("Tutoring busy workspace send keeps the draft and never replays", async () => {
@@ -1783,7 +1742,6 @@ it("Tutoring busy workspace send keeps the draft and never replays", async () =>
     (composer() as HTMLTextAreaElement).value === seed.teachingText &&
       control.messagePosts === 1,
   ).toBe(true);
-  courseUnitCheckpoint("tutoring-workspace-busy");
 });
 
 it("Tutoring workspace reload during an unsettled send loses the draft and never replays", async () => {
@@ -1811,7 +1769,6 @@ it("Tutoring workspace reload during an unsettled send loses the draft and never
       (composer() as HTMLTextAreaElement).value === "" &&
       screen.queryByRole("heading", { name: unknownSendHeading }) === null,
   ).toBe(true);
-  courseUnitCheckpoint("tutoring-workspace-reload");
 });
 
 it("Tutoring workspace waits for an addressed session read after a send state conflict", async () => {
@@ -1840,7 +1797,6 @@ it("Tutoring workspace waits for an addressed session read after a send state co
     control.turnReads >= 2 &&
       screen.queryByLabelText("Your message to the tutor") === null,
   ).toBe(true);
-  courseUnitCheckpoint("tutoring-workspace-finished");
 });
 
 it("Tutoring Finish revalidates and installs only definitive persisted completion", async () => {
@@ -1872,7 +1828,6 @@ it("Tutoring Finish revalidates and installs only definitive persisted completio
         .getByRole("link", { name: "Start a tutoring session" })
         .getAttribute("href") === "/learn/start",
   ).toBe(true);
-  courseUnitCheckpoint("tutoring-finish-success");
 });
 
 it("Tutoring Finish stays unavailable when work is busy or eligibility denied", async () => {
@@ -1897,5 +1852,4 @@ it("Tutoring Finish stays unavailable when work is busy or eligibility denied", 
     control.finishPosts === 0 &&
       screen.queryByRole("link", { name: "Finish session" }) === null,
   ).toBe(true);
-  courseUnitCheckpoint("tutoring-finish-ineligible");
 });
