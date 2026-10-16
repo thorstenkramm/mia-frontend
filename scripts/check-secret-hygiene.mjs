@@ -1,5 +1,12 @@
-import { randomBytes, randomUUID } from "node:crypto";
-import { mkdir, mkdtemp, readdir, readFile, rm } from "node:fs/promises";
+import { createHash, randomBytes, randomUUID } from "node:crypto";
+import {
+  mkdir,
+  mkdtemp,
+  readdir,
+  readFile,
+  rm,
+  writeFile,
+} from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { spawnSync } from "node:child_process";
@@ -9,8 +16,21 @@ import {
   courseUnitCases,
 } from "./secret-hygiene-evidence.ts";
 import { checkRouteSecretHygiene } from "./check-route-secret-hygiene.mjs";
+import {
+  artifactBuffers,
+  assertMarkerFree,
+  parseReport,
+  recordMarkers,
+  serverBuffers,
+} from "./hygiene-output.mjs";
+import { validateHygieneInventory } from "./check-hygiene-inventory.mjs";
 
-const outputDir = await mkdtemp(join(tmpdir(), "mia-secret-hygiene-"));
+const outputDir = await mkdtemp(
+  join(
+    process.env.MIA_HYGIENE_ARTIFACT_ROOT ?? tmpdir(),
+    "mia-secret-hygiene-",
+  ),
+);
 const recoveryAlphabet = "0123456789ABCDEFGHJKMNPQRSTVWXYZ";
 const markers = [
   `username-${randomBytes(24).toString("hex")}`,
@@ -100,6 +120,7 @@ function browserResults(suites) {
 }
 
 async function runFailures(runner, earlyId) {
+  await recordMarkers(markers);
   const directory = join(outputDir, `${runner}-${earlyId ?? "baseline"}`);
   const evidence = join(directory, "checkpoints");
   await mkdir(evidence, { recursive: true });
@@ -136,13 +157,17 @@ async function runFailures(runner, earlyId) {
     },
   );
   // Never forward child output or artifact names, including on infrastructure failure.
-  const processLeak = markers.some(
-    (marker) =>
-      result.stdout?.includes(Buffer.from(marker)) ||
-      result.stderr?.includes(Buffer.from(marker)),
+  const processLeak = markers.some((marker) =>
+    [result.stdout, result.stderr].some((bytes) =>
+      bytes?.includes(Buffer.from(marker)),
+    ),
   );
   const artifactLeaks = await leakingArtifacts(directory);
-  if (processLeak || artifactLeaks.length > 0) {
+  const serverOutput = await serverBuffers();
+  const serverLeaks = markers.some((marker) =>
+    serverOutput.some((bytes) => bytes.includes(Buffer.from(marker))),
+  );
+  if (processLeak || artifactLeaks.length > 0 || serverLeaks) {
     throw new Error("Secret-hygiene scan found a controlled fixture marker.");
   }
   if (result.error || result.status !== 1) {
@@ -178,6 +203,15 @@ async function runFailures(runner, earlyId) {
       `The ${runner} cases did not each fail exactly once (${cases.map((id) => `${id}: ${results.filter((result) => result.id === id && result.status === "failed").length} failed`).join("; ")}).`,
     );
   const rejected = [];
+  const checkpointFiles = await readdir(evidence);
+  const expectedFiles = cases
+    .filter((id) => id !== earlyId)
+    .map((id) => `${id}.checkpoint`);
+  if (
+    JSON.stringify(checkpointFiles.sort()) !==
+    JSON.stringify(expectedFiles.sort())
+  )
+    throw new Error("Baseline hygiene checkpoint filename inventory mismatch.");
   for (const id of cases) {
     const matches = results.filter((result) => result.id === id);
     const checkpoint = await readFile(
@@ -187,6 +221,21 @@ async function runFailures(runner, earlyId) {
       if (error.code === "ENOENT") return null;
       throw new Error("Could not read hygiene checkpoint.");
     });
+    if (id === earlyId) {
+      if (
+        matches.length !== 1 ||
+        checkpoint !== null ||
+        matches[0].errors.length !== 1 ||
+        !matches[0].errors[0].includes(
+          "Injected failure before the secret-bearing checkpoint.",
+        )
+      )
+        throw new Error(
+          "Baseline hygiene early-failure canary identity mismatch.",
+        );
+      rejected.push(id);
+      continue;
+    }
     if (
       matches.length !== 1 ||
       checkpoint !== id ||
@@ -230,6 +279,7 @@ async function checkCourseUnitHygiene() {
   const probes = selected.flatMap((item) =>
     item.points.map((point) => ({ item, point, early: false })),
   );
+  if (!selected.length) throw new Error("Empty course-unit hygiene scope.");
   probes.push({
     item: selected[0],
     point: selected[0].points[0],
@@ -237,84 +287,176 @@ async function checkCourseUnitHygiene() {
   });
   // Content-free timing for the speedup-plan baseline (M5 sizing).
   const courseUnitTiming = { probes: 0, totalMs: 0 };
-  for (const [index, { item, point, early }] of probes.entries()) {
+  const evidence = [];
+  // Each round contains different test identities; no journey advances past its
+  // selected checkpoint. A later point is exercised in a fresh isolated test.
+  const rounds = Math.max(...selected.map((item) => item.points.length));
+  const groups = [];
+  for (let round = 0; round < rounds; round++) {
+    const selectedRound = probes.filter(
+      ({ item, point, early }) => !early && item.points[round] === point,
+    );
+    // A deliberate failure may leave test-file-local state behind; keep one
+    // selected test per file per invocation (Vitest isolates files, not cases).
+    while (selectedRound.length) {
+      const used = new Set();
+      const group = [];
+      for (let index = 0; index < selectedRound.length && group.length < 12;) {
+        const candidate = selectedRound[index];
+        if (used.has(candidate.item.file)) {
+          index++;
+          continue;
+        }
+        used.add(candidate.item.file);
+        group.push(candidate);
+        selectedRound.splice(index, 1);
+      }
+      groups.push(group);
+    }
+  }
+  groups.push([probes[probes.length - 1]]);
+  for (const [index, group] of groups.entries()) {
     const probeStarted = Date.now();
     const directory = join(outputDir, `course-unit-${index}`);
     await mkdir(directory);
     const reportFile = join(directory, "report.json");
-    const fixture = {
-      name: `course-${randomUUID()}`,
-      username: `supervisor.${randomUUID().slice(0, 12)}`,
-      csrf: randomUUID(),
-      rawError: `body-${randomUUID()}`,
-      teachingText: `teaching-${randomUUID()}`,
-    };
+    const entries = group.map(({ item, point, early }) => ({
+      item,
+      point,
+      early,
+      fixture: {
+        name: `course-${randomUUID()}`,
+        username: `supervisor.${randomUUID().slice(0, 12)}`,
+        csrf: randomUUID(),
+        rawError: `body-${randomUUID()}`,
+        teachingText: `teaching-${randomUUID()}`,
+      },
+    }));
+    const batch = Object.fromEntries(
+      entries.map(({ item, point, early, fixture }) => [
+        item.title,
+        { point, early, fixture },
+      ]),
+    );
+    await recordMarkers(
+      entries.flatMap(({ fixture }) => Object.values(fixture)),
+    );
+    const files = [...new Set(entries.map(({ item }) => item.file))];
+    const names = entries.map(({ item }) =>
+      item.title.replace(/[.*+?^${}()|[\]\\]/gu, "\\$&"),
+    );
     const result = spawnSync(
       join(process.cwd(), "node_modules", ".bin", "vitest"),
       [
         "run",
-        item.file,
+        ...files,
         "-t",
-        `^${item.title}$`,
+        `(?:${names.join("|")})$`,
         "--reporter=json",
         `--outputFile=${reportFile}`,
+        "--maxWorkers=1",
+        "--testTimeout=30000",
+        "--retry=0",
       ],
       {
         encoding: "buffer",
-        timeout: 60_000,
+        timeout: 420_000,
         maxBuffer: 16 * 1024 * 1024,
         env: {
           ...process.env,
           NO_COLOR: "1",
-          MIA_COURSE_UNIT_NAME: fixture.name,
-          MIA_COURSE_UNIT_USERNAME: fixture.username,
-          MIA_COURSE_UNIT_CSRF: fixture.csrf,
-          MIA_COURSE_UNIT_RAW: fixture.rawError,
-          MIA_COURSE_UNIT_TEXT: fixture.teachingText,
-          MIA_COURSE_UNIT_POINT: point,
-          MIA_COURSE_UNIT_EARLY: early ? "1" : "0",
+          MIA_COURSE_UNIT_BATCH: JSON.stringify(batch),
           MIA_SECRET_HYGIENE_EVIDENCE: directory,
         },
       },
     );
     // Scan the original unredacted process output and every generated artifact.
-    const buffers = [result.stdout, result.stderr];
-    for (const file of await readdir(directory))
-      buffers.push(await readFile(join(directory, file)));
-    if (
-      Object.values(fixture).some((marker) =>
-        buffers.some((bytes) => bytes?.includes(Buffer.from(marker))),
-      )
-    )
-      throw new Error("Course unit hygiene marker leak.");
+    const buffers = [
+      result.stdout,
+      result.stderr,
+      ...(await artifactBuffers(directory)),
+      ...(await serverBuffers()),
+    ];
+    assertMarkerFree(
+      entries.flatMap(({ fixture }) => Object.values(fixture)),
+      buffers,
+    );
     if (result.error || result.status !== 1)
       throw new Error(
         "Course unit deliberate failure did not finish normally.",
       );
-    const report = JSON.parse(await readFile(reportFile, "utf8"));
-    const failures = report.testResults
-      .flatMap((suite) => suite.assertionResults)
-      .filter((test) => test.status === "failed");
-    const checkpoint = await readFile(
-      join(directory, "course.checkpoint"),
-      "utf8",
-    ).catch((error) => {
-      if (error.code === "ENOENT") return null;
-      throw error;
-    });
-    const accepted =
-      failures.length === 1 &&
-      failures[0].title === item.title &&
-      checkpoint === point &&
-      failures[0].failureMessages.some((message) =>
-        message.includes(`ControlledCourseUnitFailure:${point}`),
-      );
-    if (early ? accepted || checkpoint !== null : !accepted)
+    const report = parseReport(await readFile(reportFile), "course-unit");
+    if (!Array.isArray(report.testResults))
+      throw new Error("Malformed course-unit hygiene report.");
+    const tests = report.testResults.flatMap((suite) => suite.assertionResults);
+    const selectedTests = tests.filter(
+      (test) => test.status !== "pending" && test.status !== "skipped",
+    );
+    // Vitest JSON also lists unselected tests as pending; reject unexpected
+    // executed tests, and require every intended identity exactly once.
+    if (
+      selectedTests.length !== entries.length ||
+      selectedTests.some(
+        (test) =>
+          !batch[test.title] ||
+          test.status !== "failed" ||
+          test.failureMessages?.length !== 1,
+      )
+    )
       throw new Error(
-        `Course unit checkpoint/failure inventory mismatch: ${item.title}/${point}; checkpointReached=${checkpoint === point}; failureIdentity=${accepted}; failures=${failures.length}; early=${early}.`,
+        "Course-unit unexpected, duplicate, skipped or passing result.",
       );
-    courseUnitTiming.probes++;
+    for (const { item, point, early } of entries) {
+      const matches = selectedTests.filter((test) => test.title === item.title);
+      const checkpoint = await readFile(
+        join(
+          directory,
+          `${createHash("sha256").update(item.title).digest("hex")}.checkpoint`,
+        ),
+        "utf8",
+      ).catch((error) => {
+        if (error.code === "ENOENT") return null;
+        throw new Error("Could not read course-unit checkpoint.");
+      });
+      if (
+        matches.length !== 1 ||
+        (early ? checkpoint !== null : checkpoint !== point) ||
+        !matches[0].failureMessages[0].includes(
+          early
+            ? "ControlledCourseUnitEarlyFailure:"
+            : `ControlledCourseUnitFailure:${point}\n`,
+        )
+      )
+        throw new Error(
+          `Course-unit checkpoint/failure identity mismatch: ${item.title}/${point}; reached=${checkpoint === point}; matches=${matches.length}; intended=${matches[0]?.failureMessages[0]?.includes(`ControlledCourseUnitFailure:${point}`) === true}; selection=${matches[0]?.failureMessages[0]?.includes("course-unit hygiene") === true}; sources=${[...new Set(matches[0]?.failureMessages[0]?.match(/(?:src|scripts|test)\/[\w./-]+:\d+:\d+/gu) ?? [])].join(",")}.`,
+        );
+      evidence.push({
+        file: item.file,
+        case: item.title,
+        checkpoint: point,
+        earlyCanary: early,
+        status: early ? "early-failure-rejected" : "pass",
+      });
+    }
+    const checkpointFiles = (await readdir(directory)).filter((file) =>
+      file.endsWith(".checkpoint"),
+    );
+    const expectedCheckpointFiles = entries
+      .filter(({ early }) => !early)
+      .map(
+        ({ item }) =>
+          `${createHash("sha256").update(item.title).digest("hex")}.checkpoint`,
+      );
+    if (
+      JSON.stringify(checkpointFiles.sort()) !==
+      JSON.stringify(expectedCheckpointFiles.sort())
+    )
+      throw new Error("Course-unit unexpected or missing checkpoint.");
+    courseUnitTiming.probes += entries.length;
     courseUnitTiming.totalMs += Date.now() - probeStarted;
+    console.log(
+      `Course-unit hygiene batch ${index + 1}/${groups.length}: ${entries.length} independent failures; ${Date.now() - probeStarted} ms.`,
+    );
   }
   console.log(
     `Course unit hygiene: ${selected.length} actual tests, ${probes.length - 1} checkpoints; early-failure canary rejected; zero marker leaks.`,
@@ -322,9 +464,15 @@ async function checkCourseUnitHygiene() {
   console.log(
     `Course unit timing: probes=${courseUnitTiming.probes} total=${Math.round(courseUnitTiming.totalMs / 1000)}s.`,
   );
+  if (process.env.MIA_COURSE_HYGIENE_REPORT)
+    await writeFile(
+      process.env.MIA_COURSE_HYGIENE_REPORT,
+      JSON.stringify({ evidence }, null, 2) + "\n",
+    );
 }
 
 try {
+  validateHygieneInventory();
   await checkCourseUnitHygiene();
   if (
     ![

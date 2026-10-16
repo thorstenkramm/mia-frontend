@@ -46,6 +46,20 @@ else
     npm ci
   fi
 
+  if has_script "test:hygiene-runner"; then
+    time_stage "npm:test:hygiene-runner"
+    npm run test:hygiene-runner
+  else
+    skip "npm run test:hygiene-runner (script not defined)"
+  fi
+
+  if has_script "check:hygiene-inventory"; then
+    time_stage "npm:check:hygiene-inventory"
+    npm run check:hygiene-inventory
+  else
+    skip "npm run check:hygiene-inventory (script not defined)"
+  fi
+
   built=0
   for target in typecheck check:typecheck-coverage lint format:check test build check:bundle-size check:i18n check:api-types; do
     if has_script "$target"; then
@@ -62,20 +76,12 @@ else
   if [[ "$built" -eq 0 ]]; then
     skip "E2E and secret hygiene (no build produced by this gate)"
   else
-    if has_script "test:e2e:built"; then
-      echo "Running npm run test:e2e:built (using this gate's build) ..."
-      time_stage "npm:test:e2e:built"
-      npm run test:e2e:built
+    if has_script "check:browser-gate:built"; then
+      echo "Running npm run check:browser-gate:built (using this gate's build) ..."
+      time_stage "npm:browser-gate:built"
+      npm run check:browser-gate:built
     else
-      skip "npm run test:e2e:built (script not defined)"
-    fi
-
-    if has_script "check:secret-hygiene:built"; then
-      echo "Running npm run check:secret-hygiene:built (using this gate's build) ..."
-      time_stage "npm:check:secret-hygiene:built"
-      npm run check:secret-hygiene:built
-    else
-      skip "npm run check:secret-hygiene:built (script not defined)"
+      skip "npm run check:browser-gate:built (script not defined)"
     fi
   fi
 fi

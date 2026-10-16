@@ -86,6 +86,12 @@ suppression is permitted.**
   tests. Network mocks and request assertions must redact headers and bodies before a failure can print them.
 - Deliberately fail each secret-bearing test and scan all process output and generated artifacts for its unique marker.
   The scan must find none.
+- The hygiene gate may batch runner invocations, but each checkpoint still executes as a separate
+  isolated test that fails immediately at that checkpoint. A passing journey or an exposure record
+  cannot replace its deliberate-failure evidence. Scan the original stdout, stderr, nested artifacts,
+  and owned preview output before cleanup; reject missing, duplicate, skipped, retried, passing, or
+  wrong-checkpoint results. Preview ownership must refuse occupied ports and clean up only owned
+  descendants. Public standalone npm checks use the same ownership mechanism.
 
 ## Manual evidence
 

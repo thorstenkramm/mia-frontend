@@ -22,9 +22,13 @@ export default defineConfig({
     video: "off",
   },
   projects: [{ name: "chromium", use: { browserName: "chromium" } }],
-  webServer: {
-    command: `npm run preview -- --host 127.0.0.1 --port ${new URL(hygieneOrigin).port} --strictPort`,
-    url: hygieneOrigin,
-    reuseExistingServer: false,
-  },
+  ...(process.env.MIA_HYGIENE_PREVIEW_4174 === "1"
+    ? {}
+    : {
+        webServer: {
+          command: `npm run preview -- --host 127.0.0.1 --port ${new URL(hygieneOrigin).port} --strictPort`,
+          url: hygieneOrigin,
+          reuseExistingServer: false,
+        },
+      }),
 });

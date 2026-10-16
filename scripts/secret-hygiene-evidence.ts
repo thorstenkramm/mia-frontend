@@ -1,6 +1,6 @@
 import { writeFileSync } from "node:fs";
 import { join } from "node:path";
-import { randomUUID } from "node:crypto";
+import { createHash, randomUUID } from "node:crypto";
 
 // Dedicated preview port keeps this controlled-failure suite isolated.
 export const hygieneOrigin = "http://127.0.0.1:4174";
@@ -1006,25 +1006,109 @@ export const courseUnitCases = [
 ] as const;
 
 export function courseUnitFixture() {
-  if (process.env.MIA_COURSE_UNIT_EARLY === "1")
-    throw new Error("Injected course unit early failure.");
+  const batch = courseSelection();
+  if (batch?.early || process.env.MIA_COURSE_UNIT_EARLY === "1")
+    throw new Error("ControlledCourseUnitEarlyFailure: before checkpoint.");
+  const fixture = batch?.fixture;
   return {
-    name: process.env.MIA_COURSE_UNIT_NAME ?? `course-${randomUUID()}`,
+    name:
+      fixture?.name ??
+      process.env.MIA_COURSE_UNIT_NAME ??
+      `course-${randomUUID()}`,
     username:
+      fixture?.username ??
       process.env.MIA_COURSE_UNIT_USERNAME ??
       `supervisor.${randomUUID().slice(0, 12)}`,
-    csrf: process.env.MIA_COURSE_UNIT_CSRF ?? randomUUID(),
-    rawError: process.env.MIA_COURSE_UNIT_RAW ?? `body-${randomUUID()}`,
+    csrf: fixture?.csrf ?? process.env.MIA_COURSE_UNIT_CSRF ?? randomUUID(),
+    rawError:
+      fixture?.rawError ??
+      process.env.MIA_COURSE_UNIT_RAW ??
+      `body-${randomUUID()}`,
     teachingText:
-      process.env.MIA_COURSE_UNIT_TEXT ?? `teaching-${randomUUID()}`,
+      fixture?.teachingText ??
+      process.env.MIA_COURSE_UNIT_TEXT ??
+      `teaching-${randomUUID()}`,
+  };
+}
+function courseSelection() {
+  const batch = process.env.MIA_COURSE_UNIT_BATCH;
+  if (!batch) return undefined;
+  const map: unknown = JSON.parse(batch);
+  const state = (
+    globalThis as { expect?: { getState?: () => { currentTestName?: string } } }
+  ).expect?.getState?.();
+  const name = state?.currentTestName;
+  if (!name || typeof map !== "object" || map === null)
+    throw new Error("Missing active course-unit hygiene test.");
+  const matches = courseUnitCases.filter((item) => name.endsWith(item.title));
+  const match = matches[0];
+  if (matches.length !== 1 || !match)
+    throw new Error("Unknown course-unit hygiene test.");
+  const entry: unknown = map[match.title as keyof typeof map];
+  if (
+    typeof entry !== "object" ||
+    entry === null ||
+    !("point" in entry) ||
+    typeof entry.point !== "string" ||
+    !("early" in entry) ||
+    typeof entry.early !== "boolean" ||
+    !("fixture" in entry) ||
+    typeof entry.fixture !== "object" ||
+    entry.fixture === null
+  )
+    throw new Error("Invalid course-unit hygiene selection.");
+  const fixture = entry.fixture;
+  if (
+    !("name" in fixture) ||
+    typeof fixture.name !== "string" ||
+    !("username" in fixture) ||
+    typeof fixture.username !== "string" ||
+    !("csrf" in fixture) ||
+    typeof fixture.csrf !== "string" ||
+    !("rawError" in fixture) ||
+    typeof fixture.rawError !== "string" ||
+    !("teachingText" in fixture) ||
+    typeof fixture.teachingText !== "string"
+  )
+    throw new Error("Invalid course-unit hygiene fixture.");
+  return {
+    point: entry.point,
+    early: entry.early,
+    fixture: {
+      name: fixture.name,
+      username: fixture.username,
+      csrf: fixture.csrf,
+      rawError: fixture.rawError,
+      teachingText: fixture.teachingText,
+    },
   };
 }
 export function courseUnitCheckpoint(point: string): void {
-  if (process.env.MIA_COURSE_UNIT_POINT !== point) return;
+  const batch = courseSelection();
+  if ((batch?.point ?? process.env.MIA_COURSE_UNIT_POINT) !== point) return;
   const directory = process.env.MIA_SECRET_HYGIENE_EVIDENCE;
   if (!directory)
     throw new Error("Course unit evidence directory is required.");
-  writeFileSync(join(directory, "course.checkpoint"), point, { flag: "wx" });
+  const name = (
+    globalThis as { expect?: { getState?: () => { currentTestName?: string } } }
+  ).expect?.getState?.().currentTestName;
+  const item = courseUnitCases.find((candidate) =>
+    name?.endsWith(candidate.title),
+  );
+  if (batch && !item)
+    throw new Error("Unknown course-unit hygiene checkpoint owner.");
+  writeFileSync(
+    join(
+      directory,
+      batch
+        ? `${createHash("sha256")
+            .update(item?.title ?? "")
+            .digest("hex")}.checkpoint`
+        : "course.checkpoint",
+    ),
+    point,
+    { flag: "wx" },
+  );
   throw new Error(`ControlledCourseUnitFailure:${point}`);
 }
 

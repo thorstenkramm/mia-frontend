@@ -36,10 +36,33 @@ function currentCase() {
   return item;
 }
 
+function selection():
+  { point: string; fixture: string; early: boolean } | undefined {
+  const batch = process.env.MIA_ROUTE_HYGIENE_BATCH;
+  if (!batch) return undefined;
+  const map: unknown = JSON.parse(batch);
+  const item = currentCase();
+  if (typeof map !== "object" || map === null || !(item.id in map))
+    throw new Error("Missing route-hygiene batch selection.");
+  const entry: unknown = map[item.id as keyof typeof map];
+  if (
+    typeof entry !== "object" ||
+    entry === null ||
+    !("point" in entry) ||
+    typeof entry.point !== "string" ||
+    !("fixture" in entry) ||
+    typeof entry.fixture !== "string" ||
+    !("early" in entry) ||
+    typeof entry.early !== "boolean"
+  )
+    throw new Error("Invalid route-hygiene batch selection.");
+  return { point: entry.point, fixture: entry.fixture, early: entry.early };
+}
+
 export function routeSecretFixture(page: Page): Fixture {
   const held = fixtures.get(page);
   if (held) return held;
-  const seed = process.env.MIA_ROUTE_HYGIENE_FIXTURE;
+  const seed = selection()?.fixture ?? process.env.MIA_ROUTE_HYGIENE_FIXTURE;
   let fixture: Fixture;
   if (seed === undefined) {
     fixture = {
@@ -130,7 +153,7 @@ export function routeFailureFixture(page: Page): Response {
 }
 
 export function injectRouteEarlyFailure(): void {
-  if (process.env.MIA_ROUTE_HYGIENE_EARLY === "1")
+  if (selection()?.early || process.env.MIA_ROUTE_HYGIENE_EARLY === "1")
     throw new Error(
       "ControlledRouteHygieneEarlyFailure: no secret checkpoint reached.",
     );
@@ -140,10 +163,12 @@ export async function routeHygieneCheckpoint(
   page: Page,
   point: string,
 ): Promise<void> {
-  if (process.env.MIA_ROUTE_HYGIENE_POINT !== point) return;
+  if ((selection()?.point ?? process.env.MIA_ROUTE_HYGIENE_POINT) !== point)
+    return;
   const item = currentCase();
   if (
-    process.env.MIA_ROUTE_HYGIENE_CASE !== item.id ||
+    (selection() === undefined &&
+      process.env.MIA_ROUTE_HYGIENE_CASE !== item.id) ||
     !item.checkpoints.some((checkpoint) => checkpoint === point)
   )
     throw new Error("Unexpected route-hygiene test/checkpoint selection.");
@@ -357,7 +382,7 @@ export async function routeHygieneCheckpoint(
   if (!directory)
     throw new Error("Route-hygiene checkpoint directory is required.");
   const id = `${item.id}:${point}`;
-  writeFileSync(join(directory, "checkpoint"), id, { flag: "wx" });
+  writeFileSync(join(directory, `${item.id}.checkpoint`), id, { flag: "wx" });
   // Deliberately exercise the original matcher/report formatting while the
   // secret-bearing surface is live. The actual journey's finally closes it.
   try {
