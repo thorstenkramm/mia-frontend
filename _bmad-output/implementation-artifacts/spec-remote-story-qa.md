@@ -158,6 +158,22 @@ Run QA jobs as `git`, not root. Preserve existing repository contents and unrela
   synthetic `setsid` shim holds the direct child before session establishment and ignores TERM: focused Ubuntu queue,
   pre-spawn, held pre-session TERM/no-late-listener, delayed timeout and forced-kill quarantine regressions passed
   against the final candidate, without running the browser suite or creating a commit.
+- Post-commit Ubuntu QA diagnosis/repair: actual queued revision `48d9333ae94336b819fa3627ef4620bedec58938`
+  failed (258 passed, 94 failed, 22.6 minutes); many browser exits contained Chromium
+  `FATAL:dbus/bus.cc:1245` while direct-SSH baseline had passed. The host has `dbus-run-session` and `dbus-daemon`;
+  an SSH login exports `DBUS_SESSION_BUS_ADDRESS` and `XDG_RUNTIME_DIR`, but its user bus service is inactive.
+  The runner now starts the browser owner inside a private D-Bus session with a job-owned XDG runtime directory,
+  isolating it from the transient login bus. The D-Bus wrapper stays inside the timeout-owned process group and waits
+  for the browser owner, so detached-preview cleanup still precedes worker release. Worker preserves Playwright
+  `test-results` from failed jobs under private SHA-attributed results before removing the checkout; a retention
+  failure quarantines its workspace. A two-phase at/SSH-disconnect smoke and a synthetic failure-artifact regression
+  were added. The first queue fixture failed because it did not stage the new helper, and the first at fixture did
+  not run because `at -f` invokes `/bin/sh` regardless of the file's Bash shebang; both harness defects were fixed.
+  After correction, synthetic queue/FIFO/recovery/timeout and failure-artifact retention passed. An `at` job inherited
+  deliberately invalid session bus/runtime values, ran after SSH disconnect, verified its private bus after 25 seconds,
+  and passed one real Chromium actual-200%-zoom browser test. TERM of the job-owned D-Bus/preview group also cleaned
+  the owned worker and port. This is focused evidence only, not a re-run or pass of the failed committed full matrix.
+  No assertions were weakened; the original failed receipt/log remain unchanged.
 
 ## Review Triage Log
 
@@ -176,6 +192,11 @@ Run QA jobs as `git`, not root. Preserve existing repository contents and unrela
   launched. Fixed by signaling only the owned direct PID before the isolated session exists and confirming termination
   (or quarantining uncertain cleanup) before advancing. The paused shim regression passed with no late job, listener,
   lock release or checkout removal while the shim still ran; prior pre-spawn and timeout regressions still passed.
+- Queued QA crash: inherited transient SSH session-bus environment was allowed into asynchronous Chromium.
+  The private job-scoped D-Bus and runtime boundary replaces that inheritance. Focused disconnected-at Chromium
+  zoom and canceled-group cleanup passed. The failed commit remains failed; only a later new commit and full queued
+  QA job can close it. The original missing `test-results` cannot be reconstructed; the runner now retains them for
+  any subsequent failed job without reading or scanning fixture bodies.
 
 ## Verification
 
@@ -211,6 +232,19 @@ Final post-handoff repair evidence: focused ShellCheck, Bash syntax and diff whi
 queue's enqueue/inspect, held pre-session `setsid` handoff and hard-timeout quarantine phases each passed on the final
 worker. Content-free check summary and individual results are under `tmp/agent-execution/spec-remote-story-qa/`;
 no full application gate was run in this fix phase.
+
+Post-commit D-Bus repair focused checks (no full suite): remote `dbus-run-session` and `dbus-daemon` already installed;
+after setup-harness fixes, `.localgit/qa-smoke.sh` passed FIFO, dispatch recovery, pre-spawn cancellation, timeout
+teardown and synthetic error-context retention. `.localgit/qa-browser-smoke.sh` prepared an isolated checkout from
+the failed SHA and queued a job through `at` that inherited a deliberately dead session bus, after SSH disconnect.
+The helper replaced it with a job-owned bus/runtime, checked its bus after 25 seconds, and a selected actual 200%
+Chromium zoom spec passed (one test). The focused D-Bus/preview TERM smoke passed group, worker and port cleanup.
+The worker's synthetic failed job retained `test-results/error-context.md` under its SHA result path (private directory
+mode 700, file mode 600), with status `artifacts=` and workspace removed; the prior failed committed receipt/status/log
+remain failed and unchanged. The tested browser-smoke harness accepts an exact SHA argument rather than pinning one
+revision. Its command/result logs are in `tmp/agent-execution/spec-remote-story-qa/dbus-*-final.log` and the focused
+queue evidence under `dbus-queue-*.log`.
+No installed package was needed, no full suite was run, no commit or GitHub push was made in this repair phase.
 
 Inspect server setup before modifying it. Verify enqueue failure, two-job serialization, interrupted-worker
 cleanup and result attribution with bounded controlled jobs; avoid expensive repeated full suites.

@@ -10,6 +10,7 @@ echo "playwright=$(node -p "require('./package.json').devDependencies['@playwrig
 npx playwright install chromium
 npm run build
 echo 'Running complete-matrix Chromium; result is recorded by the worker.'
-# Replace the timeout-owned process with the preview owner. timeout cannot
-# finish until its direct child has cleaned up detached preview/browser groups.
-exec env MIA_PRESENTATION_MATRIX=full node scripts/owned-preview.mjs -- node_modules/.bin/playwright test --workers=1
+# dbus-run-session stays in the timeout-owned group and waits for the preview
+# owner to clean its detached preview/browser groups before ending the bus.
+exec bash .localgit/qa-browser-session.sh "$PWD/../runtime" \
+  env MIA_PRESENTATION_MATRIX=full node scripts/owned-preview.mjs -- node_modules/.bin/playwright test --workers=1

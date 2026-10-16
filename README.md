@@ -58,8 +58,8 @@ repository's hooks first. If it already has a post-receive or update hook, chain
 scripts as that account and enable execution; install Chromium and system libraries as authorized separately:
 
 ```bash
-scp .localgit/post-receive .localgit/update .localgit/qa-worker.sh .localgit/qa-job.sh .localgit/qa-recover.sh git@odroid:mia-frontend.git/hooks/
-ssh git@odroid 'chmod 755 ~/mia-frontend.git/hooks/{post-receive,update,qa-worker.sh,qa-job.sh,qa-recover.sh}'
+scp .localgit/post-receive .localgit/update .localgit/qa-worker.sh .localgit/qa-job.sh .localgit/qa-recover.sh .localgit/qa-browser-session.sh git@odroid:mia-frontend.git/hooks/
+ssh git@odroid 'chmod 755 ~/mia-frontend.git/hooks/{post-receive,update,qa-worker.sh,qa-job.sh,qa-recover.sh,qa-browser-session.sh}'
 # From an isolated checkout on Ubuntu, as git: npm ci && npx playwright install chromium
 # For OS dependencies, as authorized root in that checkout: npx playwright install-deps chromium
 ```
@@ -68,6 +68,10 @@ The update hook rejects rewrites/deletes of SHA-named QA refs; post-receive sche
 worker drains a FIFO queue in
 `~/.local/share/mia-qa`. Each job checks out the accepted SHA in its own workspace, runs the tracked
 `.localgit/post-receive-run.sh` and retains its private receipt, status and log. Workspaces are removed after execution.
+Chromium uses a job-owned D-Bus session and XDG runtime directory, not the dispatching SSH session's bus.
+Failed browser jobs also retain their original `test-results` privately at the `artifacts=` path in their status,
+including synthetic error context; do not copy protected fixture bodies into reports. If artifact retention fails,
+the worker quarantines the workspace rather than deleting the only evidence.
 An `at` submission failure is visible even if Git accepted the push. Use `recover SHA` only for a status explicitly
 marked `reason=dispatch-failed`; it requeues the same immutable receipt without rewriting the ref. Test failures need
 a new verified commit. For an already queued SHA, retrieve its state instead of re-pushing. Set `MIA_QA_HOST` and

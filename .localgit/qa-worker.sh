@@ -130,6 +130,17 @@ while :; do
     if [[ -z "$child_start" ]]; then forced_cleanup=1; fi
   fi
   child=''
+  artifacts=''
+  retention_failed=0
+  if [[ "$code" != 0 && -d "$workspace/checkout/test-results" ]]; then
+    artifacts="$home/results/$sha.test-results"
+    # Keep Playwright's original synthetic failure context privately, without
+    # copying or scanning fixture bodies. Same-filesystem rename is atomic.
+    if [[ -e "$artifacts" ]] || ! mv -T -- "$workspace/checkout/test-results" "$artifacts"; then
+      artifacts=''
+      retention_failed=1
+    fi
+  fi
   end=$(date -u +%FT%TZ)
   outcome=passed
   [[ "$code" == 0 ]] || outcome=failed
@@ -137,11 +148,13 @@ while :; do
   printf 'status=%s\nrevision=%s\nref=%s\njob=%s\nstarted=%s\nended=%s\nqueue_seconds=%s\nduration_seconds=%s\nexit=%s\nenvironment=%s\nchecks=%s\nlog=%s\n' \
     "$outcome" "$sha" "$ref" "$job" "$start" "$end" "$queue_seconds" "$(($(date +%s) - start_seconds))" "$code" \
     "$environment" "$checks" "$log" > "$status.tmp"
+  if [[ -n "$artifacts" ]]; then printf 'artifacts=%s\n' "$artifacts" >> "$status.tmp"; fi
+  if [[ "$retention_failed" == 1 ]]; then printf 'reason=artifact-retention-failed\n' >> "$status.tmp"; fi
   if [[ "$code" == 137 || "$forced_cleanup" == 1 ]]; then
     printf 'reason=cleanup-unconfirmed\n' >> "$status.tmp"
   fi
   mv "$status.tmp" "$status"
-  if [[ "$code" == 137 || "$forced_cleanup" == 1 ]]; then
+  if [[ "$code" == 137 || "$forced_cleanup" == 1 || "$retention_failed" == 1 ]]; then
     printf 'revision=%s\nworkspace=%s\n' "$sha" "$workspace" > "$home/cleanup-unconfirmed.tmp"
     mv "$home/cleanup-unconfirmed.tmp" "$home/cleanup-unconfirmed"
     rm -- "$entry"

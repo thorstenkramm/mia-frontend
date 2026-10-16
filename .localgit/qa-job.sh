@@ -10,5 +10,6 @@ git -C "$checkout" fetch --quiet "$repo" "$ref"
 git -C "$checkout" checkout --quiet --detach "$sha"
 [[ "$(git -C "$checkout" rev-parse HEAD)" == "$sha" ]]
 [[ -f "$checkout/.localgit/post-receive-run.sh" ]]
+[[ -f "$checkout/.localgit/qa-browser-session.sh" ]]
 cd "$checkout"
 exec bash .localgit/post-receive-run.sh "$sha"

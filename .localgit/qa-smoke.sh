@@ -7,9 +7,10 @@ case "${1:-}" in
     cp "$HOME/mia-frontend.git/hooks/"{post-receive,update,qa-worker.sh,qa-job.sh,qa-recover.sh} "$root/runner.git/hooks/"
     git init --quiet "$root/source"
     mkdir -p "$root/source/.localgit"
+    cp "$HOME/mia-frontend.git/hooks/qa-browser-session.sh" "$root/source/.localgit/"
     cd "$root/source"
     printf '#!/usr/bin/env bash\nsleep 2\necho synthetic-check-passed\n' > .localgit/post-receive-run.sh
-    git add .localgit/post-receive-run.sh
+    git add .localgit/post-receive-run.sh .localgit/qa-browser-session.sh
     git -c user.name=QA -c user.email=qa@example.invalid commit --quiet -m first
     sha1=$(git rev-parse HEAD)
     printf 'a\n' > marker
@@ -262,7 +263,7 @@ success_start=$(sed -n 's/^started=//p' "$root/state/results/$sha6.status")
 [[ ! -d "$root/state/workspaces/000000000005" && ! -d "$root/state/workspaces/000000000006" ]]
 echo 'Timeout waits for delayed detached teardown before next job: pass'
 
-printf '#!/usr/bin/env bash\necho synthetic-failure\nexit 7\n' > .localgit/post-receive-run.sh
+printf '#!/usr/bin/env bash\nmkdir test-results\necho synthetic-failure-context > test-results/error-context.md\necho synthetic-failure\nexit 7\n' > .localgit/post-receive-run.sh
 git add .localgit/post-receive-run.sh
 git -c user.name=QA -c user.email=qa@example.invalid commit --quiet -m failed-check
 sha7=$(git rev-parse HEAD)
@@ -271,5 +272,7 @@ PATH="$root/bin:$PATH" git push --quiet "$root/runner.git" "$sha7:refs/qa/commit
 grep -qx 'status=failed' "$root/state/results/$sha7.status"
 grep -qx 'exit=7' "$root/state/results/$sha7.status"
 grep -qx 'synthetic-failure' "$root/state/results/$sha7.log"
+grep -qx "artifacts=$root/state/results/$sha7.test-results" "$root/state/results/$sha7.status"
+grep -qx 'synthetic-failure-context' "$root/state/results/$sha7.test-results/error-context.md"
 [[ ! -d "$root/state/workspaces/000000000007" ]]
-echo 'Failed check retains attributable log and cleans workspace: pass'
+echo 'Failed check retains attributable log and context, cleans workspace: pass'
