@@ -2,7 +2,7 @@
 title: Remote story QA with macOS epic and GitHub gates
 type: chore
 created: '2026-10-16'
-status: in-progress
+status: done
 baseline_commit: d83855b967118aaf0c2e8ba7713354bf37e87d21
 route: dispatch
 review_loop_iteration: 0
@@ -65,24 +65,24 @@ Run QA jobs as `git`, not root. Preserve existing repository contents and unrela
 
 **Execution:**
 
-- [ ] `.localgit/post-receive`, `.localgit/qa-worker.sh`, `.localgit/post-receive-run.sh`: implement
+- [x] `.localgit/post-receive`, `.localgit/qa-worker.sh`, `.localgit/post-receive-run.sh`: implement
   small private queue at `~/.local/share/mia-qa`, existing bare `~/mia-frontend.git`, SHA-named QA refs,
   atomic receipts, background `at` dispatch and blocking `flock` FIFO drain. Isolated checkout per commit,
   lockfile install, one Playwright worker, full matrix. Retain private results; clean owned workspaces.
-- [ ] `scripts/remote-qa.sh`: enqueue/status/logs and bounded wait. Add private `qa` remote only if
+- [x] `scripts/remote-qa.sh`: enqueue/status/logs and bounded wait. Add private `qa` remote only if
   absent or matching. Validate immutable receipt after push; a failing post-receive cannot undo acceptance.
 - [x] Provision and smoke-test full bundled Chromium plus Linux libraries as authorized. Existing fixtures
   are headless; do not introduce Xvfb unless evidence requires headed execution. Test real zoom first.
-- [ ] `.opencode/agents/epic-qa.md` and existing orchestration: QA agent only dispatches/retrieves results,
+- [x] `.opencode/agents/epic-qa.md` and existing orchestration: QA agent only dispatches/retrieves results,
   no application edits; solver records QA pending/failed/completed and exact revision. Reconcile reviewer
   focused-check permission and local non-browser obligations. Update sprint status vocabulary and BMAD
   customizations without prematurely marking a real story done.
-- [ ] `scripts/verify-macos-e2e.sh`, `.localgit/pre-push`: exact-commit isolated macOS full E2E verification,
+- [x] `scripts/verify-macos-e2e.sh`, `.localgit/pre-push`: exact-commit isolated macOS full E2E verification,
   untracked evidence receipt and normal-workflow push enforcement for GitHub destinations, including tags
   and direct URLs. Preserve existing hooks if discovered; exempt the actual private QA destination.
 - [x] Reconcile platform/cadence rules and planning contracts; keep macOS CI, use full matrices there.
   README documents install, dispatch, result retrieval, failure handling and manual release obligations.
-- [ ] Test queue race/failure/cleanup and push guard meaningfully; deploy private runner; run actual Ubuntu
+- [x] Test queue race/failure/cleanup and push guard meaningfully; deploy private runner; run actual Ubuntu
   full E2E and revised local checks sequentially. Record timings and failures, not theoretical speedups.
 
 **Acceptance Criteria:**
@@ -199,6 +199,21 @@ Run QA jobs as `git`, not root. Preserve existing repository contents and unrela
   any subsequent failed job without reading or scanning fixture bodies.
 
 ## Verification
+
+Final acceptance completed for `387b109056804237758c9b1fcbee81a229b3886f`:
+
+- Repair local gate: `dbus-local-gate.log` / `.exit`, exit 0; complete non-browser checks and targeted
+  actual browser-zoom E2E passed. Independent D-Bus/lifecycle repair review passed.
+- Actual QA-agent dispatch produced immutable job `000000000002`; remote Ubuntu full-matrix E2E passed.
+  Result: `repaired-ubuntu-result.log`, exit 0, 2335 seconds (38m55s) including install/build,
+  queue delay 0; full runner log `repaired-ubuntu.log`. Runs as `git` with one worker and job-owned D-Bus.
+- Exact-commit macOS full-matrix verification passed, 764 seconds (12m44s), exit 0.
+  Result: `repaired-macos-result.log`; receipt under `~/.local/share/mia-qa/macos/` for the full SHA.
+- Both checks ran sequentially. First committed job `48d9333ae94336b819fa3627ef4620bedec58938`
+  remains failed; no success was retroactively assigned. No GitHub push occurred.
+- Chapters 9 and 8 are complete. Worker-count tuning is separate follow-up; this implementation proves
+  asynchronous reliable execution, not a remote CPU-speed advantage. Completion notes do not extend an
+  exact-SHA macOS receipt to later bookkeeping commits; normal GitHub pushes still enforce that requirement.
 
 - Final local affected verification passed: `./run-all-tests.sh --affected-e2e e2e/scaffold.spec.ts
   e2e/sessionLifecycle.spec.ts e2e/routeNavigation.spec.ts`; 110 selected E2E tests and 940 unit tests
