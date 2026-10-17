@@ -1,5 +1,5 @@
 story: 7-3-move-the-build-identifier-into-the-sidebar-footer
-phase: commit-pending
+phase: complete
 spec: _bmad-output/implementation-artifacts/spec-7-3-move-the-build-identifier-into-the-sidebar-footer.md
 baseline_commit: 06578ca5763e229c2d0b9fc88e24e5e2241e8512
 pre_existing_changes: []
@@ -40,8 +40,29 @@ last_verification:
   result: pass — all non-browser stages pass, 23/23 browser, no skipped components
   log: tmp/agent-execution/7-3/affected-gate.log
 resume_attempts: 0
-commit: 'intended: "feat: move the build identifier into the sidebar footer"'
-qa: null
-macos_e2e: null
-next_action: worker commits story files, spec, tracker and this checkpoint; solver confirms full SHA
+commit: 5a9746480296c2b894371c09a937b66f41c7a06c
+qa:
+  commit: 5a9746480296c2b894371c09a937b66f41c7a06c
+  job: '000000000003'
+  queued: 2026-10-17T08:06:50Z
+  started: 2026-10-17T08:06:50Z
+  ended: 2026-10-17T08:46:15Z
+  duration_seconds: 2365
+  environment: Ubuntu 24.04 x86_64
+  checks: npm ci, build, Chromium full-matrix E2E (361/361)
+  skipped_inputs: API types, licensed catalog, vulnerability scans (local-gate only)
+  result: passed
+  log: (QA host) ~/.local/share/mia-qa/results/5a9746480296c2b894371c09a937b66f41c7a06c.log
+  qa_session: ses_eb719e2adffeDceUGCIYlzDBhn
+macos_e2e:
+  revision: 5a9746480296c2b894371c09a937b66f41c7a06c
+  status: passed
+  mode: full
+  platform: macOS-27.0.1
+  chromium_e2e: 361/361
+  started: 2026-10-17T08:28:32Z
+  ended: 2026-10-17T08:41:48Z
+  receipt: ~/.local/share/mia-qa/macos/5a9746480296c2b894371c09a937b66f41c7a06c.receipt
+next_action: none — story done (QA 5a974648 passed); epic-7 done (macOS full-matrix receipt at 5a974648).
+  Epic 8 (next_story 8-1) requires explicit owner scope; retrospective optional, not run automatically.
 blocked_on: null
