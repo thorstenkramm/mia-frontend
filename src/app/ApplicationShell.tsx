@@ -149,6 +149,7 @@ function authorizedGroups(
 // page; "Your teams" becomes one labelled list per authorized capability group without
 // initials, its label darkened to gray-500 for text contrast; links are router links
 // with a forced-colors current cue; transitions stop under reduced motion. The route
+// build identifier moves from main to the bottom of both scrollable sidebar variants;
 // heading follows Application UI > Headings > Page Headings > With actions without
 // actions or truncation, so long translations wrap.
 export function ApplicationShell({
@@ -221,6 +222,7 @@ export function ApplicationShell({
               <div className="relative flex grow flex-col gap-y-5 overflow-y-auto bg-white px-6 pb-2">
                 <ProductName />
                 <ShellNavigation onNavigate={closeDrawer} />
+                <BuildIdentifier className="shrink-0 break-all pb-4 text-sm/6 text-gray-500" />
                 <DrawerClosed pending={afterDrawerClose} />
               </div>
             </DialogPanel>
@@ -234,6 +236,7 @@ export function ApplicationShell({
             <div className="flex grow flex-col gap-y-5 overflow-y-auto border-r border-gray-200 bg-white px-6">
               <ProductName />
               <ShellNavigation signOut />
+              <BuildIdentifier className="shrink-0 break-all pb-4 text-sm/6 text-gray-500" />
             </div>
           </div>
 
@@ -282,7 +285,6 @@ export function ApplicationShell({
             >
               {children}
             </div>
-            <BuildIdentifier className="mt-10 break-all text-sm/6 text-gray-500" />
           </div>
         </main>
       </div>

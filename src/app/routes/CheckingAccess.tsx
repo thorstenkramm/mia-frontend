@@ -26,6 +26,7 @@ export function CheckingAccess({
     <SimpleEntrySurface
       titleMessage={messages.checkingPageTitle}
       headingMessage={messages.checkingHeading}
+      showBuildIdentifier={false}
     >
       {children}
       <EntryIntroduction message={messages.checkingIntroduction} />

@@ -1,0 +1,47 @@
+story: 7-3-move-the-build-identifier-into-the-sidebar-footer
+phase: commit-pending
+spec: _bmad-output/implementation-artifacts/spec-7-3-move-the-build-identifier-into-the-sidebar-footer.md
+baseline_commit: 06578ca5763e229c2d0b9fc88e24e5e2241e8512
+pre_existing_changes: []
+files:
+- _bmad-output/implementation-artifacts/spec-7-3-move-the-build-identifier-into-the-sidebar-footer.md
+- src/app/ApplicationShell.tsx
+- src/app/routes/SimpleEntrySurface.tsx
+- src/app/routes/CheckingAccess.tsx
+- src/app/App.test.tsx
+- e2e/applicationShell.spec.ts
+- _bmad-output/implementation-artifacts/sprint-status.yaml
+worker_session: ses_eb728b609ffe50zt50d04MYRGg
+reviewer_session: ses_eb71fd892ffeZMZxn3abh2Nz3t
+models:
+  solver: anthropic/claude-opus-5-5 (owner-launched session; protocol default is openai/gpt-6-astra#high)
+  prepare: openai/gpt-6-sol#high
+  implement: openai/gpt-6-sol#high
+  review: openai/gpt-6-sol#high
+  verify: openai/gpt-6-sol#high
+completed_blocks:
+- prepare (spec ready, worktree clean at baseline, tooling and models available, no blockers)
+- 'implement (owner clarification: hide public build label on CheckingAccess only; manifest expanded to
+  SimpleEntrySurface.tsx + CheckingAccess.tsx; focused checks pass — typecheck, lint, App 144/144, build,
+  selected Chromium 23/23, 0 clones, bundle budget; diff tmp/agent-execution/7-3/review.diff)'
+- review (independent reviewer approved; zero blocking and zero non-blocking findings)
+- verify (affected local gate green)
+decisions:
+- 'Story selected 2026-10-17: explicit user dispatch via epic-solver; matches sprint next_story after 7-2 closure
+  (commit f5082d92f8c5d708863a8ab0d1798769aeb5891a). Per-story reviewed+verified commit authorized by agent mandate;
+  stop at story end. Epic 7 closure needs exact-revision macOS full-matrix receipt.'
+repair_queue: []
+last_verification:
+  input_fingerprint_sha256: 4e1ec36dc950e5bc57fe4beef2b02a6a3af7c4db50fb03f8e3c4089870339793
+  scoped_diff_sha256: f86c9d0668971e941103de12318e86ddadabf0d897b7c146e07c22988acb7124
+  command: ./run-all-tests.sh --affected-e2e e2e/applicationShell.spec.ts e2e/scaffold.spec.ts e2e/coursePreparation.spec.ts
+    --grep (exact pattern recorded in spec)
+  selected_browser_tests: 23 (9 new shell build identifier cases)
+  result: pass — all non-browser stages pass, 23/23 browser, no skipped components
+  log: tmp/agent-execution/7-3/affected-gate.log
+resume_attempts: 0
+commit: 'intended: "feat: move the build identifier into the sidebar footer"'
+qa: null
+macos_e2e: null
+next_action: worker commits story files, spec, tracker and this checkpoint; solver confirms full SHA
+blocked_on: null

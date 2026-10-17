@@ -12,10 +12,12 @@ type MessageDescriptor = (typeof messages)[keyof typeof messages];
 export function SimpleEntrySurface({
   titleMessage,
   headingMessage,
+  showBuildIdentifier = true,
   children,
 }: {
   titleMessage: MessageDescriptor;
   headingMessage: MessageDescriptor;
+  showBuildIdentifier?: boolean;
   children: ReactNode;
 }) {
   const intl = useIntl();
@@ -48,7 +50,9 @@ export function SimpleEntrySurface({
           <div className="mt-10 sm:mx-auto sm:w-full sm:max-w-[480px]">
             {children}
           </div>
-          <BuildIdentifier className="mt-8 break-all text-center text-sm/6 text-gray-500" />
+          {showBuildIdentifier ? (
+            <BuildIdentifier className="mt-8 break-all text-center text-sm/6 text-gray-500" />
+          ) : null}
         </div>
       </main>
     </>

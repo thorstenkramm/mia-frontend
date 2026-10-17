@@ -1,5 +1,6 @@
 import AxeBuilder from "@axe-core/playwright";
 import { expect, test, type Page } from "@playwright/test";
+import { atBrowserZoom } from "./routeFixtures";
 
 // The shell carries no secret, but keep artifacts off like the other auth
 // journeys so a failure never records page content.
@@ -132,6 +133,135 @@ function noPageScroll(page: Page): Promise<boolean> {
 async function expectNoAxeViolations(page: Page) {
   // Default axe-core rule set, no exclusions or disabled rules.
   expect((await new AxeBuilder({ page }).analyze()).violations).toEqual([]);
+}
+
+test("desktop shell build identifier follows Sign out in the scrollable sidebar, never main", async ({
+  page,
+}) => {
+  await mockBackend(page);
+  await page.setViewportSize({ width: 1280, height: 420 });
+  await page.goto("/");
+  await expect(
+    page.getByRole("heading", { name: "Home", level: 1 }),
+  ).toBeFocused();
+  const navigation = page.getByRole("navigation", { name: "Application" });
+  const build = page.locator('header [data-testid="build-identifier"]:visible');
+  await expect(build).toHaveCount(1);
+  await expect(build).toHaveText(/Build \d+\.\d+\.\d+\+/u);
+  await expect(
+    page.locator("main [data-testid='build-identifier']"),
+  ).toHaveCount(0);
+  const signOut = navigation.getByRole("button", { name: "Sign out" });
+  expect(
+    await signOut.evaluate((node) => {
+      const footer = node.closest("nav")?.nextElementSibling;
+      return (
+        footer?.getAttribute("data-testid") === "build-identifier" &&
+        Boolean(
+          node.compareDocumentPosition(footer) &
+          Node.DOCUMENT_POSITION_FOLLOWING,
+        )
+      );
+    }),
+  ).toBe(true);
+  await build.scrollIntoViewIfNeeded();
+  expect(
+    await build.evaluate((node) => {
+      const scrollport = node.parentElement?.getBoundingClientRect();
+      const text = node.getBoundingClientRect();
+      return scrollport !== undefined && text.bottom <= scrollport.bottom;
+    }),
+  ).toBe(true);
+  await expectNoAxeViolations(page);
+
+  await navigation
+    .getByRole("link", { name: "Multi-factor authentication" })
+    .click();
+  await expect(
+    page.getByRole("heading", {
+      name: "Multi-factor authentication",
+      level: 1,
+    }),
+  ).toBeFocused();
+  await expect(build).toHaveCount(1);
+  await expect(
+    page.locator("main [data-testid='build-identifier']"),
+  ).toHaveCount(0);
+});
+
+for (const locale of ["en-US", "pt-BR"] as const) {
+  for (const size of textSizes) {
+    test(`narrow shell build identifier stays in the drawer at 320px with ${locale} ${size} text`, async ({
+      page,
+    }) => {
+      await mockBackend(page);
+      await page.setViewportSize({ width: 320, height: 480 });
+      await page.addInitScript(
+        ({ locale, size }) => {
+          localStorage.setItem("mia.interface.locale", locale);
+          localStorage.setItem("mia.interface.text-size", size);
+        },
+        { locale, size },
+      );
+      await page.goto("/");
+      await expect(page.getByRole("heading", { level: 1 })).toBeFocused();
+      await expect(
+        page.locator("main [data-testid='build-identifier']"),
+      ).toHaveCount(0);
+      await expect(
+        page.locator('[data-testid="build-identifier"]:visible'),
+      ).toHaveCount(0);
+      expect(await noPageScroll(page)).toBe(true);
+      await page
+        .getByRole("button", {
+          name: locale === "en-US" ? "Open navigation" : /navegaç/u,
+        })
+        .click();
+      const drawer = page.getByRole("dialog");
+      const build = drawer.getByTestId("build-identifier");
+      await expect(build).toBeVisible();
+      await expect(
+        page.locator('[data-testid="build-identifier"]:visible'),
+      ).toHaveCount(1);
+      await build.scrollIntoViewIfNeeded();
+      expect(
+        await build.evaluate((node) => {
+          const scrollport = node.parentElement?.getBoundingClientRect();
+          const text = node.getBoundingClientRect();
+          return (
+            scrollport !== undefined &&
+            text.top >= scrollport.top &&
+            text.bottom <= scrollport.bottom &&
+            text.right <= scrollport.right
+          );
+        }),
+      ).toBe(true);
+      expect(await noPageScroll(page)).toBe(true);
+      await expectNoAxeViolations(page);
+      await page.keyboard.press("Escape");
+      await expect(drawer).toHaveCount(0);
+      await expect(
+        page.locator('[data-testid="build-identifier"]:visible'),
+      ).toHaveCount(0);
+    });
+  }
+}
+
+for (const factor of [2, 4] as const) {
+  test(`shell build identifier stays readable at ${factor * 100}% browser zoom`, async () => {
+    await atBrowserZoom(factor, async (page) => {
+      await page.goto("/");
+      await expect(page.getByRole("heading", { name: "Home" })).toBeFocused();
+      await expect(
+        page.locator("main [data-testid='build-identifier']"),
+      ).toHaveCount(0);
+      await page.getByRole("button", { name: "Open navigation" }).click();
+      const build = page.getByRole("dialog").getByTestId("build-identifier");
+      await build.scrollIntoViewIfNeeded();
+      await expect(build).toBeVisible();
+      expect(await noPageScroll(page)).toBe(true);
+    });
+  });
 }
 
 test("desktop shell keyboard order reaches each destination and Sign out", async ({

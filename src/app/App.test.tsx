@@ -930,7 +930,54 @@ describe("localized anonymous entry", () => {
     expect(screen.getByTestId("build-identifier")).toHaveTextContent(
       /^Build \d+\.\d+\.\d+\+/,
     );
+    expect(
+      within(screen.getByRole("main")).getByTestId("build-identifier"),
+    ).toBeInTheDocument();
   });
+
+  it("shows the build identifier in the admitted shell sidebar, not during checking or in main", async () => {
+    const capabilityGate = deferredVoid();
+    renderEntry(
+      sessionHandler("authenticated"),
+      http.get("/api/v1/users/me/capabilities", async () => {
+        await capabilityGate.promise;
+        return HttpResponse.json(capabilityDocument(), {
+          headers: { "Content-Type": mediaType },
+        });
+      }),
+    );
+    await screen.findByRole("heading", { name: "Checking access" });
+    expect(screen.queryByTestId("build-identifier")).not.toBeInTheDocument();
+    expect(screen.queryByRole("navigation")).not.toBeInTheDocument();
+
+    capabilityGate.resolve();
+    await screen.findByRole("heading", { name: "Home", level: 1 });
+    const main = screen.getByRole("main");
+    expect(within(main).queryByTestId("build-identifier")).toBeNull();
+    const sidebar = screen.getByRole("banner");
+    const build = within(sidebar).getByTestId("build-identifier");
+    expect(build).toHaveTextContent(/^Build \d+\.\d+\.\d+\+/);
+    const navigation = within(sidebar).getByRole("navigation", {
+      name: "Application",
+    });
+    expect(
+      within(navigation).getByRole("button", { name: "Sign out" }),
+    ).toBeInTheDocument();
+  });
+
+  it.each(["mfa", "password-change"] as const)(
+    "retains the public build identifier on the %s restricted entry without shell navigation",
+    async (stage) => {
+      renderEntry(sessionHandler(stage));
+      await screen.findByRole("heading", {
+        name: stage === "mfa" ? "Verify sign-in" : "Choose a new password",
+      });
+      expect(
+        within(screen.getByRole("main")).getByTestId("build-identifier"),
+      ).toHaveTextContent(/^Build \d+\.\d+\.\d+\+/);
+      expect(screen.queryByRole("navigation")).not.toBeInTheDocument();
+    },
+  );
 
   it("changes locale atomically, announces once, and retains selector focus", async () => {
     const user = userEvent.setup();
